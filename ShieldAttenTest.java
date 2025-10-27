@@ -1,72 +1,107 @@
 /**
  * @(#)ShieldAttenTest.java
  *
+ * Simulates photon attenuation through shielding material,
+ * accounting for shielding attenuation coefficient (Beer-Lambert Law)
+ * and geometric spreading (Inverse-Square Law).
  *
  * @author
- * @version 1.00 2025/10/23
+ * @version 1.01
  */
 
 import java.util.*;
 public class ShieldAttenTest {
 
     public static void main(String [] args) {
-    //simulated gamma energy in MeV
-    	double E = .6617;
-    //simulated thickness of material in cm
-    	double thickness = 1;
-    //Photon energy values in MeV
-    Scanner scan = new Scanner(System.in);
-    System.out.println("Enter material name (lead, concrete, water): ");
-    String choice = scan.nextLine().toLowerCase();
 
-    Material mat = null;
+    	//Constants and setup
+    	//Simulated photon energy (MeV) - will be replaced with user input
+    	double E = .6617; //Example Cs-137 photon energy
+    	Scanner scan = new Scanner(System.in);
 
-    if (choice.equals("lead")){
-    	mat= createLead();
-    }else if(choice.equals("concrete")){
-  //  	mat= createConcrete();
-    }else if(choice.equals("water")){
-    	//mat= createWater();
-    }else{
-    	System.out.println("Material not found.");
-    	return;
-    }
+    	//User input section
+   		System.out.println("Enter material name (lead, concrete, water): ");
+   		String choice = scan.nextLine().toLowerCase();
 
-	//density of the shielding material for linear attenuation coefficient calculation
-    // linear attenuation coefficient calucation
+   		System.out.println("Enter shielding thickness (cm): ");
+   		double thickness = scan.nextDouble();
+
+   		System.out.println("Enter distance from source to detector (cm): ");
+   		double distance = scan.nextDouble();
+
+   		//Geometric possibility check
+   		//Detector must not be located beyond or in the shield.
+		if(distance <= thickness){
+			System.out.println("Error: Distance must be greater than shielding thickness.");
+			System.out.println("Detector must be located beyond the shield.");
+			return;
+		}
+
+		//Material selection
+   		Material mat = null;
+
+    	if (choice.equals("lead")){
+    		mat= createLead();
+    	}else if(choice.equals("concrete")){
+  			//mat= createConcrete();
+   		}else if(choice.equals("water")){
+    		//mat= createWater();
+    	}else{
+    		System.out.println("Material not found.");
+    		return;
+   		}
+
+		//Linear attenuation coefficient (mu) calculation
+        //Uses log-log interpolation to find u/p at the input energy,
+        //then multiplies by density to get mu (cm^-1)
     	double mu = getMu(E, mat.energy, mat.muOverP, mat.density);
+
     	System.out.println("\nMaterial: "+mat.name);
     	System.out.println("Linear attenuation coefficient for  mu = "+mu+"cm^-1");
-    // percentage of photons that pass through the shielding material
-    	double transmission = calcTransmission(mu, thickness);
-    	System.out.printf("Transmission through %.2f cm: %.6f%%\n",thickness, transmission*100);
+
+   		//Transmission calculation
+        //Combines exponential attenuation and inverse-square law
+    	double transmission = calcTransmission(mu, thickness, distance);
+
+    	System.out.printf("Transmission through %.2f cm thickness: at %.2f cm distance): %.8f%%\n",thickness, distance, transmission*100);
 
 
     }
-	// log log interpolation to estimate the linear attenuation coefficient for values that do not exist in the NIST list of values
+	//Calculates linear attenuation coefficient mu using log-log interpolation.
+    //The NIST tables provide mu/p at specified photon energies, so this method
+    //estimates mu at any given energy between known points.
+
     public static double getMu(double E, double[] energy, double[] muOverP, double density){
     	int i = bracketIndex(E, energy);
     	if(i==-1){
     		System.out.println("Energy out of bounds");
     		return -1;
     	}
+
+    	//Values on either side of the desired photon energy
     	double E1 = energy[i];
     	double E2 = energy[i+1];
     	double m1 = muOverP[i];
     	double m2 = muOverP[i+1];
+
+    	//Log-log interpolation based on linear interpolation formula
     	double lnE1 = Math.log(E1);
     	double lnE2 = Math.log(E2);
     	double lnE = Math.log(E);
     	double lnM1 = Math.log(m1);
     	double lnM2 = Math.log(m2);
-	// log log interpolation based on linear interpolation formula
     	double lnM = lnM1+((lnE-lnE1)/(lnE2-lnE1))*(lnM2-lnM1);
+
+    	//Convert back from log scale
     	double m = Math.exp(lnM);
-    // interpolation gives mu/density. multiply by density to get mu
+
+   		//Interpolation gives mu/density. Multiply by density to get mu.
     	double mu = m*density;
     	return mu;
     }
-	// finds the values that are on either side of the input energy
+
+	//Finds the index "i" such that E lies between energy[i] and energy[i+1].
+    //Returns -1 if E is outside the range.
     public static int bracketIndex(double E, double[] energy){
     	for(int i=0; i<energy.length-1; i++){
     		if(E>=energy[i]&&E<=energy[i+1]){
@@ -75,11 +110,18 @@ public class ShieldAttenTest {
     	}
     	return -1;
     }
-    // beer-lambert law to calculate for percentage of photon transmission
-    public static double calcTransmission(double mu, double thickness){
-		return Math.exp(-mu*thickness);
+
+    //Calculates transmitted fraction of photons through a material and air gap.
+    //Beer-Lambert Law
+    //Inverse-Square Law
+    public static double calcTransmission(double mu, double thickness, double distance){
+    	double shieldingFactor = Math.exp(-mu*thickness); //exponential attenuation
+    	double distanceFactor = 1.0 / Math.pow(distance, 2); //inverse-square spreading
+		return shieldingFactor * distanceFactor;
     }
 
+	//Defines lead attenuation data from NIST XCOM.
+    //Returns a Material object containing energy and u/p values.
     public static Material createLead(){
     	double[] energy = {0.001, 0.0015, 0.002, 0.00248, 0.002484, 0.00253, 0.002586, 0.002586,
     		0.003, 0.003066, 0.003066, 0.003301, 0.003554, 0.003554, 0.003699, 0.003851,
