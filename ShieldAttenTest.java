@@ -54,71 +54,20 @@ public class ShieldAttenTest {
 		//Linear attenuation coefficient (mu) calculation
         //Uses log-log interpolation to find u/p at the input energy,
         //then multiplies by density to get mu (cm^-1)
-    	double mu = getMu(E, mat.energy, mat.muOverP, mat.density);
+    	double mu = Physics.getMu(E, mat);
 
     	System.out.println("\nMaterial: "+mat.name);
     	System.out.println("Linear attenuation coefficient for  mu = "+mu+"cm^-1");
 
    		//Transmission calculation
         //Combines exponential attenuation and inverse-square law
-    	double transmission = calcTransmission(mu, thickness, distance);
+    	double transmission = Physics.calcTransmission(mu, thickness, distance);
 
     	System.out.printf("Transmission through %.2f cm thickness: at %.2f cm distance): %.8f%%\n",thickness, distance, transmission*100);
 
 
     }
-	//Calculates linear attenuation coefficient mu using log-log interpolation.
-    //The NIST tables provide mu/p at specified photon energies, so this method
-    //estimates mu at any given energy between known points.
 
-    public static double getMu(double E, double[] energy, double[] muOverP, double density){
-    	int i = bracketIndex(E, energy);
-    	if(i==-1){
-    		System.out.println("Energy out of bounds");
-    		return -1;
-    	}
-
-    	//Values on either side of the desired photon energy
-    	double E1 = energy[i];
-    	double E2 = energy[i+1];
-    	double m1 = muOverP[i];
-    	double m2 = muOverP[i+1];
-
-    	//Log-log interpolation based on linear interpolation formula
-    	double lnE1 = Math.log(E1);
-    	double lnE2 = Math.log(E2);
-    	double lnE = Math.log(E);
-    	double lnM1 = Math.log(m1);
-    	double lnM2 = Math.log(m2);
-    	double lnM = lnM1+((lnE-lnE1)/(lnE2-lnE1))*(lnM2-lnM1);
-
-    	//Convert back from log scale
-    	double m = Math.exp(lnM);
-
-   		//Interpolation gives mu/density. Multiply by density to get mu.
-    	double mu = m*density;
-    	return mu;
-    }
-
-	//Finds the index "i" such that E lies between energy[i] and energy[i+1].
-    //Returns -1 if E is outside the range.
-    public static int bracketIndex(double E, double[] energy){
-    	for(int i=0; i<energy.length-1; i++){
-    		if(E>=energy[i]&&E<=energy[i+1]){
-    			return i;
-    		}
-    	}
-    	return -1;
-    }
-
-    //Calculates transmitted fraction of photons through a material and air gap.
-    //Beer-Lambert Law
-    //Inverse-Square Law
-    public static double calcTransmission(double mu, double thickness, double distance){
-    	double shieldingFactor = Math.exp(-mu*thickness); //exponential attenuation
-    	double distanceFactor = 1.0 / Math.pow(distance, 2); //inverse-square spreading
-		return shieldingFactor * distanceFactor;
-    }
 
 	//Defines lead attenuation data from NIST XCOM.
     //Returns a Material object containing energy and u/p values.
@@ -137,11 +86,9 @@ public class ShieldAttenTest {
     		0.06962, 0.05875, 0.05222, 0.04607, 0.04577, 0.04234, 0.0420, 0.04272, 0.04391,
     		0.04528, 0.04675, 0.04823, 0.04972};
     	return new Material("Lead", 11.34, energy, muOverP);
-
     }
-
-
 }
+
 class Material{
 	String name;
 	double density;
@@ -154,4 +101,60 @@ class Material{
 		this.energy = energy;
 		this.muOverP = muOverP;
 	}
+}
+//
+class Physics{
+
+	//Calculates linear attenuation coefficient mu using log-log interpolation.
+    //The NIST tables provide mu/p at specified photon energies, so this method
+    //estimates mu at any given energy between known points.
+	public static double getMu(double E, Material mat){
+		int i = bracketIndex(E, mat.energy);
+    	if(i==-1){
+    		System.out.println("Energy out of bounds for "+mat.name);
+    		return -1;
+    	}
+
+    	//Values on either side of the desired photon energy
+    	double E1 = mat.energy[i];
+    	double E2 = mat.energy[i+1];
+    	double m1 = mat.muOverP[i];
+    	double m2 = mat.muOverP[i+1];
+
+    	//Log-log interpolation based on linear interpolation formula
+    	double lnE1 = Math.log(E1);
+    	double lnE2 = Math.log(E2);
+    	double lnE = Math.log(E);
+    	double lnM1 = Math.log(m1);
+    	double lnM2 = Math.log(m2);
+    	double lnM = lnM1+((lnE-lnE1)/(lnE2-lnE1))*(lnM2-lnM1);
+
+    	//Convert back from log scale
+    	double m = Math.exp(lnM);
+
+   		//Interpolation gives mu/density. Multiply by density to get mu.
+    	double mu = m*mat.density;
+    	return mu;
+	}
+
+	//Finds the index "i" such that E lies between energy[i] and energy[i+1].
+    //Returns -1 if E is outside the range.
+	public static int bracketIndex(double E, double[] energy){
+    	for(int i=0; i<energy.length-1; i++){
+    		if(E>=energy[i]&&E<=energy[i+1]){
+    			return i;
+    		}
+    	}
+    	return -1;
+    }
+
+    //Calculates transmitted fraction of photons through a material and air gap.
+    //Beer-Lambert Law
+    //Inverse-Square Law
+    public static double calcTransmission(double mu, double thickness, double distance){
+    	double shieldingFactor = Math.exp(-mu*thickness); //exponential attenuation
+    	double distanceFactor = 1.0 / Math.pow(distance, 2); //inverse-square spreading
+		return shieldingFactor * distanceFactor;
+    }
+
 }
