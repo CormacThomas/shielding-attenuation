@@ -40,9 +40,11 @@ public class ShieldAttenTest {
    			return;
    		}
 
+		//User shielding thickness input
    		System.out.println("Enter shielding thickness (cm): ");
    		double thickness = scan.nextDouble();
 
+		//User air distance input
    		System.out.println("Enter distance from source to detector (cm): ");
    		double distance = scan.nextDouble();
 
@@ -53,20 +55,6 @@ public class ShieldAttenTest {
 			System.out.println("Detector must be located beyond the shield.");
 			return;
 		}
-
-		//Material selection
-   		/*Material mat = null;
-
-    	if (choice.equals("lead")){
-    		mat= createLead();
-    	}else if(choice.equals("concrete")){
-  			//mat= createConcrete();
-   		}else if(choice.equals("water")){
-    		//mat= createWater();
-    	}else{
-    		System.out.println("Material not found.");
-    		return;
-   		}*/
 
 		//Linear attenuation coefficient (mu) calculation
         //Uses log-log interpolation to find u/p at the input energy,
@@ -80,14 +68,11 @@ public class ShieldAttenTest {
         //Combines exponential attenuation and inverse-square law
     	double transmission = Physics.calcTransmission(mu, thickness, distance);
 
+		//Prints result of calculations
     	System.out.printf("Transmission through %.2f cm thickness: at %.2f cm distance): %.8f%%\n",thickness, distance, transmission*100);
 
 
     }
-
-
-	//Defines lead attenuation data from NIST XCOM.
-    //Returns a Material object containing energy and u/p values.
 }
 
 class Material{
@@ -96,6 +81,7 @@ class Material{
 	double[] energy;
 	double[] muOverP;
 
+	//Defines parameters for a Material object
 	public Material(String name, double density, double[] energy, double[] muOverP){
 		this.name = name;
 		this.density = density;
@@ -162,6 +148,7 @@ class Physics{
 
 class MaterialLibrary{
 
+	//User material choice selection
 	public static Material getMaterial(int choice){
 		if(choice == 1){
 			return createLead();
@@ -191,6 +178,9 @@ class MaterialLibrary{
 			return null;
 		}
 	}
+
+	//Methods define attenuation data from NIST XCOM.
+    //Returns a Material object containing energy and u/p values.
 	public static Material createLead(){
 		double[] energy = {0.001, 0.0015, 0.002, 0.00248, 0.002484, 0.00253, 0.002586, 0.002586,
     		0.003, 0.003066, 0.003066, 0.003301, 0.003554, 0.003554, 0.003699, 0.003851,
