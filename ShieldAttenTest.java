@@ -19,8 +19,17 @@ public class ShieldAttenTest {
     	double E = .6617; //Example Cs-137 photon energy
     	Scanner scan = new Scanner(System.in);
 
-    	//User input section
-   		System.out.println("Select a material:");
+		ArrayList<Layer> layers = new ArrayList<>();
+
+		//User input layer selection
+		System.out.println("Enter number of shielding layers: ");
+		int numLayers = scan.nextInt();
+
+
+    	//Loop for each layer: material + thickness
+    	for(int i=1; i<=numLayers; i++){
+    	System.out.println("\nSelect material for layer " +i+":");
+    	System.out.println("Select a material:");
    		System.out.println("1. Lead");
    		System.out.println("2. Concrete, Ordinary");
    		System.out.println("3. Concrete, Barite");
@@ -30,9 +39,9 @@ public class ShieldAttenTest {
    		System.out.println("7. Bismuth");
    		System.out.println("8. Copper");
    		System.out.println("9. Tin");
-   		System.out.println("10 Polyethylene");
-   		System.out.println("11 Graphite");
-   		System.out.println("12 Leaded Glass");
+   		System.out.println("10. Polyethylene");
+   		System.out.println("11. Graphite");
+   		System.out.println("12. Leaded Glass");
    		int choice = scan.nextInt();
    		Material mat = MaterialLibrary.getMaterial(choice);
    		if(mat == null){
@@ -43,38 +52,52 @@ public class ShieldAttenTest {
 		//User shielding thickness input
    		System.out.println("Enter shielding thickness (cm): ");
    		double thickness = scan.nextDouble();
+   		layers.add(new Layer(mat, thickness));
 
-		//User air distance input
+    	}
+
+
+		//User detector distance input
    		System.out.println("Enter distance from source to detector (cm): ");
    		double distance = scan.nextDouble();
 
+		//Total thickness check
+		double totalThickness = 0;
+		for(Layer layer : layers){
+			totalThickness += layer.thickness;
+		}
+
    		//Geometric possibility check
    		//Detector must not be located beyond or in the shield.
-		if(distance <= thickness){
+		if(distance <= totalThickness){
 			System.out.println("Error: Distance must be greater than shielding thickness.");
 			System.out.println("Detector must be located beyond the shield.");
 			return;
 		}
 
-		//Linear attenuation coefficient (mu) calculation
-        //Uses log-log interpolation to find u/p at the input energy,
-        //then multiplies by density to get mu (cm^-1)
-    	double mu = Physics.getMu(E, mat);
+		//Calculations: multiply transmission through each layer (Beer-Lambert)
+		double transmission = 1;
+		for(Layer layer : layers){
+			double mu = Physics.getMu(E, layer.material); //Interpolate
+			double attenuation = Math.exp(-mu*layer.thickness);
+			transmission *= attenuation;
+		}
 
-    	System.out.println("\nMaterial: "+mat.name);
-    	System.out.println("Linear attenuation coefficient for  mu = "+mu+"cm^-1");
+		//Geometric Attenuation (Inverse-Square Law)
+		transmission *= 1/Math.pow(distance, 2);
 
-   		//Transmission calculation
-        //Combines exponential attenuation and inverse-square law
-    	double transmission = Physics.calcTransmission(mu, thickness, distance);
-
-		//Prints result of calculations
-    	System.out.printf("Transmission through %.2f cm thickness: at %.2f cm distance): %.8f%%\n",thickness, distance, transmission*100);
-
-
+		//Output
+		System.out.println("\nResults");
+		for(int i = 0; i<layers.size(); i++){
+			Layer l = layers.get(i);
+			System.out.printf("Layer %d: %s (%.2f cm)\n", i + 1, l.material.name, l.thickness);
+		}
+    	System.out.printf("\nTotal thickness: %.2f cm\n", totalThickness);
+        System.out.printf("Transmission at %.2f cm: %.8f%%\n", distance, transmission * 100);
     }
 }
 
+//Holds properties and attenuation values
 class Material{
 	String name;
 	double density;
@@ -89,7 +112,8 @@ class Material{
 		this.muOverP = muOverP;
 	}
 }
-//
+
+
 class Physics{
 
 	//Calculates linear attenuation coefficient mu using log-log interpolation.
@@ -368,4 +392,15 @@ class MaterialLibrary{
 
 
 
+}
+
+class Layer {
+
+	Material material;
+	double thickness;
+
+	public Layer(Material material, double thickness){
+		this.material = material;
+		this.thickness = thickness;
+	}
 }
