@@ -35,7 +35,7 @@ public class ShieldAttenTest {
    		System.out.println("3. Concrete, Barite");
    		System.out.println("4. Aluminum");
    		System.out.println("5. Water (liquid)");
-   		System.out.println("6. Tunsten");
+   		System.out.println("6. Tungsten");
    		System.out.println("7. Bismuth");
    		System.out.println("8. Copper");
    		System.out.println("9. Tin");
