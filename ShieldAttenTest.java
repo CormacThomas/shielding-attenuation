@@ -42,6 +42,7 @@ public class ShieldAttenTest {
    		System.out.println("10. Polyethylene");
    		System.out.println("11. Graphite");
    		System.out.println("12. Leaded Glass");
+   		System.out.println("13. Depleted Uranium");
    		int choice = scan.nextInt();
    		Material mat = MaterialLibrary.getMaterial(choice);
    		if(mat == null){
@@ -54,6 +55,51 @@ public class ShieldAttenTest {
    		double thickness = scan.nextDouble();
    		layers.add(new Layer(mat, thickness));
 
+			if(choice == 13){
+				System.out.println("\n Depleted Uranium Internal Source Modeling ");
+
+				double tHalf = 4.468e9 * 365.25 * 24 * 3600;
+				double lambda = Math.log(2)/tHalf;
+				double atomsPerGram = (6.022e23/238);
+				double A = atomsPerGram * lambda;
+				double Avol = A * 19;
+				System.out.printf("Decay constant lambda = %.4e s^-1\n", lambda);
+	            System.out.printf("Activity = %.2f Bq/g = %.2f kBq/g\n", A, A/1000.0);
+	            System.out.printf("Activity per volume = %.3e Bq/cm^3\n", Avol);
+
+	            double [][] lines={{63.28, 0.041},
+                    {92.37, 0.0242},
+                    {92.79, 0.0239},
+                    {112.81, 0.0024},
+                    {258.19, 0.000754},
+                    {742.81, 0.00096},
+                    {766.37, 0.00316},
+                    {1001.0, 0.00839}};
+
+                System.out.println("\nEnergy (keV)\tIgamma\t\tSvol(E) [ph/s/cm^3]");
+                for(double[] line: lines){
+                	double E_keV = line[0];
+                	double Ig = line[1];
+                	double Svol = Avol*Ig;
+
+                	System.out.printf("%.2f\t\t%.5f\t%.3e\n", E_keV, Ig, Svol);
+                }
+                for(double[] line: lines){
+                	double E_keV = line[0];
+                	double E_MeV = E_keV/1000;
+                	double Ig = line[1];
+                	System.out.println(line[1]);
+                	double Svol = Avol*Ig;
+                	double mu = Physics.getMu(E_MeV, mat);
+                	double Rout = Svol*(1-Math.exp(-mu*thickness))/mu;
+                //	System.out.println(thickness);
+                //	System.out.println(mat.name);
+                	System.out.println("Mu is"+mu);
+                    System.out.printf("E=%.1f keV: Rout = %.3e photons/s/cm^2\n", E_keV, Rout);
+                }
+
+                System.out.println("\nNote: These values assume secular equilibrium up to Pa-234m.");
+			}
     	}
 
 
@@ -81,6 +127,7 @@ public class ShieldAttenTest {
 			double mu = Physics.getMu(E, layer.material); //Interpolate
 			double attenuation = Math.exp(-mu*layer.thickness);
 			transmission *= attenuation;
+
 		}
 
 		//Geometric Attenuation (Inverse-Square Law)
@@ -93,6 +140,7 @@ public class ShieldAttenTest {
 			System.out.printf("Layer %d: %s (%.2f cm)\n", i + 1, l.material.name, l.thickness);
 		}
     	System.out.printf("\nTotal thickness: %.2f cm\n", totalThickness);
+
         System.out.printf("Transmission at %.2f cm: %.8f%%\n", distance, transmission * 100);
     }
 }
@@ -198,6 +246,8 @@ class MaterialLibrary{
 			return createGraphite();
 		}else if(choice == 12){
 			return createLeadedGlass();
+		}else if(choice == 13){
+			return createDepletedUranium();
 		}else{
 			return null;
 		}
@@ -389,12 +439,35 @@ class MaterialLibrary{
 	    return new Material("Leaded Glass", 5.05, energy, muOverP);
 	}
 
+	public static Material createDepletedUranium() {
+	    double[] energy = {0.001000, 0.0010222, 0.0010449, 0.00115314, 0.0012726, 0.00135409,
+	        0.0014408, 0.001500, 0.002000, 0.003000, 0.0035517, 0.00363859,
+	        0.0037276, 0.004000, 0.0043034, 0.005000, 0.0051822, 0.00536198,
+	        0.005548, 0.006000, 0.008000, 0.010000, 0.015000, 0.0171663,
+	        0.020000, 0.0209476, 0.0213487, 0.0217574, 0.030000, 0.040000,
+	        0.050000, 0.060000, 0.080000, 0.100000, 0.115606, 0.150000,
+	        0.200000, 0.300000, 0.400000, 0.500000, 0.600000, 0.800000,
+	        1.000000, 1.250000, 1.500000, 2.000000, 3.000000, 4.000000,
+	        5.000000, 6.000000, 8.000000, 10.000000};
+
+    double[] muOverP = {6626, 6375, 6127, 5446, 4526, 4065, 3598, 3382, 1865, 769.2, 525.7,
+        1188, 1112, 1329, 1110, 889.1, 811.8, 791.5, 728.2, 628.4, 310.8,
+        179.1, 65.28, 46.63, 71.06, 63.00, 95.15, 80.23, 41.28, 19.83,
+        11.21, 7.035, 3.395, 1.954, 4.893, 2.591, 1.298, 0.5192, 0.2922,
+        0.1976, 0.1490, 0.1016, 0.07896, 0.06370, 0.05587, 0.04878,
+        0.04447, 0.04392, 0.04463, 0.04583, 0.04879, 0.05195};
+
+    double density = 18.95; // g/cm^3, typical for Depleted Uranium
+
+    return new Material("Depleted Uranium (DU)", density, energy, muOverP);
+}
+
 
 
 
 }
 
-class Layer {
+class Layer{
 
 	Material material;
 	double thickness;
