@@ -12,7 +12,7 @@
 import java.util.*;
 public class ShieldAttenTest {
 
-    public static void main(String [] args) {
+     static void main(String [] args) {
 
     	//Constants and setup
     	//Simulated photon energy (MeV) - will be replaced with user input
@@ -92,8 +92,6 @@ public class ShieldAttenTest {
                 	double Svol = Avol*Ig;
                 	double mu = Physics.getMu(E_MeV, mat);
                 	double Rout = Svol*(1-Math.exp(-mu*thickness))/mu;
-                //	System.out.println(thickness);
-                //	System.out.println(mat.name);
                 	System.out.println("Mu is"+mu);
                     System.out.printf("E=%.1f keV: Rout = %.3e photons/s/cm^2\n", E_keV, Rout);
                 }
@@ -121,17 +119,8 @@ public class ShieldAttenTest {
 			return;
 		}
 
-		//Calculations: multiply transmission through each layer (Beer-Lambert)
-		double transmission = 1;
-		for(Layer layer : layers){
-			double mu = Physics.getMu(E, layer.material); //Interpolate
-			double attenuation = Math.exp(-mu*layer.thickness);
-			transmission *= attenuation;
-
-		}
-
-		//Geometric Attenuation (Inverse-Square Law)
-		transmission *= 1/Math.pow(distance, 2);
+		//Compute transmission using ShieldingCalculator
+		double transmission = ShieldingCalculator.computeTransmission(E,layers,distance);
 
 		//Output
 		System.out.println("\nResults");
@@ -476,4 +465,21 @@ class Layer{
 		this.material = material;
 		this.thickness = thickness;
 	}
+}
+
+class ShieldingCalculator{
+
+	public static double computeTransmission(double energy, ArrayList<Layer> layers, double distance){
+		//Calculations: multiply transmission through each layer (Beer-Lambert)
+		double transmission = 1;
+		for(Layer layer: layers){
+			double mu = Physics.getMu(energy,layer.material);
+			transmission *= Math.exp(-mu*layer.thickness);
+		}
+		//Geometric Attenuation (Inverse-Square Law)
+		transmission *= 1/Math.pow(distance,2);
+		return transmission;
+	}
+
+
 }
