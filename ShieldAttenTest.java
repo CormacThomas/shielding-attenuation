@@ -12,128 +12,104 @@
 import java.util.*;
 public class ShieldAttenTest {
 
-     static void main(String [] args) {
-
-    	//Constants and setup
-    	//Simulated photon energy (MeV) - will be replaced with user input
-    	double E = .6617; //Example Cs-137 photon energy
-    	Scanner scan = new Scanner(System.in);
-
-		ArrayList<Layer> layers = new ArrayList<>();
-
-		//User input layer selection
-		System.out.println("Enter number of shielding layers: ");
-		int numLayers = scan.nextInt();
-
-
-    	//Loop for each layer: material + thickness
-    	for(int i=1; i<=numLayers; i++){
-    	System.out.println("\nSelect material for layer " +i+":");
-    	System.out.println("Select a material:");
-   		System.out.println("1. Lead");
-   		System.out.println("2. Concrete, Ordinary");
-   		System.out.println("3. Concrete, Barite");
-   		System.out.println("4. Aluminum");
-   		System.out.println("5. Water (liquid)");
-   		System.out.println("6. Tungsten");
-   		System.out.println("7. Bismuth");
-   		System.out.println("8. Copper");
-   		System.out.println("9. Tin");
-   		System.out.println("10. Polyethylene");
-   		System.out.println("11. Graphite");
-   		System.out.println("12. Leaded Glass");
-   		System.out.println("13. Depleted Uranium");
-   		int choice = scan.nextInt();
-   		Material mat = MaterialLibrary.getMaterial(choice);
-   		if(mat == null){
-   			System.out.println("Invalid choice.");
-   			return;
-   		}
-
-		//User shielding thickness input
-   		System.out.println("Enter shielding thickness (cm): ");
-   		double thickness = scan.nextDouble();
-   		layers.add(new Layer(mat, thickness));
-
-			if(choice == 13){
-				System.out.println("\n Depleted Uranium Internal Source Modeling ");
-
-				double tHalf = 4.468e9 * 365.25 * 24 * 3600;
-				double lambda = Math.log(2)/tHalf;
-				double atomsPerGram = (6.022e23/238);
-				double A = atomsPerGram * lambda;
-				double Avol = A * 19;
-				System.out.printf("Decay constant lambda = %.4e s^-1\n", lambda);
-	            System.out.printf("Activity = %.2f Bq/g = %.2f kBq/g\n", A, A/1000.0);
-	            System.out.printf("Activity per volume = %.3e Bq/cm^3\n", Avol);
-
-	            double [][] lines={{63.28, 0.041},
-                    {92.37, 0.0242},
-                    {92.79, 0.0239},
-                    {112.81, 0.0024},
-                    {258.19, 0.000754},
-                    {742.81, 0.00096},
-                    {766.37, 0.00316},
-                    {1001.0, 0.00839}};
-
-                System.out.println("\nEnergy (keV)\tIgamma\t\tSvol(E) [ph/s/cm^3]");
-                for(double[] line: lines){
-                	double E_keV = line[0];
-                	double Ig = line[1];
-                	double Svol = Avol*Ig;
-
-                	System.out.printf("%.2f\t\t%.5f\t%.3e\n", E_keV, Ig, Svol);
-                }
-                for(double[] line: lines){
-                	double E_keV = line[0];
-                	double E_MeV = E_keV/1000;
-                	double Ig = line[1];
-                	System.out.println(line[1]);
-                	double Svol = Avol*Ig;
-                	double mu = Physics.getMu(E_MeV, mat);
-                	double Rout = Svol*(1-Math.exp(-mu*thickness))/mu;
-                	System.out.println("Mu is"+mu);
-                    System.out.printf("E=%.1f keV: Rout = %.3e photons/s/cm^2\n", E_keV, Rout);
-                }
-
-                System.out.println("\nNote: These values assume secular equilibrium up to Pa-234m.");
-			}
-    	}
+     public static void main(String [] args) {
+		 //Gamma energy in MeV (Cs-137 reference)
+		 double E = .6617;
+		 //Scanner for user input
+		 Scanner scan = new Scanner(System.in);
+		 //Read shielding config
+		 ArrayList<Layer> layers = InputHandler.readLayers(scan);
+		 //Read detector distance from source
+		 double distance = InputHandler.readDistance(scan);
+		 //Compute total photon transmission
+		 double flux = ShieldingCalculator.computeTransmission(E,layers,distance);
+		 //Output results
+		 OutputHandler.printResults(layers,distance,flux);
 
 
-		//User detector distance input
-   		System.out.println("Enter distance from source to detector (cm): ");
-   		double distance = scan.nextDouble();
-
-		//Total thickness check
-		double totalThickness = 0;
-		for(Layer layer : layers){
-			totalThickness += layer.thickness;
-		}
-
-   		//Geometric possibility check
-   		//Detector must not be located beyond or in the shield.
-		if(distance <= totalThickness){
-			System.out.println("Error: Distance must be greater than shielding thickness.");
-			System.out.println("Detector must be located beyond the shield.");
-			return;
-		}
-
-		//Compute transmission using ShieldingCalculator
-		double transmission = ShieldingCalculator.computeTransmission(E,layers,distance);
-
-		//Output
-		System.out.println("\nResults");
-		for(int i = 0; i<layers.size(); i++){
-			Layer l = layers.get(i);
-			System.out.printf("Layer %d: %s (%.2f cm)\n", i + 1, l.material.name, l.thickness);
-		}
-    	System.out.printf("\nTotal thickness: %.2f cm\n", totalThickness);
-
-        System.out.printf("Transmission at %.2f cm: %.8f%%\n", distance, transmission * 100);
+		 boolean hasDU = false;
+		 Layer duLayer = null;
+		 //Check whether any layer contains DU
+		 for(Layer layer :layers){
+			 if(layer.material.name.equals("Depleted Uranium (DU)")){
+				 hasDU = true;
+				 duLayer = layer;
+			 }
+		 }
+		 //If DU is present, perform source modeling
+		 if(hasDU){
+			 UraniumSourceModel.analyzeDU(duLayer.thickness,duLayer.material);
+		 }
     }
 }
 
+class InputHandler{
+	//Read shielding layers from user
+	public static ArrayList<Layer> readLayers(Scanner scan){
+		ArrayList<Layer> layers = new ArrayList<>();
+		System.out.print("Enter number of shielding layers: ");
+		int numLayers = scan.nextInt();
+		//loop over each layer
+		for(int i = 1; i<=numLayers; i++){
+			//get material selection
+			int choice = readMaterialChoice(scan,i);
+			Material mat = MaterialLibrary.getMaterial(choice);
+			//make sure selection exists
+			if(mat == null){
+				System.out.println("Invalid material choice.");
+				i--;
+				continue;
+			}
+			//Get thickness in cm
+			System.out.println("Enter Shielding Thickness (cm): ");
+			double thickness = scan.nextDouble();
+			//store layer
+			layers.add(new Layer(mat, thickness));
+		}
+		return layers;
+	}
+	//Displays material menu
+	public static int readMaterialChoice(Scanner scan,int layer){
+		System.out.println("\nSelect material for layer " +layer+":");
+		System.out.println("Select a material:");
+		System.out.println("1. Lead");
+		System.out.println("2. Concrete, Ordinary");
+		System.out.println("3. Concrete, Barite");
+		System.out.println("4. Aluminum");
+		System.out.println("5. Water (liquid)");
+		System.out.println("6. Tungsten");
+		System.out.println("7. Bismuth");
+		System.out.println("8. Copper");
+		System.out.println("9. Tin");
+		System.out.println("10. Polyethylene");
+		System.out.println("11. Graphite");
+		System.out.println("12. Leaded Glass");
+		System.out.println("13. Depleted Uranium");
+		return scan.nextInt();
+	}
+	//reads detector distance in cm
+	public static double readDistance(Scanner scan){
+		System.out.print("Enter detector distance (cm): ");
+		return scan.nextDouble();
+	}
+}
+
+class OutputHandler{
+	public static void printResults(ArrayList<Layer> layers, double distance, double transmission){
+		double totalThickness = 0;
+		System.out.println("\nResults");
+		//prints lyer summary
+		for(int i = 0; i<layers.size(); i++){
+			Layer l = layers.get(i);
+			System.out.printf("Layer %d: %s (%.2f cm)\n",i+1,l.material.name,l.thickness);
+			totalThickness +=l.thickness;
+		}
+		//prints totals
+		System.out.printf("\nTotal thickness: %.2f cm\n",totalThickness);
+		//transmission includes geometry factor
+		System.out.printf("Transmission at %.2f cm: %.8f%%\n", distance, transmission*100);
+	}
+}
 //Holds properties and attenuation values
 class Material{
 	String name;
@@ -153,7 +129,6 @@ class Material{
 
 class Physics{
 
-	//Calculates linear attenuation coefficient mu using log-log interpolation.
     //The NIST tables provide mu/p at specified photon energies, so this method
     //estimates mu at any given energy between known points.
 	public static double getMu(double E, Material mat){
@@ -195,18 +170,57 @@ class Physics{
     	}
     	return -1;
     }
-
-    //Calculates transmitted fraction of photons through a material and air gap.
-    //Beer-Lambert Law
-    //Inverse-Square Law
-    public static double calcTransmission(double mu, double thickness, double distance){
-    	double shieldingFactor = Math.exp(-mu*thickness); //exponential attenuation
-    	double distanceFactor = 1.0 / Math.pow(distance, 2); //inverse-square spreading
-		return shieldingFactor * distanceFactor;
-    }
-
 }
 
+class UraniumSourceModel{
+	public static void analyzeDU(double thickness, Material mat){
+				//System.out.println("\n Depleted Uranium Internal Source Modeling ");
+				//Uranium half-life in seconds
+				double tHalf = 4.468e9 * 365.25 * 24 * 3600;
+				//Decay constant
+				double lambda = Math.log(2)/tHalf;
+				//Atoms per gam of U-238
+				double atomsPerGram = (6.022e23/238);
+				//Activity per gram (Bq/g)
+				double A = atomsPerGram * lambda;
+				//Activity per volume (Bq/cm^3)
+				double Avol = A * 19;
+				//System.out.printf("Decay constant lambda = %.4e s^-1\n", lambda);
+	           // System.out.printf("Activity = %.2f Bq/g = %.2f kBq/g\n", A, A/1000.0);
+	           // System.out.printf("Activity per volume = %.3e Bq/cm^3\n", Avol);
+				//gamma emission lines (kev, intensity)
+	            double [][] lines={{63.28, 0.041},
+                    {92.37, 0.0242},
+                    {92.79, 0.0239},
+                    {112.81, 0.0024},
+                    {258.19, 0.000754},
+                    {742.81, 0.00096},
+                    {766.37, 0.00316},
+                    {1001.0, 0.00839}};
+
+             //   System.out.println("\nEnergy (keV)\tIgamma\t\tSvol(E) [ph/s/cm^3]");
+                for(double[] line: lines){
+                	double E_keV = line[0];
+                	double Ig = line[1];
+                	double Svol = Avol*Ig;
+
+              //  	System.out.printf("%.2f\t\t%.5f\t%.3e\n", E_keV, Ig, Svol);
+                }
+                for(double[] line: lines){
+                	double E_keV = line[0];
+                	double E_MeV = E_keV/1000;
+                	double Ig = line[1];
+                	//System.out.println(line[1]);
+                	double Svol = Avol*Ig;
+                	double mu = Physics.getMu(E_MeV, mat);
+                	double Rout = Svol*(1-Math.exp(-mu*thickness))/mu;
+                //	System.out.println("Mu is"+mu);
+                  //  System.out.printf("E=%.1f keV: Rout = %.3e photons/s/cm^2\n", E_keV, Rout);
+                }
+
+             //   System.out.println("\nNote: These values assume secular equilibrium up to Pa-234m.");
+			}
+    	}
 class MaterialLibrary{
 
 	//User material choice selection
@@ -474,10 +488,12 @@ class ShieldingCalculator{
 		double transmission = 1;
 		for(Layer layer: layers){
 			double mu = Physics.getMu(energy,layer.material);
+			if(mu<=0) continue;
 			transmission *= Math.exp(-mu*layer.thickness);
 		}
 		//Geometric Attenuation (Inverse-Square Law)
-		transmission *= 1/Math.pow(distance,2);
+		double distanceFactor = 1/(4*Math.PI*distance*distance);
+		transmission *= distanceFactor;
 		return transmission;
 	}
 
