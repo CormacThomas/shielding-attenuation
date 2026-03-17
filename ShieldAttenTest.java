@@ -4,7 +4,11 @@
  * Simulates photon attenuation through shielding material,
  * accounting for shielding attenuation coefficient (Beer-Lambert Law)
  * and geometric spreading (Inverse-Square Law).
- *
+ * ASSUMPTIONS
+ * -Point gamma source
+ * -Narrow beam (no scatter or build up)
+ * -No secondary transport
+ * -Point detector
  * @author
  * @version 1.01
  */
@@ -15,16 +19,19 @@ public class ShieldAttenTest {
      public static void main(String [] args) {
 		 //Gamma energy in MeV (Cs-137 reference)
 		 double E = .6617;
+		 //Source Stength in photons/s roughly equivalent to 1 Ci
+		 double S = 3.7e10;
 		 //Scanner for user input
 		 Scanner scan = new Scanner(System.in);
 		 //Read shielding config
 		 ArrayList<Layer> layers = InputHandler.readLayers(scan);
 		 //Read detector distance from source
 		 double distance = InputHandler.readDistance(scan);
-		 //Compute total photon transmission
-		 double flux = ShieldingCalculator.computeTransmission(E,layers,distance);
+		 //Compute shielding transmission and flux
+		 double transmission = ShieldingCalculator.computeTransmission(E,layers);
+		 double flux = ShieldingCalculator.computeFlux(transmission,distance,S);
 		 //Output results
-		 OutputHandler.printResults(layers,distance,flux);
+		 OutputHandler.printResults(layers,distance,transmission, flux);
 
 
 		 boolean hasDU = false;
@@ -89,13 +96,14 @@ class InputHandler{
 	}
 	//reads detector distance in cm
 	public static double readDistance(Scanner scan){
+		//distance from point source to surface of detector
 		System.out.print("Enter detector distance (cm): ");
 		return scan.nextDouble();
 	}
 }
 
 class OutputHandler{
-	public static void printResults(ArrayList<Layer> layers, double distance, double transmission){
+	public static void printResults(ArrayList<Layer> layers, double distance, double transmission, double flux){
 		double totalThickness = 0;
 		System.out.println("\nResults");
 		//prints lyer summary
@@ -106,8 +114,9 @@ class OutputHandler{
 		}
 		//prints totals
 		System.out.printf("\nTotal thickness: %.2f cm\n",totalThickness);
-		//transmission includes geometry factor
-		System.out.printf("Transmission at %.2f cm: %.8f%%\n", distance, transmission*100);
+		//transmission is dimensionless (shielding only)
+		System.out.printf("Shield transmission: %.6f%%\n", transmission*100);
+		System.out.printf("Flux at %.2f cm: %.8e (photons/cm^2/s)\n",distance,flux);
 	}
 }
 //Holds properties and attenuation values
@@ -257,7 +266,9 @@ class MaterialLibrary{
 	}
 
 	//Methods define attenuation data from NIST XCOM.
+	//All MeV
     //Returns a Material object containing energy and u/p values.
+	//muOverP units: (cm^2/g)
 	public static Material createLead(){
 		double[] energy = {0.001, 0.0015, 0.002, 0.00248, 0.002484, 0.00253, 0.002586, 0.002586,
     		0.003, 0.003066, 0.003066, 0.003301, 0.003554, 0.003554, 0.003699, 0.003851,
@@ -483,19 +494,20 @@ class Layer{
 
 class ShieldingCalculator{
 
-	public static double computeTransmission(double energy, ArrayList<Layer> layers, double distance){
+	public static double computeTransmission(double energy, ArrayList<Layer> layers){
 		//Calculations: multiply transmission through each layer (Beer-Lambert)
 		double transmission = 1;
 		for(Layer layer: layers){
+			//returns linear attenuation coefficient mu in cm^-1
 			double mu = Physics.getMu(energy,layer.material);
 			if(mu<=0) continue;
 			transmission *= Math.exp(-mu*layer.thickness);
 		}
-		//Geometric Attenuation (Inverse-Square Law)
-		double distanceFactor = 1/(4*Math.PI*distance*distance);
-		transmission *= distanceFactor;
 		return transmission;
 	}
-
+	//calculates photon flux as a result of spreading
+	public static double computeFlux(double transmission, double distance,double sourceStrength){
+		return sourceStrength * transmission / (4* Math.PI * distance*distance);
+	}
 
 }
