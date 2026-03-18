@@ -4,11 +4,7 @@
  * Simulates photon attenuation through shielding material,
  * accounting for shielding attenuation coefficient (Beer-Lambert Law)
  * and geometric spreading (Inverse-Square Law).
- * ASSUMPTIONS
- * -Point gamma source
- * -Narrow beam (no scatter or build up)
- * -No secondary transport
- * -Point detector
+ *
  * @author
  * @version 1.01
  */
@@ -125,13 +121,33 @@ class Material{
 	double density;
 	double[] energy;
 	double[] muOverP;
+	double[] muPhotoOverP;
+	double[] muComptonOverP;
+	double[] muPairOverP;
 
 	//Defines parameters for a Material object
-	public Material(String name, double density, double[] energy, double[] muOverP){
+	public Material(String name, double density, double[] energy, double[] muPhotoOverP, double[] muComptonOverP, double[] muPairOverP){
 		this.name = name;
 		this.density = density;
 		this.energy = energy;
+		this.muPhotoOverP = muPhotoOverP;
+		this.muComptonOverP = muComptonOverP;
+		this.muPairOverP = muPairOverP;
+	}
+	public Material(String name, double density,
+					double[] energy,
+					double[] muOverP){
+
+		this.name = name;
+		this.density = density;
+		this.energy = energy;
+
 		this.muOverP = muOverP;
+
+		// component arrays remain null
+		this.muPhotoOverP = null;
+		this.muComptonOverP = null;
+		this.muPairOverP = null;
 	}
 }
 
@@ -141,32 +157,45 @@ class Physics{
     //The NIST tables provide mu/p at specified photon energies, so this method
     //estimates mu at any given energy between known points.
 	public static double getMu(double E, Material mat){
-		int i = bracketIndex(E, mat.energy);
-    	if(i==-1){
-    		System.out.println("Energy out of bounds for "+mat.name);
-    		return -1;
-    	}
+		if(mat.muPhotoOverP !=null && mat.muComptonOverP!=null&&mat.muPairOverP!=null){
+			double photo = interpolate(E, mat.energy, mat.muPhotoOverP);
+			double compton = interpolate(E, mat.energy, mat.muComptonOverP);
+			double pair = interpolate(E, mat.energy, mat.muPairOverP);
 
-    	//Values on either side of the desired photon energy
-    	double E1 = mat.energy[i];
-    	double E2 = mat.energy[i+1];
-    	double m1 = mat.muOverP[i];
-    	double m2 = mat.muOverP[i+1];
+			double muOverP = photo + compton + pair;
 
-    	//Log-log interpolation based on linear interpolation formula
-    	double lnE1 = Math.log(E1);
-    	double lnE2 = Math.log(E2);
-    	double lnE = Math.log(E);
-    	double lnM1 = Math.log(m1);
-    	double lnM2 = Math.log(m2);
-    	double lnM = lnM1+((lnE-lnE1)/(lnE2-lnE1))*(lnM2-lnM1);
+			return muOverP * mat.density;
+		}
+		if(mat.muOverP !=null){
+			double muOverP = interpolate(E, mat.energy, mat.muOverP);
+			return muOverP *mat.density;
+		}
+		return 0;
+	}
 
-    	//Convert back from log scale
-    	double m = Math.exp(lnM);
+	public static double interpolate(double E, double[] energy, double[] values){
+		int i = bracketIndex(E, energy);
 
-   		//Interpolation gives mu/density. Multiply by density to get mu.
-    	double mu = m*mat.density;
-    	return mu;
+		if(i==-1){
+			System.out.println("Energy out of bounds.");
+			return -1;
+		}
+		double E1 = energy[i];
+		double E2 = energy[i+1];
+		double V1 = values[i];
+		double V2 = values[i+1];
+		if(V1 <= 0 || V2 <= 0){
+			return V1 + ((E - E1)/(E2 - E1))*(V2 - V1);
+		}
+		double lnE = Math.log(E);
+		double lnE1 = Math.log(E1);
+		double lnE2 = Math.log(E2);
+		double lnV1 = Math.log(V1);
+		double lnV2 = Math.log(V2);
+
+		double lnV = lnV1 + ((lnE - lnE1)/(lnE2 - lnE1))*(lnV2 - lnV1);
+
+		return Math.exp(lnV);
 	}
 
 	//Finds the index "i" such that E lies between energy[i] and energy[i+1].
@@ -276,14 +305,57 @@ class MaterialLibrary{
     		0.01553, 0.01586, 0.01586, 0.02, 0.03, 0.04, 0.05, 0.06, 0.08, 0.088, 0.088,
     		0.1, 0.15, 0.2, 0.3, 0.4, 0.5, 0.6, 0.8, 1.0, 1.022, 1.25, 1.5, 2.0, 2.044,
    			3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0, 10.0};
-    	double[] muOverP = {5209.0, 2356.0, 1285.0, 800.9, 1396.0, 1647.0, 1944.0, 2450.0,
-    		1965.0, 1857.0, 2146.0, 1792.0, 1496.0, 1585.0, 1441.0, 1302.0,
-    		1368.0, 1251.0, 730.5, 467.2, 228.7, 130.6, 67.0, 162.1, 111.6, 107.8,
-    		148.5, 141.2, 134.4, 154.8, 86.37, 30.32, 14.36, 8.056, 5.020, 2.419,
-    		1.910, 7.684, 5.549, 2.015, 0.4032, 0.2323, 0.1613, 0.125, 0.0887, 0.07102,
-    		0.06962, 0.05875, 0.05222, 0.04607, 0.04577, 0.04234, 0.0420, 0.04272, 0.04391,
-    		0.04528, 0.04675, 0.04823, 0.04972};
-    	return new Material("Lead", 11.34, energy, muOverP);
+		double[] muPhoto = {
+				5.197E+03, 2.344E+03, 1.274E+03, 7.900E+02,
+				1.385E+03, 1.636E+03, 1.933E+03, 2.439E+03,
+				1.955E+03, 1.847E+03, 2.136E+03, 1.782E+03,
+				1.486E+03, 1.575E+03, 1.432E+03, 1.302E+03,
+				1.358E+03, 1.242E+03, 7.222E+02, 4.598E+02,
+				2.226E+02, 1.256E+02, 6.310E+01, 1.082E+02,
+				1.045E+02, 1.452E+02, 1.380E+02, 1.312E+02,
+				1.517E+02, 8.397E+01, 2.886E+01, 1.335E+01,
+				7.292E+00, 4.432E+00, 2.012E+00, 1.547E+00,
+				7.321E+00, 5.237E+00, 1.815E+00, 8.464E-01,
+				2.930E-01, 1.417E-01, 8.257E-02, 5.406E-02,
+				2.871E-02, 1.810E-02, 1.732E-02, 1.168E-02,
+				8.321E-03, 5.034E-03, 4.854E-03, 2.631E-03,
+				1.723E-03, 1.263E-03, 9.894E-04, 8.103E-04,
+				6.845E-04, 5.915E-04, 5.203E-04
+		};
+		double[] muCompton = {
+				3.587E-03, 6.601E-03, 9.620E-03, 1.240E-02,
+				1.240E-02, 1.268E-02, 1.297E-02, 1.297E-02,
+				1.525E-02, 1.560E-02, 1.560E-02, 1.684E-02,
+				1.813E-02, 1.813E-02, 1.887E-02, 1.963E-02,
+				1.963E-02, 2.037E-02, 2.516E-02, 2.970E-02,
+				3.807E-02, 4.540E-02, 5.435E-02, 5.920E-02,
+				5.964E-02, 5.964E-02, 6.037E-02, 6.112E-02,
+				6.112E-02, 6.897E-02, 8.228E-02, 9.019E-02,
+				9.478E-02, 9.734E-02, 9.923E-02, 9.928E-02,
+				9.928E-02, 9.894E-02, 9.484E-02, 8.966E-02,
+				8.036E-02, 7.310E-02, 6.734E-02, 6.263E-02,
+				5.537E-02, 4.993E-02, 4.944E-02, 4.476E-02,
+				4.075E-02, 3.482E-02, 3.441E-02, 2.744E-02,
+				2.290E-02, 1.978E-02, 1.749E-02, 1.572E-02,
+				1.431E-02, 1.315E-02, 1.219E-02
+		};
+		double[] muPair = {
+				0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
+				0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
+				3.781E-04 + 0,
+				1.806E-03,
+				5.450E-03,
+				5.769E-03,
+				1.192E-02,
+				1.712E-02,
+				2.148E-02,
+				2.523E-02,
+				2.853E-02,
+				3.151E-02,
+				3.421E-02,
+				3.671E-02
+		};
+    	return new Material("Lead", 11.34, energy, muPhoto, muCompton, muPair);
 	}
 	public static Material createConcreteO() {
     	double[] energy = {0.001000, 0.001035, 0.001072, 0.0011828, 0.001305, 0.0015, 0.0015596, 0.0016935,
@@ -500,7 +572,10 @@ class ShieldingCalculator{
 		for(Layer layer: layers){
 			//returns linear attenuation coefficient mu in cm^-1
 			double mu = Physics.getMu(energy,layer.material);
-			if(mu<=0) continue;
+			if(mu < 0){
+				System.out.println("Warning: negative mu encountered.");
+				continue;
+			}
 			transmission *= Math.exp(-mu*layer.thickness);
 		}
 		return transmission;
