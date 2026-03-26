@@ -1,5 +1,3 @@
-import java.util.*;
-
 /**
  * UraniumSourceModel.java
  *

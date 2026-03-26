@@ -1,5 +1,3 @@
-import java.util.*;
-
 /**
  * Physics.java
  *
