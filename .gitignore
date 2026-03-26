@@ -1,0 +1,14 @@
+# Compiled Java class files
+*.class
+
+# IntelliJ IDEA internal files
+.idea/
+*.iml
+out/
+gen/
+
+# macOS system files (if you're on a Mac)
+.DS_Store
+
+# Windows system files
+Thumbs.db
