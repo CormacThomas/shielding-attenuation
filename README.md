@@ -9,10 +9,10 @@ This project provides a framework for calculating uncollided photon flux from a 
 Physics Models
 - Attenuation: Calculated using the Beer-Lambert Law
 - Geometric Spreading: Flux at a distance modeled via Inverse-Square Law.
-- Data Interpolation: Since pohotn cross-sections are non-linear, the simulator uses log-log interpolation for NIST XCOM mass attenuation coefficients to keep accuracy between tabulated energy points.
+- Data Interpolation: Since photon cross-sections are non-linear, the simulator uses log-log interpolation for NIST XCOM mass attenuation coefficients to keep accuracy between tabulated energy points.
 
 ## Features
-- Multi-Layer Support: Calculates transmission through an unlimited stack of diferrent materials.
+- Multi-Layer Support: Calculates transmission through an unlimited stack of different materials.
 - NIST-Integrated Library: Includes attenuation data for common materials like Lead, Tungsten, Barite Concrete, and Polyethylene.
 - Error Handling: Validates energy bounds (0.0001-10.0 MeV) and handles duplicate NIST data entries or physical inconsistencies.
 
@@ -38,9 +38,18 @@ Radiation shielding is essential in reactor design, radiography, and nuclear saf
 
 ## Author
 
-Developed by Cormac Thomas, Nuclear Engineering, Univeristy of New Mexico.
+Developed by Cormac Thomas, Nuclear Engineering, University of New Mexico.
 Focus areas include radiation transport, reactor systems, and defense applications.
 
 ## References
 NIST XCOM Photon Cross Section Database
 https://physics.nist.gov/cgi-bin/Xcom/xcom2?Method=Elem&Output2=Hand
+
+Inverse square law | radiology reference article
+https://radiopaedia.org/articles/inverse-square-law?lang=us
+
+Shielding Radiation Alphas, Betas, Gammas and Neutrons
+https://www.nrc.gov/docs/ML1122/ML11229A721.pdf 
+
+Density of elements chart – Angstrom Sciences elements density table
+https://angstromsciences.com/density-elements-chart
