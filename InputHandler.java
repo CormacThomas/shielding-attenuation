@@ -1,25 +1,43 @@
 import java.util.*;
+
+/**
+ * InputHandler.java
+ *
+ * Handles all user input for the shielding attenuation simulator.
+ */
 public class InputHandler{
-    //Read shielding layers from user
+    /*
+      Reads a list of shielding layers from user input.
+      Each layer consists of a selected material and user
+      defined thickness in centimeters.
+      Returns a list of configured shielding layers.
+     */
     public static ArrayList<Layer> readLayers(Scanner scan){
+
         ArrayList<Layer> layers = new ArrayList<>();
+
         System.out.print("Enter number of shielding layers: ");
         int numLayers = scan.nextInt();
-        //loop over each layer
+
+        //Iterate through each layer and collect data
         for(int i = 1; i<=numLayers; i++){
-            //get material selection
+
+            //Obtain user material selection
             int choice = readMaterialChoice(scan,i);
             Material mat = MaterialLibrary.getMaterial(choice);
-            //make sure selection exists
+
+            //Make sure selection exists
             if(mat == null){
                 System.out.println("Invalid material choice.");
                 i--;
                 continue;
             }
-            //Get thickness in cm
+
+            //Obtain user thickness selection in cm
             System.out.println("Enter Shielding Thickness (cm): ");
             double thickness = scan.nextDouble();
-            //store layer
+
+            //Store layer configuration
             layers.add(new Layer(mat, thickness));
         }
         return layers;
@@ -43,9 +61,9 @@ public class InputHandler{
         System.out.println("13. Depleted Uranium");
         return scan.nextInt();
     }
-    //reads detector distance in cm
+    //Reads detector from source distance in cm
     public static double readDistance(Scanner scan){
-        //distance from point source to surface of detector
+
         System.out.print("Enter detector distance (cm): ");
         return scan.nextDouble();
     }
