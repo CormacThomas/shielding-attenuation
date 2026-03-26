@@ -146,7 +146,7 @@ public class MaterialLibrary{
         double density = 2.4;
 
         return new Material("Concrete (Ordinary)", density, energy, muOverP);
-    }
+    }//test
     public static Material createConcreteB() {
         double[] energy = {0.001000, 0.001031, 0.001062, 0.0010988, 0.0011367, 0.001212, 0.001293,
                 0.001299, 0.001305, 0.001500, 0.0015596, 0.0016935, 0.0018389, 0.002000,
