@@ -20,7 +20,7 @@ Physics Models
 
 Detailed physics models and validation benchmarks can be found in the following document:
 
-**[VALIDATION REPORT: PHOTON ATTENUATION SIMULATOR (V1.01)](./docs/VALIDATION_REPORT_PHOTON_ATTENUATION_SIMULATOR_(V1.01).pdf)**
+**[VALIDATION REPORT: PHOTON ATTENUATION SIMULATOR (V1.01)](https://github.com/CormacThomas/shielding-attenuation/tree/main/docs)**
 
 ## Planned Features
 - Implement G-P fitting parameters (ORNL standard) to account for collided flux
