@@ -1,14 +1,8 @@
-# Compiled Java class files
-*.class
-
-# IntelliJ IDEA internal files
-.idea/
-*.iml
-out/
-gen/
-
-# macOS system files (if you're on a Mac)
+__pycache__/
+*.pyc
+.venv/
+venv/
+.env
+.vscode/
 .DS_Store
 
-# Windows system files
-Thumbs.db
