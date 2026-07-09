@@ -1,6 +1,6 @@
-# Shielding Attenuation Simulator (v1.01)
+# Shielding Attenuation Simulator (v1.02)
 
-A Java-based radiation transport tool designed to model photon attenuation through multi-layer shielding geometries. This simulator uses the Beer-Lambert Law for material interactions and the Inverse-Square Law for geometric spreading.
+A Python-based radiation transport tool designed to model photon attenuation through multi-layer shielding geometries. This simulator uses the Beer-Lambert Law for material interactions and the Inverse-Square Law for geometric spreading.
 
 ## Overview
 
@@ -20,11 +20,10 @@ Physics Models
 
 Detailed physics models and validation benchmarks can be found in the following document:
 
-**[VALIDATION REPORT: PHOTON ATTENUATION SIMULATOR (V1.01)](https://github.com/CormacThomas/shielding-attenuation/tree/main/docs)**
+**[VALIDATION REPORT: PHOTON ATTENUATION SIMULATOR (V1.02)](https://github.com/CormacThomas/shielding-attenuation/tree/main/docs)**
 
 ## Planned Features
 - Implement G-P fitting parameters (ORNL standard) to account for collided flux
-- Add depleted uranium shielding with self-radiation correction
 - Create a graphical front end for visualization
 - Add dose rate calculation using source activity
 - Implement improved / user friendly UI
