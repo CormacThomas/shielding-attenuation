@@ -94,7 +94,7 @@ public class ShieldAttenTest {
                 	double Rout = Svol*(1-Math.exp(-mu*thickness))/mu;
                 //	System.out.println(thickness);
                 //	System.out.println(mat.name);
-                	System.out.println("Mu is"+mu);
+                //	System.out.println("Mu is"+mu);
                     System.out.printf("E=%.1f keV: Rout = %.3e photons/s/cm^2\n", E_keV, Rout);
                 }
 
