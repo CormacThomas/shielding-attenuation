@@ -1,4 +1,4 @@
-# Shielding Attenuation Simulator (v1.02)
+# Shielding Attenuation Simulator (v1.03)
 
 A Python-based radiation transport tool designed to model photon attenuation through multi-layer shielding geometries. This simulator uses the Beer-Lambert Law for material interactions and the Inverse-Square Law for geometric spreading.
 
