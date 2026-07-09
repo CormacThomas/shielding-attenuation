@@ -24,6 +24,7 @@ def print_results(
         total_transmission: float,
         flux: float) -> None:
     
+    print("Calculation mode: Narrow-beam\n")
     print(f"Photon energy: {photon_energy} MeV")
     print(f"Source strength: {source_strength:.3e} photons/s")
     print(f"Detector distance: {detector_distance} cm")

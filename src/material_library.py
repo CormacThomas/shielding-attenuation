@@ -179,3 +179,17 @@ def create_polyethylene() -> Material:
                 0.03045, 0.0276, 0.02383, 0.02145]
     
     return Material("Polyethylene", 0.94, energy, mu_over_p)
+
+
+def get_material_library() -> dict[str, Material]:
+    # Create and return a dictionary of available shielding materials.
+    return{
+        "lead": create_lead(),
+        "aluminum": create_aluminum(),
+        "concrete_ordinary": create_concrete_o(),
+        "concrete_barite": create_concrete_b(),
+        "water": create_water(),
+        "tungsten": create_tungsten(),
+        "copper": create_copper(),
+        "tin": create_tin(),
+        "polyethylene": create_polyethylene()}
