@@ -129,6 +129,6 @@ def log_log_interpolate(x: float, x_values: list[float], y_values: list[float]) 
 
 
 def get_mu_over_p_at_energy(material: Material, energy: float) -> float:
-    if energy <- 0:
+    if energy <= 0:
         raise ValueError("Photon energy must be greater than zero.")
     return log_log_interpolate(energy, material.energy, material.mu_over_p)

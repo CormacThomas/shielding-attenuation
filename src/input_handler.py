@@ -38,3 +38,15 @@ def get_photon_energy_from_user() -> float:
 def get_source_strength_from_user() -> float:
     source_strength = float(input("Enter source strength in photons/s "))
     return source_strength
+
+
+def get_apply_buildup_from_user() -> bool:
+    answer = input("Apply G-P buildup correction? (y/n): ").lower().strip()
+
+    if answer == "y" or answer == "yes":
+        return True
+
+    if answer == "n" or answer == "no":
+        return False
+
+    raise ValueError("Please enter y or n.")

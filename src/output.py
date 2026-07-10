@@ -22,9 +22,15 @@ def print_results(
         total_thickness: float,
         total_mfp: float,
         total_transmission: float,
-        flux: float) -> None:
+        flux: float,
+        buildup_factor: float | None = None,
+        buildup_corrected_flux: float | None = None) -> None:
     
-    print("Calculation mode: Narrow-beam\n")
+    
+    if buildup_factor is not None and buildup_corrected_flux is not None:
+        print("Calculation mode: Narrow-beam uncollided flux + G-P buildup correction\n")
+    else:
+        print("Calculation mode: Narrow-beam uncollided flux\n")
     print(f"Photon energy: {photon_energy} MeV")
     print(f"Source strength: {source_strength:.3e} photons/s")
     print(f"Detector distance: {detector_distance} cm")
@@ -33,6 +39,11 @@ def print_results(
     print(f"Total MFP: {total_mfp}")
     print(f"Total transmission = {total_transmission}")
     print(f"Flux at detector: {flux:.6e} photons/cm^2/s")
+    if buildup_factor is not None and buildup_corrected_flux is not None:
+        print("\nG-P buildup correction:")
+        print("Buildup mode: Single-layer lead exposure buildup")
+        print(f"Buildup factor: {buildup_factor}")
+        print(f"Buildup-corrected flux: {buildup_corrected_flux:.6e} photons/cm^2/s")
 
     print("\nLayers:")
 
