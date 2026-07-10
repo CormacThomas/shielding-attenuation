@@ -18,12 +18,17 @@ result = calculate_shielding_result(layers, photon_energy, source_strength, dete
 
 apply_buildup = get_apply_buildup_from_user()
 
+# G-P buildup is currently only supported for single layer homogenous shields.
+# The selected material must have coefficients in the buildup library.
 if apply_buildup:
     if len(result.layers) != 1:
         raise ValueError("G-P buildup mode currently supports only one shielding layer.")
 
     gp_library = get_gp_coefficients_library()
-    material_key = result.layers[0].material.name.lower().strip()
+
+    # Uses the material key instead of display name so materials like "Concrete (Ordinary)"
+    # can map to "concrete_ordinary".
+    material_key = result.layers[0].material.key
 
     if material_key not in gp_library:
         raise ValueError(

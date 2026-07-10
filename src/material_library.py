@@ -20,7 +20,7 @@ def create_lead() -> Material:
                 0.2323, 0.1613, 0.1248, 0.08870, 0.07102, 0.06962, 0.05875, 0.05222,
                 0.04607, 0.04577, 0.04234, 0.04198, 0.04272, 0.04391, 0.04528, 0.04675, 0.04823, 0.04972]
     
-    return Material("Lead", 11.34, energy, mu_over_p)
+    return Material("lead", "Lead", 11.34, energy, mu_over_p)
 
 
 def create_aluminum() -> Material:
@@ -40,7 +40,7 @@ def create_aluminum() -> Material:
                 0.1042, 0.09276, 0.08445, 0.07802, 0.06841, 0.06146, 0.05496, 0.05006,
                 0.04324, 0.03541, 0.03106, 0.02836, 0.02655, 0.02437, 0.02318]
     
-    return Material("Aluminum", 2.70, energy, mu_over_p)
+    return Material("aluminum", "Aluminum", 2.70, energy, mu_over_p)
 
 
 def create_concrete_o() -> Material:
@@ -60,7 +60,7 @@ def create_concrete_o() -> Material:
                 0.1436, 0.1282, 0.1097, 0.09783, 0.08915, 0.08236, 0.07227, 0.06495,
                 0.05807, 0.05288, 0.04557, 0.03701, 0.03217, 0.02908, 0.02697, 0.02432, 0.02278]
     
-    return Material("Concrete (Ordinary)", 2.4, energy, mu_over_p)
+    return Material("concrete_ordinary", "Concrete (Ordinary)", 2.4, energy, mu_over_p)
 
 
 def create_concrete_b() -> Material:
@@ -84,7 +84,7 @@ def create_concrete_b() -> Material:
                 0.1104, 0.09309, 0.08245, 0.06936, 0.06112, 0.05404, 0.04915, 0.04296,
                 0.03676, 0.03388, 0.03240, 0.03162, 0.03116, 0.03138]
     
-    return Material("Concrete (Barite, Type BA)", 3.5, energy, mu_over_p)
+    return Material("concrete_barite", "Concrete (Barite, Type BA)", 3.5, energy, mu_over_p)
 
 
 def create_water() -> Material:
@@ -103,7 +103,7 @@ def create_water() -> Material:
                 0.1061, 0.09687, 0.08956, 0.07865, 0.07072, 0.06323, 0.05754, 0.04942, 0.03969,
                 0.03403, 0.03031, 0.02770, 0.02429, 0.02219]
     
-    return Material("Water", 1.0, energy, mu_over_p)
+    return Material("water", "Water", 1.0, energy, mu_over_p)
 
 
 def create_tungsten() -> Material:
@@ -124,7 +124,7 @@ def create_tungsten() -> Material:
                 0.7844, 0.3238, 0.1925, 0.1378, 0.1093, 0.08066, 0.06618, 0.05577, 0.05000,
                 0.04433, 0.04075, 0.04038, 0.04103, 0.04210, 0.04472, 0.04747]
     
-    return Material("Tungsten", 19.254, energy, mu_over_p)
+    return Material("tungsten", "Tungsten", 19.254, energy, mu_over_p)
 
 
 def create_copper() -> Material:
@@ -142,7 +142,7 @@ def create_copper() -> Material:
                 0.2217, 0.1559, 0.1119, 0.09413, 0.08362, 0.07625, 0.06605, 0.05901, 0.05261, 0.04803,
                 0.04205, 0.03599, 0.03318, 0.03177, 0.03108, 0.03074, 0.03103]
     
-    return Material("Copper", 8.96, energy, mu_over_p)
+    return Material("copper", "Copper", 8.96, energy, mu_over_p)
 
 
 def create_tin() -> Material:
@@ -160,7 +160,7 @@ def create_tin() -> Material:
                 3.029, 1.676, 0.6091, 0.326, 0.1639, 0.1156, 0.09374, 0.08113, 0.06662, 0.058,
                 0.05095, 0.04638, 0.04112, 0.03686, 0.03561, 0.03548, 0.03583, 0.03724, 0.03895]
     
-    return Material("Tin", 7.31, energy, mu_over_p)
+    return Material("tin", "Tin", 7.31, energy, mu_over_p)
 
 
 def create_polyethylene() -> Material:
@@ -178,7 +178,7 @@ def create_polyethylene() -> Material:
                 0.1089, 0.09947, 0.09198, 0.08078, 0.07262, 0.06495, 0.0591, 0.05064, 0.04045, 0.03444,
                 0.03045, 0.0276, 0.02383, 0.02145]
     
-    return Material("Polyethylene", 0.94, energy, mu_over_p)
+    return Material("polyethylene", "Polyethylene", 0.94, energy, mu_over_p)
 
 
 def get_material_library() -> dict[str, Material]:

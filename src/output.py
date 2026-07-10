@@ -32,7 +32,7 @@ def print_results(result: ShieldingResult) -> None:
 
     if result.buildup_factor is not None and result.buildup_corrected_flux is not None:
         print("\nG-P buildup correction:")
-        print("Buildup mode: Single-layer lead exposure buildup")
+        print(f"Buildup mode: Single-layer {result.layers[0].material.name} exposure buildup")
         print(f"Buildup factor: {result.buildup_factor}")
         print(
             f"Buildup-corrected flux: "

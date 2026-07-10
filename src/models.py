@@ -4,20 +4,26 @@ from dataclasses import dataclass
 @dataclass
 class Material:
     # shielding material with energy dependent attenuation data.
+        # key = internal identifier used for dictionaries and buildup lookup
         # name = material name ex: "Lead"
         # density = material density in g/cm^3
         # energy = photon energy table in MeV
         # mu_over_p = mass attenuation coefficient in cm^2/g
+    key: str
     name: str
     density: float
     energy: list[float]
     mu_over_p: list[float]
 
     def __post_init__(self): # Error checks. Statements to prevent errors that could lead to incorrect values.
+        if self.key.strip() == "":
+            raise ValueError("Material key cannot be empty.")
+        
         if len(self.energy) != len(self.mu_over_p):
             raise ValueError(
                 f"{self.name} has {len(self.energy)} energy values "f"but {len(self.mu_over_p)} mu/rho values."
             )
+        
         if self.density <= 0:
             raise ValueError(f"{self.name} density must be positive.")
         
@@ -39,6 +45,7 @@ class Material:
 
 @dataclass
 class Layer:
+
     # A single shielding layer that stores thickness and references a material object.
     thickness: float
     material: Material
@@ -116,6 +123,10 @@ class ShieldingResult:
         if self.total_thickness < 0:
             raise ValueError("Total thickness cannot be negative.")
 
+        if self.total_thickness > self.detector_distance:
+            raise ValueError(
+                "Total thickness cannot be greater than detector distance.")
+        # Total thickness cannot be greater than detector distance.
         if self.total_mfp < 0:
             raise ValueError("Total MFP cannot be negative.")
 

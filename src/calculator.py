@@ -95,6 +95,11 @@ def calculate_shielding_result(
         total_mfp = total_mfp + layer_result.mfp
         total_thickness = total_thickness + layer.thickness
 
+    if total_thickness > detector_distance:
+        raise ValueError(
+        "Total shielding thickness cannot be greater than the source-to-detector distance."
+        )
+
     uncollided_flux = calculate_flux(source_strength, total_transmission, detector_distance)
 
     return ShieldingResult(
