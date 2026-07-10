@@ -23,20 +23,25 @@ def get_exact_gp_coefficients(
 
 
 def calculate_gp_buildup_factor(coefficients: GPCoefficients, mfp: float) -> float:
+    # Calculate the G-P buildup factor from fitting coefficients and shield MFP.
+
     if mfp < 0:
         raise ValueError("Mean free paths cannot be negative.")
     
     if mfp == 0:
         return 1.0
     
+    # K is the intermediate G-P fitting value used in the buildup equation.
     k_value =(coefficients.c * (mfp ** coefficients.a) + coefficients.d * (math.tanh(mfp / coefficients.xk - 2.0) - math.tanh(-2.0)) / (1.0 - math.tanh(-2.0)))
 
+    # If K is too close to 1, use the limiting form to avoid division by zero.
     if abs(k_value - 1.0) < 1e-12:
         return 1.0 + (coefficients.b - 1.0) * mfp
     
     buildup_factor = 1.0 + ((coefficients.b - 1.0) / (k_value - 1.0)) * ((k_value ** mfp) - 1.0)
 
     return buildup_factor
+
 
 def linear_interpolate_value(
         x: float,
@@ -58,7 +63,7 @@ def get_gp_coefficients_at_energy(
     gp_library: dict[str, list[GPCoefficients]],
 ) -> GPCoefficients:
     
-    # "Return exact or linearly interpolated G-P coefficients for a material and energy.
+    # Return exact or linearly interpolated G-P coefficients for a material and energy.
     if energy <= 0:
         raise ValueError("Photon energy must be greater than zero.")
 
@@ -106,6 +111,7 @@ def get_gp_coefficients_at_energy(
 
     raise ValueError("Requested energy is outside the G-P coefficient data range.")
 
+
 def calculate_buildup_corrected_flux(uncollided_flux: float, buildup_factor: float) -> float:
     if uncollided_flux < 0:
         raise ValueError("Uncollided flux cannot be negative.")
@@ -114,3 +120,7 @@ def calculate_buildup_corrected_flux(uncollided_flux: float, buildup_factor: flo
         raise ValueError("Buildup factor should not be less than 1.")
 
     return uncollided_flux * buildup_factor
+
+
+def get_buildup_material_key(material_name: str) -> str:
+    return material_name.lower().strip()

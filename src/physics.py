@@ -2,9 +2,13 @@ import math
 from models import Material
 
 
-def calculate_mu(mu_over_p: float, density: float ) -> float:
-    # NIST XCOM data is presented as mu/rho. This function converts to just the
-    # linear attenuation coefficient with unit 1/cm.
+def calculate_mu(mu_over_p: float, density: float) -> float:
+    if mu_over_p < 0:
+        raise ValueError("Mass attenuation coefficient cannot be negative.")
+
+    if density <= 0:
+        raise ValueError("Density must be greater than zero.")
+
     return mu_over_p * density
 
 

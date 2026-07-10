@@ -39,10 +39,97 @@ class Material:
 
 @dataclass
 class Layer:
-    # a single shielding layer that stores thickness and references a material object.
+    # A single shielding layer that stores thickness and references a material object.
     thickness: float
     material: Material
 
     def __post_init__(self):
         if self.thickness < 0:
             raise ValueError("Layer thickness cannot be negative.")
+        
+
+@dataclass
+class LayerResult:
+    # Stores calculated quantities for one shielding layer.
+    # This separates calculated values from the input Layer object.
+    # layer = original layer input
+    # mu_over_p = interpolated mass attenuation coefficient in cm^2/g
+    # mu = linear attenuation coefficient in 1/cm
+    # mfp = optical thickness of this layer in mean free paths
+    # transmission = narrow-beam transmission through this layer
+
+
+    layer: Layer
+    mu_over_p: float
+    mu: float
+    mfp: float
+    transmission: float
+
+    def __post_init__(self):
+        if self.mu_over_p < 0:
+            raise ValueError("LayerResult mu/rho cannot be negative.")
+
+        if self.mu < 0:
+            raise ValueError("LayerResult mu cannot be negative.")
+
+        if self.mfp < 0:
+            raise ValueError("LayerResult MFP cannot be negative.")
+
+        if self.transmission < 0:
+            raise ValueError("LayerResult transmission cannot be negative.")
+        
+        if self.transmission > 1:
+            raise ValueError("LayerResult transmission cannot be greater than 1.")
+
+
+@dataclass
+class ShieldingResult:
+    # Stores the complete result of one shielding calculation.
+    # This object keeps all output values together so main.py and output.py
+    # do not need to pass many separate floats.
+    # buildup_factor and buildup_corrected_flux are optional because not all
+    # calculations use G-P buildup correction.
+
+    
+    layers: list[Layer]
+    layer_results: list[LayerResult]
+    photon_energy: float
+    source_strength: float
+    detector_distance: float
+    total_thickness: float
+    total_mfp: float
+    total_transmission: float
+    uncollided_flux: float
+    buildup_factor: float | None = None
+    buildup_corrected_flux: float | None = None
+
+    def __post_init__(self):
+        if self.photon_energy <= 0:
+            raise ValueError("Photon energy must be greater than zero.")
+
+        if self.source_strength < 0:
+            raise ValueError("Source strength cannot be negative.")
+
+        if self.detector_distance <= 0:
+            raise ValueError("Detector distance must be greater than zero.")
+
+        if self.total_thickness < 0:
+            raise ValueError("Total thickness cannot be negative.")
+
+        if self.total_mfp < 0:
+            raise ValueError("Total MFP cannot be negative.")
+
+        if self.total_transmission < 0:
+            raise ValueError("Total transmission cannot be negative.")
+        
+        if self.total_transmission > 1:
+            raise ValueError("Total transmission cannot be greater than 1.")
+
+        if self.uncollided_flux < 0:
+            raise ValueError("Uncollided flux cannot be negative.")
+
+        if self.buildup_factor is not None and self.buildup_factor < 1:
+            raise ValueError("Buildup factor cannot be less than 1.")
+
+        if self.buildup_corrected_flux is not None and self.buildup_corrected_flux < 0:
+            raise ValueError("Buildup-corrected flux cannot be negative.")

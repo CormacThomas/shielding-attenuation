@@ -28,5 +28,6 @@ def get_gp_coefficients_library() -> dict[str, list[GPCoefficients]]:
             GPCoefficients("Lead", 5.00, 1.530, 0.722, 0.139, 14.19, -0.1526),
             GPCoefficients("Lead", 6.00, 1.497, 0.721, 0.145, 14.37, -0.1578),
             GPCoefficients("Lead", 8.00, 1.443, 0.808, 0.123, 14.30, -0.1385),
-            GPCoefficients("Lead", 10.00,1.424, 0.940, 0.090, 14.20, -0.1121)]
+            GPCoefficients("Lead", 10.00, 1.424, 0.940, 0.090, 14.20, -0.1121),
+        ]
     }
