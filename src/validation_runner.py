@@ -1,5 +1,7 @@
 from buildup import calculate_gp_buildup_factor, get_gp_coefficients_at_energy
 from buildup_library import get_gp_coefficients_library
+from source_library import create_isotope_source
+from unit_conversions import convert_activity_to_bq
 
 # Validation runner for benchmark cases.
 # This script is intended for validation after code changes.
@@ -49,6 +51,49 @@ def run_validation_tests() -> None:
             buildup_at_5_mfp,
             1.0,
         )
+
+    one_ci_bq = convert_activity_to_bq(1.0, "ci")
+
+    assert_close(
+        "1 Ci activity conversion",
+        one_ci_bq,
+        3.7e10,
+        1e-6,
+    )
+
+    cs137_source = create_isotope_source("cs137", one_ci_bq)
+
+    assert_close(
+        "Cs-137 activity stored in Bq",
+        cs137_source.activity_bq,
+        3.7e10,
+        1e-6,
+    )
+
+    assert_close(
+        "Cs-137 source has one photon line",
+        len(cs137_source.photon_lines),
+        1,
+        0,
+    )
+
+    co60_source = create_isotope_source("co60", one_ci_bq)
+
+    assert_close(
+        "Co-60 source has two photon lines",
+        len(co60_source.photon_lines),
+        2,
+        0,
+    )
+
+    am241_source = create_isotope_source("am241", one_ci_bq)
+
+    assert_close(
+        "Am-241 source has one photon line",
+        len(am241_source.photon_lines),
+        1,
+        0,
+    )
 
     print("\nAll validation tests passed.")
 

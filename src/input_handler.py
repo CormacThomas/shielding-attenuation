@@ -1,4 +1,7 @@
 from models import Layer, Material
+from source_library import create_isotope_source, get_available_isotopes
+from source_models import IsotopeSource, ManualPhotonSource
+from unit_conversions import convert_activity_to_bq
 
 
 def get_layers_from_user(materials: dict[str, Material]) -> list[Layer]:
@@ -50,3 +53,65 @@ def get_apply_buildup_from_user() -> bool:
         return False
 
     raise ValueError("Please enter y or n.")
+
+
+# Gets user choice between V1.05 monoenergetic photon source or Isotope source
+def get_source_mode_from_user() -> str:
+    print("\nSource modes:")
+    print("1. Manual monoenergetic photon source")
+    print("2. Isotope source from library")
+
+    source_mode = input("Select source mode (1/2): ").strip()
+
+    if source_mode == "1":
+        return "manual"
+
+    if source_mode == "2":
+        return "isotope"
+
+    raise ValueError("Please enter 1 or 2.")
+
+
+# If manual photon source is selected, perform the V1.05 method of photon_energy and source_strength
+def get_manual_photon_source_from_user() -> ManualPhotonSource:
+    photon_energy = float(input("Enter photon energy in MeV: "))
+    photon_rate = float(input("Enter photon emission rate in photons/s: "))
+
+    return ManualPhotonSource(
+        photon_energy,
+        photon_rate,
+    )
+
+
+# If isotope source is selected, prompt user to choose an isotope, enter activity, and enter unit.
+def get_isotope_source_from_user() -> IsotopeSource:
+    print("\nAvailable isotope sources:")
+    for isotope_key in get_available_isotopes():
+        print(f"- {isotope_key}")
+
+    isotope_key = input("Enter isotope source: ").lower().strip()
+
+    activity_value = float(input("Enter source activity value: "))
+    activity_unit = input("Enter activity unit (bq, kbq, mbq, gbq, ci, mci, uci): ")
+
+    activity_bq = convert_activity_to_bq(
+        activity_value,
+        activity_unit,
+    )
+
+    return create_isotope_source(
+        isotope_key,
+        activity_bq,
+    )
+
+
+def get_source_from_user() -> ManualPhotonSource | IsotopeSource:
+    source_mode = get_source_mode_from_user()
+
+    if source_mode == "manual":
+        return get_manual_photon_source_from_user()
+
+    if source_mode == "isotope":
+        return get_isotope_source_from_user()
+
+    raise ValueError("Invalid source mode.")

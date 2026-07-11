@@ -1,55 +1,34 @@
-from buildup_library import get_gp_coefficients_library
-from buildup import calculate_buildup_corrected_flux, calculate_gp_buildup_factor, get_gp_coefficients_at_energy
-from calculator import calculate_shielding_result
-from input_handler import get_apply_buildup_from_user,get_detector_distance_from_user, get_layers_from_user, get_photon_energy_from_user, get_source_strength_from_user
+from input_handler import (get_apply_buildup_from_user, get_detector_distance_from_user, get_layers_from_user, get_source_from_user)
 from material_library import get_material_library
-from output import print_results
+from output import print_source_results
+from source_calculator import (calculate_isotope_source_result, calculate_manual_source_result)
+from source_models import IsotopeSource, ManualPhotonSource
 
 
 materials = get_material_library()
+
+source = get_source_from_user()
 layers = get_layers_from_user(materials)
-
-photon_energy = get_photon_energy_from_user()
-source_strength = get_source_strength_from_user()
 detector_distance = get_detector_distance_from_user()
-
-# Run narrow-beam shielding calculation.
-result = calculate_shielding_result(layers, photon_energy, source_strength, detector_distance)
-
 apply_buildup = get_apply_buildup_from_user()
 
-# G-P buildup is currently only supported for single layer homogenous shields.
-# The selected material must have coefficients in the buildup library.
-if apply_buildup:
-    if len(result.layers) != 1:
-        raise ValueError("G-P buildup mode currently supports only one shielding layer.")
-
-    gp_library = get_gp_coefficients_library()
-
-    # Uses the material key instead of display name so materials like "Concrete (Ordinary)"
-    # can map to "concrete_ordinary".
-    material_key = result.layers[0].material.key
-
-    if material_key not in gp_library:
-        raise ValueError(
-            f"G-P buildup mode does not currently support {result.layers[0].material.name}."
-        )
-
-    coefficients = get_gp_coefficients_at_energy(
-        material_key,
-        result.photon_energy,
-        gp_library,
+if isinstance(source, ManualPhotonSource):
+    result = calculate_manual_source_result(
+        source,
+        layers,
+        detector_distance,
+        apply_buildup,
     )
 
-    result.buildup_factor = calculate_gp_buildup_factor(
-        coefficients,
-        result.total_mfp,
+elif isinstance(source, IsotopeSource):
+    result = calculate_isotope_source_result(
+        source,
+        layers,
+        detector_distance,
+        apply_buildup,
     )
 
-    result.buildup_corrected_flux = calculate_buildup_corrected_flux(
-        result.uncollided_flux,
-        result.buildup_factor,
-    )
+else:
+    raise ValueError("Unsupported source type.")
 
-# Print results.
-print_results(result)
+print_source_results(result)

@@ -13,6 +13,7 @@
         # Material density: g/cm^3
 
 from models import ShieldingResult
+from source_models import SourceCalculationResult
 
 
 def print_results(result: ShieldingResult) -> None:
@@ -49,3 +50,45 @@ def print_results(result: ShieldingResult) -> None:
         print(f"mu: {layer_result.mu} 1/cm")
         print(f"Layer MFP: {layer_result.mfp}")
         print(f"Layer transmission: {layer_result.transmission}")
+
+
+def print_source_results(result: SourceCalculationResult) -> None:
+    print("\nSource calculation results")
+    print(f"Source: {result.source_name}")
+
+    if result.activity_bq is not None:
+        print(f"Activity: {result.activity_bq:.6e} Bq")
+
+    print(f"Number of photon lines: {len(result.line_results)}")
+    print(f"Total uncollided flux: {result.total_uncollided_flux:.6e} photons/cm^2/s")
+
+    if result.total_buildup_corrected_flux is not None:
+        print(
+            f"Total buildup-corrected flux: "
+            f"{result.total_buildup_corrected_flux:.6e} photons/cm^2/s"
+        )
+
+    print("\nPhoton line results:")
+
+    for i, line_result in enumerate(result.line_results):
+        shielding_result = line_result.shielding_result
+
+        print(f"\nLine {i + 1}")
+        print(f"Photon energy: {line_result.photon_line.energy} MeV")
+        print(f"Emission intensity: {line_result.photon_line.intensity} photons/decay")
+        print(f"Photon emission rate: {line_result.photon_rate:.6e} photons/s")
+        print(f"Transmission: {shielding_result.total_transmission}")
+        print(f"Total MFP: {shielding_result.total_mfp}")
+        print(
+            f"Uncollided flux: "
+            f"{shielding_result.uncollided_flux:.6e} photons/cm^2/s"
+        )
+
+        if shielding_result.buildup_factor is not None:
+            print(f"Buildup factor: {shielding_result.buildup_factor}")
+
+        if shielding_result.buildup_corrected_flux is not None:
+            print(
+                f"Buildup-corrected flux: "
+                f"{shielding_result.buildup_corrected_flux:.6e} photons/cm^2/s"
+            )
