@@ -120,6 +120,9 @@ class ShieldingResult:
         if self.detector_distance <= 0:
             raise ValueError("Detector distance must be greater than zero.")
 
+        if len(self.layers) != len(self.layer_results):
+            raise ValueError("Number of layers and layer results must match.")
+
         if self.total_thickness < 0:
             raise ValueError("Total thickness cannot be negative.")
 

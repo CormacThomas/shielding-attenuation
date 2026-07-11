@@ -1,17 +1,29 @@
-from buildup import (calculate_buildup_corrected_flux, calculate_gp_buildup_factor, get_gp_coefficients_at_energy)
+from buildup import (
+    calculate_buildup_corrected_flux,
+    calculate_gp_buildup_factor,
+    get_gp_coefficients_at_energy,
+)
 from buildup_library import get_gp_coefficients_library
 from calculator import calculate_shielding_result
-from models import Layer
-from source_models import (IsotopeSource, ManualPhotonSource, PhotonLine, SourceCalculationResult, SourceLineResult)
+from models import Layer, ShieldingResult
+from source_models import (
+    IsotopeSource,
+    ManualPhotonSource,
+    PhotonLine,
+    SourceCalculationResult,
+    SourceLineResult,
+)
 
-# Given a source, shielding layers, detector distance, and buildup choice, what is total flux?
-# Note: This calculator does not "redo" already validated attenuation physics.
+# Source-level calculation utilities.
+# These functions sit above the validated narrow-beam attenuation calculator.
+# They do not redo attenuation physics; they convert source definitions into
+# one or more photon-line shielding calculations and then collect the results.
 
-def calculate_buildup_for_result(
-    result,
-) -> None:
-    # Apply G-P buildup correction to a single ShieldingResult.
-    # This uses the same single-layer homogeneous material restriction as V1.05.
+
+def calculate_buildup_for_result(result: ShieldingResult) -> None:
+    # Apply G-P exposure buildup correction to a single ShieldingResult.
+    # V1.06 only supports G-P buildup for one homogeneous shielding layer.
+    # Multilayer buildup requires a more advanced treatment and is not included yet.
 
     if len(result.layers) != 1:
         raise ValueError("G-P buildup mode currently supports only one shielding layer.")
@@ -20,6 +32,7 @@ def calculate_buildup_for_result(
     material = result.layers[0].material
     material_key = material.key
 
+    # Only materials with available ANS/ORNL G-P coefficients can use buildup.
     if material_key not in gp_library:
         raise ValueError(
             f"G-P buildup mode does not currently support {material.name}."
@@ -31,6 +44,8 @@ def calculate_buildup_for_result(
         gp_library,
     )
 
+    # calculate_gp_buildup_factor() enforces the valid MFP range.
+    # This wrapper adds photon energy and material context to the error message.
     try:
         result.buildup_factor = calculate_gp_buildup_factor(
             coefficients,
@@ -56,6 +71,11 @@ def calculate_manual_source_result(
     apply_buildup: bool,
 ) -> SourceCalculationResult:
     # Run the shielding calculation for a manually defined monoenergetic photon source.
+    # Narrow-beam uncollided flux is always calculated.
+    # If buildup is requested but invalid, the calculation still returns the
+    # uncollided result and stores a warning.
+
+    warnings = []
 
     photon_line = PhotonLine(source.energy, 1.0)
 
@@ -67,7 +87,13 @@ def calculate_manual_source_result(
     )
 
     if apply_buildup:
-        calculate_buildup_for_result(shielding_result)
+        try:
+            calculate_buildup_for_result(shielding_result)
+        except ValueError as error:
+            warnings.append(
+                f"Buildup skipped for {source.energy} MeV manual photon source: "
+                f"{error} Narrow-beam uncollided flux is still reported."
+            )
 
     line_result = SourceLineResult(
         photon_line,
@@ -86,6 +112,7 @@ def calculate_manual_source_result(
         [line_result],
         shielding_result.uncollided_flux,
         total_buildup_corrected_flux,
+        warnings,
     )
 
 
@@ -95,9 +122,11 @@ def calculate_isotope_source_result(
     detector_distance: float,
     apply_buildup: bool,
 ) -> SourceCalculationResult:
-    # Run one shielding calculation per photon line and sum the detector flux.
-    # Narrow-beam uncollided flux is always calculated.
-    # G-P buildup is applied only to photon lines within the valid buildup range.
+    # Run one shielding calculation per photon line and sum detector flux.
+    # Narrow-beam uncollided flux is always calculated for every photon line.
+    # G-P buildup is applied only when valid for that line/material/thickness.
+    # If any line cannot receive buildup, the total buildup-corrected flux is
+    # marked unavailable because the source total would be only partially corrected.
 
     line_results = []
     warnings = []

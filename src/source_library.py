@@ -1,9 +1,13 @@
 from source_models import IsotopeSource, PhotonLine
 
 
+# Energy values are stored in MeV.
+# Intensities are stored as photons emitted per decay.
+# Source definitions use selected major photon lines, not complete decay spectra.
+
+
 def create_cs137_source(activity_bq: float) -> IsotopeSource:
-    # Cs-137 primary gamma emission through Ba-137m.
-    # PhotonLine intensity is photons per decay.
+    # Cs-137 selected major photon line for external shielding estimates.
     return IsotopeSource(
         "Cs-137",
         activity_bq,
@@ -26,9 +30,9 @@ def create_co60_source(activity_bq: float) -> IsotopeSource:
 
 
 def create_am241_source(activity_bq: float) -> IsotopeSource:
-    # Am-241 common low-energy gamma line.
-    # 59.541 keV = 0.059541 MeV.
-    # X-Ray at 13.9 keV igored as it is out of bounds for buildup calculations.
+    # Am-241 selected low-energy photon line.
+    # The 59.541 keV line is useful for low-energy shielding and calibration examples.
+    # Lower-energy X-rays are not included in the default V1.06 source library.
     return IsotopeSource(
         "Am-241",
         activity_bq,
@@ -39,7 +43,8 @@ def create_am241_source(activity_bq: float) -> IsotopeSource:
 
 
 def create_ba133_source(activity_bq: float) -> IsotopeSource:
-    # Ba-133 Multiple x-ray and gamma lines.
+    # Ba-133 selected major photon lines.
+    # Very low-energy X-ray clusters are not included in the default V1.06 source library.
     return IsotopeSource(
         "Ba-133",
         activity_bq,
@@ -56,7 +61,8 @@ def create_ba133_source(activity_bq: float) -> IsotopeSource:
 
 
 def create_na22_source(activity_bq: float) -> IsotopeSource:
-    # Na-22 two gamma lines.
+    # Na-22 selected photon lines.
+    # Includes annihilation photons at 511 keV and the 1274.537 keV gamma line.
     return IsotopeSource(
         "Na-22",
         activity_bq,
@@ -68,8 +74,7 @@ def create_na22_source(activity_bq: float) -> IsotopeSource:
 
 
 def create_mn54_source(activity_bq: float) -> IsotopeSource:
-    # Mn-54 major photon emission.
-
+    # Mn-54 selected major photon line.
     return IsotopeSource(
         "Mn-54",
         activity_bq,
@@ -80,7 +85,7 @@ def create_mn54_source(activity_bq: float) -> IsotopeSource:
 
 
 def create_co57_source(activity_bq: float) -> IsotopeSource:
-    # Co-57 two gamma lines
+    # Co-57 selected low-energy photon lines.
     return IsotopeSource(
         "Co-57",
         activity_bq,
@@ -92,7 +97,8 @@ def create_co57_source(activity_bq: float) -> IsotopeSource:
 
 
 def create_zn65_source(activity_bq: float) -> IsotopeSource:
-    # Zn-65 annihillation and gamma line
+    # Zn-65 selected photon lines.
+    # Includes a small annihilation photon component and the main gamma line.
     return IsotopeSource(
         "Zn-65",
         activity_bq,
@@ -104,7 +110,8 @@ def create_zn65_source(activity_bq: float) -> IsotopeSource:
 
 
 def create_eu152_source(activity_bq: float) -> IsotopeSource:
-    # Eu-152 X-Ray and Gamma lines
+    # Eu-152 selected major photon lines.
+    # Very low-energy X-ray clusters are not included in the default V1.06 source library.
     return IsotopeSource(
         "Eu-152",
         activity_bq,
@@ -124,7 +131,7 @@ def create_eu152_source(activity_bq: float) -> IsotopeSource:
 
 
 def create_ir192_source(activity_bq: float) -> IsotopeSource:
-    # Ir-192 X-Ray and Gamma lines
+    # Ir-192 selected major photon lines.
     return IsotopeSource(
         "Ir-192",
         activity_bq,

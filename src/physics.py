@@ -40,6 +40,9 @@ def calculate_flux(source_strength: float, transmission: float, distance: float)
     if transmission < 0:
         raise ValueError("Transmission cannot be negative.")
 
+    if transmission > 1:
+        raise ValueError("Transmission cannot be greater than 1.")
+
     if distance <= 0:
         raise ValueError("Detector distance must be greater than zero.")
     

@@ -48,7 +48,10 @@ def assert_not_none(name: str, value: float | None) -> float:
 
 
 def run_validation_tests() -> None:
+    
     gp_library = get_gp_coefficients_library()
+
+    # Validate G-P buildup behavior for every material with coefficient data.
 
     for material_key in gp_library:
         coefficients = get_gp_coefficients_at_energy(
@@ -79,6 +82,8 @@ def run_validation_tests() -> None:
             1.0,
         )
 
+    # Validate activity-unit conversions used by isotope sources.
+
     one_ci_bq = convert_activity_to_bq(1.0, "ci")
 
     assert_close(
@@ -101,6 +106,8 @@ def run_validation_tests() -> None:
         3.7e4,
         1e-9,
     )
+
+    # Validate source-library structure and source-line bookkeeping.
 
     isotope_keys = get_available_isotopes()
 
@@ -127,6 +134,8 @@ def run_validation_tests() -> None:
     lead_layer = Layer(5.0, materials["lead"])
     layers = [lead_layer]
     detector_distance = 100.0
+
+    # Validate that every isotope source can run through the narrow-beam calculator.
 
     for isotope_key in isotope_keys:
         source = create_isotope_source(isotope_key, one_ci_bq)
@@ -199,6 +208,8 @@ def run_validation_tests() -> None:
             1e-6,
         )
 
+    # Regression test: manual source mode should reproduce the V1.05 Cs-137 lead case.
+
     manual_source = ManualPhotonSource(
         0.6617,
         3.7e10,
@@ -229,6 +240,8 @@ def run_validation_tests() -> None:
         1.42612e3,
         1e-2,
     )
+
+    # Validate that multi-line buildup totals equal the sum of valid line-by-line results.
 
     co60_source = create_isotope_source("co60", one_ci_bq)
 
@@ -261,6 +274,8 @@ def run_validation_tests() -> None:
         1e-6,
     )
 
+    # Validate warning behavior when buildup is requested outside the valid G-P MFP range.
+
     am241_source = create_isotope_source("am241", one_ci_bq)
 
     am241_result = calculate_isotope_source_result(
@@ -281,6 +296,8 @@ def run_validation_tests() -> None:
         len(am241_result.warnings),
         0,
     )
+
+    # Validate expected error handling for invalid user inputs.
 
     try:
         convert_activity_to_bq(1.0, "banana")

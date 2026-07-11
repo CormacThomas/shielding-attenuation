@@ -4,10 +4,10 @@ from models import ShieldingResult
 
 @dataclass
 class PhotonLine:
-    # A single photon emission line from a source. ex: .6617 MeV at .85 photons/decay
-    # energy = photon energy in MeV
-    # intensity = photons emitted per decay
-    # Useful in determining photon rate which = activity * intesity.
+    # A single emitted photon line from a radioactive or manual source.
+    # energy is stored in MeV.
+    # intensity is stored as photons emitted per decay.
+    # Example: Cs-137 has a 0.661657 MeV photon line with intensity about 0.851.
     energy: float
     intensity: float
 
@@ -21,11 +21,9 @@ class PhotonLine:
 
 @dataclass
 class IsotopeSource:
-    # A radioactive isotope source with one or more photon emission lines. Some sources have multiple gamma lines.
-    # activity_bq = decays per second
-    # photon_lines = list of emitted photon lines and their intensities
-    # Ex: Co-60, activity = 3.7e10 Bq, photon lines = [1.173 MeV, 1.333 MeV].
-
+    # A radioactive isotope source with one or more emitted photon lines.
+    # activity_bq is the decay rate in decays per second.
+    # photon_lines stores the photon energies and intensities used for shielding calculations.
     name: str
     activity_bq: float
     photon_lines: list[PhotonLine]
@@ -43,11 +41,9 @@ class IsotopeSource:
 
 @dataclass
 class ManualPhotonSource:
-    # A manual monoenergetic photon source.
-    # This preserves the original V1.05 behavior where the user directly
-    # enters photon energy and photon emission rate.
-    # Ex: .500 MeV photon line
-
+    # A user-defined monoenergetic photon source.
+    # This preserves the original V1.05 behavior where the user directly enters
+    # photon energy and photon emission rate instead of selecting an isotope.
     energy: float
     photon_rate: float
 
@@ -61,7 +57,9 @@ class ManualPhotonSource:
 
 @dataclass
 class SourceLineResult:
-    # Result for one photon line after shielding calculation.
+    # Stores the shielding result for one photon line.
+    # photon_rate is calculated from activity * intensity for isotope sources,
+    # or directly from the user-entered photon rate for manual sources.
     photon_line: PhotonLine
     photon_rate: float
     shielding_result: ShieldingResult
@@ -73,9 +71,12 @@ class SourceLineResult:
 
 @dataclass
 class SourceCalculationResult:
-    # Complete result for a source calculation.
-    # For isotope sources, this stores line-by-line shielding results
-    # and the summed detector flux over all photon lines.
+    # Stores the complete result for a source calculation.
+    # For isotope sources, this contains one SourceLineResult per photon line.
+    # total_uncollided_flux is always available.
+    # total_buildup_corrected_flux is only available when buildup was requested
+    # and successfully applied to every photon line.
+    # warnings stores non-fatal modeling limitations, such as skipped buildup.
     source_name: str
     activity_bq: float | None
     line_results: list[SourceLineResult]
