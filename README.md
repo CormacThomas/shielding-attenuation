@@ -1,12 +1,12 @@
-# Shielding Attenuation Simulator (v1.05)
+# Shielding Attenuation Simulator (v1.06)
 
-A Python-based photon shielding calculator designed to model attenuation through shielding materials using NIST XCOM data, Beer-Lambert attenuation, inverse-square geometric spreading, and optional Geometric Progression (G-P) buildup correction for supported single-layer shielding materials.
+A Python-based photon shielding calculator designed to model attenuation through shielding materials using NIST XCOM data, Beer-Lambert attenuation, inverse-square geometric spreading, optional Geometric Progression (G-P) buildup correction, and isotope source photon emission data.
 
 ## Overview
 
-This project provides a framework for calculating photon transmission and detector flux from an isotropic point source. The simulator supports multi-layer narrow-beam attenuation calculations and single-layer G-P buildup correction for selected homogeneous shielding materials.
+This project provides a framework for calculating photon transmission and detector flux from an isotropic point source. The simulator supports multi-layer narrow-beam attenuation calculations, single-layer G-P buildup correction for selected homogeneous shielding materials, manual monoenergetic photon sources, and isotope source calculations using selected major photon emission lines.
 
-The project is intended as a nuclear engineering portfolio project focused on radiation shielding, attenuation modeling, interpolation, validation, and future shielding optimization.
+The project is intended as a nuclear engineering portfolio project focused on radiation shielding, attenuation modeling, interpolation, source modeling, validation, and future shielding optimization.
 
 ## Physics Models
 
@@ -15,6 +15,8 @@ The project is intended as a nuclear engineering portfolio project focused on ra
 - **NIST XCOM interpolation:** Uses log-log interpolation for mass attenuation coefficients between tabulated photon energy values.
 - **G-P buildup correction:** Applies Geometric Progression gamma-ray exposure buildup factors for supported single-layer homogeneous shielding cases.
 - **Mean free path calculation:** Reports optical thickness in mean free paths for individual layers and total shielding thickness.
+- **Isotope source calculation:** Converts source activity to photon emission rate using selected photon line intensities.
+- **Line-by-line source summation:** Calculates each isotope photon line independently and sums detector flux at the source level.
 
 ## Features
 
@@ -23,19 +25,28 @@ The project is intended as a nuclear engineering portfolio project focused on ra
 - **NIST XCOM-based data:** Uses tabulated mass attenuation coefficients with interpolation between energy points.
 - **Expanded single-layer G-P buildup:** Supports optional buildup-corrected flux estimates for lead, aluminum, ordinary concrete, water, tungsten, copper, and tin.
 - **Material key lookup:** Uses stable internal material keys while preserving readable material display names.
-- **Input validation:** Checks for invalid energies, negative thicknesses, invalid source strength, invalid detector distance, data list mismatches, unsupported buildup cases, and physically invalid shield geometry.
-- **Command-line interface:** Allows users to select materials, thicknesses, photon energy, source strength, detector distance, and buildup mode.
-- **Validation runner:** Includes repeatable validation tests for supported buildup materials and important edge cases.
+- **Manual photon source mode:** Allows users to enter photon energy and photon emission rate directly.
+- **Isotope source library:** Includes selected major photon lines for Cs-137, Co-60, Am-241, Ba-133, Na-22, Mn-54, Co-57, Zn-65, Eu-152, and Ir-192.
+- **Activity unit conversion:** Supports Bq, kBq, MBq, GBq, Ci, mCi, and uCi.
+- **Photon emission rate calculation:** Converts isotope activity and photon emission intensity into photons/s for each line.
+- **Multi-line source handling:** Performs one shielding calculation per photon line and sums total uncollided flux.
+- **Buildup warning behavior:** Reports warnings when buildup is requested outside the valid G-P mean-free-path range while preserving narrow-beam results.
+- **Input validation:** Checks for invalid energies, negative thicknesses, invalid source strength, invalid activity, invalid detector distance, data list mismatches, unsupported buildup cases, and physically invalid shield geometry.
+- **Command-line interface:** Allows users to select source mode, isotope source, activity, shielding materials, thicknesses, detector distance, and buildup mode.
+- **Validation runner:** Includes repeatable validation tests for supported buildup materials, source-library behavior, source flux summation, activity conversion, and important edge cases.
 
 ## Current Limitations
 
 - G-P buildup correction currently supports single-layer homogeneous shielding only.
 - Multilayer buildup correction is not implemented.
 - Barite concrete and polyethylene are available for narrow-beam attenuation but do not currently support G-P buildup correction.
+- Buildup correction is only applied through 40 mean free paths. If a photon line exceeds this range, narrow-beam flux is reported but buildup is skipped with a warning.
 - The source is modeled as an isotropic point source.
-- The simulator currently models monoenergetic photon sources.
-- Dose-rate conversion and isotope libraries are not yet implemented.
+- The isotope library uses selected major photon lines, not complete emitted decay spectra.
+- Photon intensities are treated as emitted photons per decay before source self-attenuation, encapsulation, air attenuation, or detector-window effects.
+- Dose-rate conversion, exposure-rate conversion, air kerma, and effective dose are not yet implemented.
 - G-P coefficients are currently implemented for exposure buildup factors only.
+- The simulator currently uses a command-line interface.
 
 ## Technical Documentation
 
@@ -45,18 +56,21 @@ Detailed physics models and validation benchmarks can be found in the following 
 - **Validation Report V1.02:** Validates the Python rewrite, Beer-Lambert attenuation, NIST XCOM interpolation, inverse-square flux calculation, and robustness checks.
 - **Validation Report V1.04:** Validates G-P buildup coefficient interpolation, buildup factor calculation, buildup-corrected flux, and unsupported-case handling for single-layer lead buildup.
 - **Validation Report V1.05:** Validates expanded single-layer G-P buildup support for lead, aluminum, ordinary concrete, water, tungsten, copper, and tin.
+- **Validation Report V1.06:** Validates isotope source modeling, activity conversion, photon emission rate calculation, line-by-line source summation, manual source regression, and buildup warning behavior outside the valid G-P MFP range.
 
 **[Validation Reports](https://github.com/CormacThomas/shielding-attenuation/tree/main/docs)**
 
 ## Planned Features
 
 - Add improved user input handling with repeated prompts instead of immediate program termination.
+- Build target classes for transmission, flux, and reduction-factor goals.
+- Build a minimum shielding calculator for given design targets.
+- Add dose-rate calculation using appropriate photon flux-to-dose conversion coefficients.
 - Create a graphical front end for visualization.
-- Add dose-rate calculation using source activity.
-- Add isotope library with common gamma emitters.
+- Add plotting for attenuation curves, transmission versus thickness, and source spectra.
 - Add uncertainty estimation.
 - Let users define custom material compositions.
-- Build a minimum shielding calculator for given intensity reduction targets.
+- Expand isotope source library options and possibly add detailed spectrum modes.
 - Explore OpenMC integration for Monte Carlo comparison and validation.
 - Investigate more rigorous multilayer buildup treatment.
 
@@ -83,3 +97,7 @@ Focus areas include radiation effects, electronics hardening, and national secur
 [5] “Shielding Radiation Alphas, Betas, Gammas and Neutrons,” U.S. NRC, https://www.nrc.gov/docs/ML1122/ML11229A721.pdf (accessed Mar. 26, 2026).
 
 [6] M. J. Berger et al., “XCOM: Photon Cross Sections Database,” NIST, https://dx.doi.org/10.18434/T48G6X (accessed Mar. 26, 2026).
+
+[7] National Nuclear Data Center, “NuDat 3 Glossary,” Brookhaven National Laboratory, https://www.nndc.bnl.gov/nudat3/guide/glossary.html (accessed Jul. 11, 2026).
+
+[8] International Atomic Energy Agency, “LiveChart of the Nuclides,” IAEA Nuclear Data Section, https://nds.iaea.org/relnsd/vcharthtml/VChartHTML.html (accessed Jul. 11, 2026).

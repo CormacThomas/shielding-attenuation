@@ -2,6 +2,67 @@
 
 All major development milestones for the Shielding Attenuation Simulator are documented here.
 
+## v1.06 - Isotope Source Library and Source-Level Flux Calculation
+
+Added isotope source modeling, activity unit conversion, line-by-line photon source calculations, and warning behavior for buildup requests outside the valid G-P mean-free-path range.
+
+Changes:
+- Added source model dataclasses:
+  - `PhotonLine`
+  - `IsotopeSource`
+  - `ManualPhotonSource`
+  - `SourceLineResult`
+  - `SourceCalculationResult`
+- Added isotope photon source library with selected major photon lines for:
+  - Cs-137
+  - Co-60
+  - Am-241
+  - Ba-133
+  - Na-22
+  - Mn-54
+  - Co-57
+  - Zn-65
+  - Eu-152
+  - Ir-192
+- Added activity unit conversion to Bq for:
+  - Bq
+  - kBq
+  - MBq
+  - GBq
+  - Ci
+  - mCi
+  - uCi
+- Added isotope source mode to the command-line interface.
+- Preserved manual monoenergetic photon source mode from previous versions.
+- Added line-by-line source calculation for multi-line isotope sources.
+- Added source-level summation of uncollided detector flux.
+- Added source-level summation of buildup-corrected flux when buildup is valid for all photon lines.
+- Added warning behavior when G-P buildup is requested outside the supported 40 MFP range.
+- Updated output formatting to show source name, activity, photon line results, total flux, buildup results, and warnings.
+- Added validation checks for source-library structure, activity conversion, photon emission rates, source flux summation, and invalid buildup range handling.
+- Added V1.06 validation report for isotope source modeling and source-level calculation behavior.
+
+Validated behavior:
+- Activity conversion for Ci, mCi, and uCi.
+- Creation of all 10 isotope sources.
+- Correct photon line counts for each isotope source.
+- Positive photon energy and intensity values for all source-library entries.
+- Photon emission rate calculation using activity multiplied by emission intensity.
+- Total uncollided source flux equals the sum of line-by-line uncollided flux values.
+- Co-60 buildup-corrected source flux equals the sum of valid line-by-line buildup-corrected flux values.
+- Manual source mode reproduces the V1.05 single-energy lead shielding regression case.
+- Am-241 through 5 cm of lead correctly reports narrow-beam flux while skipping buildup above the valid G-P MFP range.
+- Unsupported activity units are rejected.
+- Unsupported isotope source names are rejected.
+- Negative activity values are rejected.
+
+Notes:
+- The isotope library uses selected major photon lines, not complete decay spectra.
+- Photon intensities are treated as emitted photons per decay before source self-attenuation, encapsulation, air attenuation, or detector-window effects.
+- G-P buildup correction remains limited to single-layer homogeneous shielding.
+- Buildup correction is only applied through 40 mean free paths. Above this range, narrow-beam flux is still reported but buildup is skipped with a warning.
+- V1.06 reports photon flux, not dose rate, exposure rate, air kerma, or effective dose.
+
 ## v1.05 - Expanded Single-Layer G-P Buildup Material Support
 
 Expanded Geometric Progression (G-P) gamma-ray buildup correction from lead-only support to multiple single-layer shielding materials.
