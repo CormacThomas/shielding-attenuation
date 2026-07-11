@@ -2,6 +2,42 @@
 
 All major development milestones for the Shielding Attenuation Simulator are documented here.
 
+## v1.05 - Expanded Single-Layer G-P Buildup Material Support
+
+Expanded Geometric Progression (G-P) gamma-ray buildup correction from lead-only support to multiple single-layer shielding materials.
+
+Changes:
+- Added G-P exposure buildup coefficient tables for:
+  - Lead
+  - Aluminum
+  - Ordinary Concrete
+  - Water
+  - Tungsten
+  - Copper
+  - Tin
+- Added a `key` field to the `Material` dataclass for stable internal material lookup.
+- Updated buildup lookup to use `Material.key` instead of display names.
+- Updated output text so buildup mode displays the selected material.
+- Added validation runner checks for all supported buildup materials.
+- Added validation checks confirming:
+  - `B(0 MFP) = 1`
+  - `B(1 MFP) = b`
+  - `B(5 MFP) > 1`
+- Added geometry validation preventing total shielding thickness from exceeding source-to-detector distance.
+- Added V1.05 validation report for expanded buildup material support.
+
+Validated behavior:
+- Supported buildup material lookup.
+- G-P buildup behavior for lead, aluminum, ordinary concrete, water, tungsten, copper, and tin.
+- Material key lookup for display names such as `Concrete (Ordinary)`.
+- Rejection of unsupported buildup materials.
+- Rejection of multilayer buildup cases.
+- Rejection of physically invalid source-to-detector geometry.
+
+Notes:
+- G-P buildup remains limited to single-layer homogeneous shielding.
+- Barite concrete and polyethylene remain available for narrow-beam attenuation but do not currently support buildup correction.
+
 ## v1.04 - G-P Buildup Factor Support for Lead
 
 Added the first implementation of Geometric Progression gamma-ray buildup correction.
