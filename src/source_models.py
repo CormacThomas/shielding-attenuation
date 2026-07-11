@@ -1,4 +1,4 @@
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from models import ShieldingResult
 
 
@@ -74,15 +74,14 @@ class SourceLineResult:
 @dataclass
 class SourceCalculationResult:
     # Complete result for a source calculation.
-    # For isotope sources, this stores all line by line shielding results
+    # For isotope sources, this stores line-by-line shielding results
     # and the summed detector flux over all photon lines.
-    # For a one line source, it has one result.
-    # For a twon line source, like Co-60, it would have two line results.
     source_name: str
     activity_bq: float | None
     line_results: list[SourceLineResult]
     total_uncollided_flux: float
     total_buildup_corrected_flux: float | None = None
+    warnings: list[str] = field(default_factory=list)
 
     def __post_init__(self):
         if self.source_name.strip() == "":

@@ -68,6 +68,11 @@ def print_source_results(result: SourceCalculationResult) -> None:
             f"{result.total_buildup_corrected_flux:.6e} photons/cm^2/s"
         )
 
+    if len(result.warnings) > 0:
+        print("\nWarnings:")
+        for warning in result.warnings:
+            print(f"- {warning}")
+
     print("\nPhoton line results:")
 
     for i, line_result in enumerate(result.line_results):

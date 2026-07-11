@@ -17,11 +17,12 @@ def calculate_buildup_for_result(
         raise ValueError("G-P buildup mode currently supports only one shielding layer.")
 
     gp_library = get_gp_coefficients_library()
-    material_key = result.layers[0].material.key
+    material = result.layers[0].material
+    material_key = material.key
 
     if material_key not in gp_library:
         raise ValueError(
-            f"G-P buildup mode does not currently support {result.layers[0].material.name}."
+            f"G-P buildup mode does not currently support {material.name}."
         )
 
     coefficients = get_gp_coefficients_at_energy(
@@ -30,10 +31,17 @@ def calculate_buildup_for_result(
         gp_library,
     )
 
-    result.buildup_factor = calculate_gp_buildup_factor(
-        coefficients,
-        result.total_mfp,
-    )
+    try:
+        result.buildup_factor = calculate_gp_buildup_factor(
+            coefficients,
+            result.total_mfp,
+        )
+    except ValueError as error:
+        raise ValueError(
+            f"Could not apply G-P buildup to the {result.photon_energy} MeV "
+            f"photon line through {material.name}. "
+            f"Total MFP = {result.total_mfp:.6g}. {error}"
+        ) from error
 
     result.buildup_corrected_flux = calculate_buildup_corrected_flux(
         result.uncollided_flux,
@@ -88,10 +96,15 @@ def calculate_isotope_source_result(
     apply_buildup: bool,
 ) -> SourceCalculationResult:
     # Run one shielding calculation per photon line and sum the detector flux.
+    # Narrow-beam uncollided flux is always calculated.
+    # G-P buildup is applied only to photon lines within the valid buildup range.
 
     line_results = []
+    warnings = []
+
     total_uncollided_flux = 0.0
     total_buildup_corrected_flux = 0.0
+    all_buildup_lines_valid = True
 
     for photon_line in source.photon_lines:
         photon_rate = source.activity_bq * photon_line.intensity
@@ -104,7 +117,14 @@ def calculate_isotope_source_result(
         )
 
         if apply_buildup:
-            calculate_buildup_for_result(shielding_result)
+            try:
+                calculate_buildup_for_result(shielding_result)
+            except ValueError as error:
+                all_buildup_lines_valid = False
+                warnings.append(
+                    f"Buildup skipped for {photon_line.energy} MeV line: {error} "
+                    "Narrow-beam uncollided flux is still reported for this line."
+                )
 
         line_result = SourceLineResult(
             photon_line,
@@ -121,7 +141,7 @@ def calculate_isotope_source_result(
                 + shielding_result.buildup_corrected_flux
             )
 
-    if not apply_buildup:
+    if not apply_buildup or not all_buildup_lines_valid:
         total_buildup_corrected_flux = None
 
     return SourceCalculationResult(
@@ -130,4 +150,5 @@ def calculate_isotope_source_result(
         line_results,
         total_uncollided_flux,
         total_buildup_corrected_flux,
+        warnings,
     )
