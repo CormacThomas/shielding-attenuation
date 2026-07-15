@@ -29,7 +29,7 @@ class ReductionFactorTarget:
 
 @dataclass
 class FluxTarget:
-    # Target uncollided detector flux in photons/cm^2/s.
+    # Target detector flux in photons/cm^2/s.
     target_flux: float
 
     def __post_init__(self):
@@ -40,15 +40,20 @@ class FluxTarget:
 @dataclass
 class MinimumThicknessResult:
     # Result from a minimum shielding thickness calculation.
-    # required_thickness is the minimum material thickness needed to satisfy the target.
-    # final_flux is the calculated uncollided flux at that thickness.
-    # final_transmission is the total narrow-beam transmission at that thickness.
+    # final_flux is the flux used to check the target.
+    # In narrow-beam mode, final_flux is the uncollided flux.
+    # In buildup-aware mode, final_flux is the buildup-corrected flux.
+    # final_transmission is the final_flux divided by the unshielded flux.
     material: Material
     required_thickness: float
     final_flux: float
     final_transmission: float
     target_description: str
     warnings: list[str]
+    calculation_mode: str = "Narrow-beam minimum thickness design"
+    final_uncollided_flux: float | None = None
+    final_buildup_corrected_flux: float | None = None
+    buildup_used: bool = False
 
     def __post_init__(self):
         if self.required_thickness < 0:
@@ -62,3 +67,23 @@ class MinimumThicknessResult:
 
         if self.final_transmission > 1:
             raise ValueError("Final transmission cannot be greater than 1.")
+
+        if self.calculation_mode.strip() == "":
+            raise ValueError("Calculation mode cannot be empty.")
+
+        if self.final_uncollided_flux is None:
+            self.final_uncollided_flux = self.final_flux
+
+        if self.final_uncollided_flux < 0:
+            raise ValueError("Final uncollided flux cannot be negative.")
+
+        if (
+            self.final_buildup_corrected_flux is not None
+            and self.final_buildup_corrected_flux < 0
+        ):
+            raise ValueError("Final buildup-corrected flux cannot be negative.")
+
+        if self.buildup_used and self.final_buildup_corrected_flux is None:
+            raise ValueError(
+                "Buildup-corrected flux must be stored when buildup_used is True."
+            )

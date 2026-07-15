@@ -59,6 +59,7 @@ def run_minimum_thickness_mode() -> None:
     detector_distance = get_detector_distance_from_user()
     target = get_target_from_user()
     max_thickness = get_optional_max_thickness_from_user()
+    apply_buildup = get_apply_buildup_from_user()
 
     if isinstance(source, ManualPhotonSource):
         result = calculate_manual_minimum_thickness(
@@ -67,6 +68,7 @@ def run_minimum_thickness_mode() -> None:
             detector_distance,
             target,
             max_thickness,
+            apply_buildup=apply_buildup,
         )
 
     elif isinstance(source, IsotopeSource):
@@ -76,6 +78,7 @@ def run_minimum_thickness_mode() -> None:
             detector_distance,
             target,
             max_thickness,
+            apply_buildup=apply_buildup,
         )
 
     else:

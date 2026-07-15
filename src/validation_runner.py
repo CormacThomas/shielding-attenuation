@@ -394,6 +394,88 @@ def run_validation_tests() -> None:
         0,
     )
 
+
+    # Validate buildup-aware V1.07 minimum shielding thickness calculations.
+
+    manual_buildup_flux_target_result = calculate_manual_minimum_thickness(
+        manual_source,
+        materials["lead"],
+        detector_distance,
+        FluxTarget(100.0),
+        apply_buildup=True,
+    )
+
+    assert_less_than_or_equal(
+        "Manual buildup-aware minimum thickness flux target",
+        manual_buildup_flux_target_result.final_flux,
+        100.000001,
+    )
+
+    assert_equal(
+        "Manual buildup-aware minimum thickness used buildup",
+        manual_buildup_flux_target_result.buildup_used,
+        True,
+    )
+
+    assert_greater_than(
+        "Manual buildup-aware thickness greater than narrow-beam thickness",
+        manual_buildup_flux_target_result.required_thickness,
+        manual_flux_target_result.required_thickness,
+    )
+
+    cs137_buildup_flux_target_result = calculate_isotope_minimum_thickness(
+        cs137_source,
+        materials["lead"],
+        detector_distance,
+        FluxTarget(100.0),
+        max_thickness=detector_distance,
+        apply_buildup=True,
+    )
+
+    assert_less_than_or_equal(
+        "Cs-137 buildup-aware isotope minimum thickness flux target",
+        cs137_buildup_flux_target_result.final_flux,
+        100.000001,
+    )
+
+    assert_equal(
+        "Cs-137 buildup-aware isotope minimum thickness used buildup",
+        cs137_buildup_flux_target_result.buildup_used,
+        True,
+    )
+
+    am241_manual_source = ManualPhotonSource(
+        0.059541,
+        3.7e10,
+    )
+
+    am241_buildup_fallback_result = calculate_manual_minimum_thickness(
+        am241_manual_source,
+        materials["lead"],
+        detector_distance,
+        FluxTarget(1.0e-121),
+        apply_buildup=True,
+    )
+
+    assert_less_than_or_equal(
+        "Am-241 fallback minimum thickness reaches flux target",
+        am241_buildup_fallback_result.final_flux,
+        1.000001e-121,
+    )
+
+    assert_equal(
+        "Am-241 fallback minimum thickness did not use buildup",
+        am241_buildup_fallback_result.buildup_used,
+        False,
+    )
+
+    assert_greater_than(
+        "Am-241 fallback minimum thickness warning generated",
+        len(am241_buildup_fallback_result.warnings),
+        0,
+    )
+
+
     try:
         calculate_manual_minimum_thickness(
             manual_source,

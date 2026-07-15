@@ -102,19 +102,29 @@ def print_source_results(result: SourceCalculationResult) -> None:
 
 def print_minimum_thickness_result(result: MinimumThicknessResult) -> None:
     print("\nMinimum shielding thickness result")
-    print("Calculation mode: Narrow-beam minimum thickness design")
+    print(f"Calculation mode: {result.calculation_mode}")
     print(f"Material: {result.material.name}")
     print(f"Target: {result.target_description}")
     print(f"Required thickness: {result.required_thickness:.6g} cm")
-    print(f"Final transmission: {result.final_transmission:.6e}")
-    print(f"Final uncollided flux: {result.final_flux:.6e} photons/cm^2/s")
+    print(f"Final effective transmission: {result.final_transmission:.6e}")
+    print(
+        f"Final target-comparison flux: "
+        f"{result.final_flux:.6e} photons/cm^2/s"
+    )
+
+    if result.final_uncollided_flux is not None:
+        print(
+            f"Final narrow-beam uncollided flux: "
+            f"{result.final_uncollided_flux:.6e} photons/cm^2/s"
+        )
+
+    if result.final_buildup_corrected_flux is not None:
+        print(
+            f"Final buildup-corrected flux: "
+            f"{result.final_buildup_corrected_flux:.6e} photons/cm^2/s"
+        )
 
     if len(result.warnings) > 0:
         print("\nWarnings:")
         for warning in result.warnings:
-            print(f"- {warning}")
-
-    print(
-        "\nNote: V1.07 minimum-thickness calculations use narrow-beam "
-        "uncollided flux only. G-P buildup is not included in design mode."
-    )            
+            print(f"- {warning}")      
