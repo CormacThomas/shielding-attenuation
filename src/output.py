@@ -12,6 +12,7 @@
         # Material thickness: cm
         # Material density: g/cm^3
 
+from target_models import MinimumThicknessResult
 from models import ShieldingResult
 from source_models import SourceCalculationResult
 
@@ -97,3 +98,23 @@ def print_source_results(result: SourceCalculationResult) -> None:
                 f"Buildup-corrected flux: "
                 f"{shielding_result.buildup_corrected_flux:.6e} photons/cm^2/s"
             )
+
+
+def print_minimum_thickness_result(result: MinimumThicknessResult) -> None:
+    print("\nMinimum shielding thickness result")
+    print("Calculation mode: Narrow-beam minimum thickness design")
+    print(f"Material: {result.material.name}")
+    print(f"Target: {result.target_description}")
+    print(f"Required thickness: {result.required_thickness:.6g} cm")
+    print(f"Final transmission: {result.final_transmission:.6e}")
+    print(f"Final uncollided flux: {result.final_flux:.6e} photons/cm^2/s")
+
+    if len(result.warnings) > 0:
+        print("\nWarnings:")
+        for warning in result.warnings:
+            print(f"- {warning}")
+
+    print(
+        "\nNote: V1.07 minimum-thickness calculations use narrow-beam "
+        "uncollided flux only. G-P buildup is not included in design mode."
+    )            

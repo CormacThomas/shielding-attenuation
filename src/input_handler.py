@@ -1,3 +1,4 @@
+from target_models import FluxTarget, ReductionFactorTarget, TransmissionTarget
 from models import Layer, Material
 from source_library import create_isotope_source, get_available_isotopes
 from source_models import IsotopeSource, ManualPhotonSource
@@ -115,3 +116,75 @@ def get_source_from_user() -> ManualPhotonSource | IsotopeSource:
         return get_isotope_source_from_user()
 
     raise ValueError("Invalid source mode.")
+
+
+def get_calculation_mode_from_user() -> str:
+    print("\nCalculation modes:")
+    print("1. Calculate shielded flux for a chosen thickness")
+    print("2. Calculate required shielding thickness for a target")
+
+    calculation_mode = input("Select calculation mode (1/2): ").strip()
+
+    if calculation_mode == "1":
+        return "fixed_thickness"
+
+    if calculation_mode == "2":
+        return "minimum_thickness"
+
+    raise ValueError("Please enter 1 or 2.")
+
+
+def get_single_material_from_user(materials: dict[str, Material]) -> Material:
+    print("Available materials:")
+    for material_name in materials:
+        print(f"- {material_name}")
+
+    material_name = input("Enter shielding material name: ").lower().strip()
+
+    if material_name not in materials:
+        raise ValueError("Material not found.")
+
+    return materials[material_name]
+
+
+def get_target_from_user() -> TransmissionTarget | ReductionFactorTarget | FluxTarget:
+    print("\nTarget types:")
+    print("1. Transmission target")
+    print("2. Reduction factor target")
+    print("3. Flux target")
+
+    target_mode = input("Select target type (1/2/3): ").strip()
+
+    if target_mode == "1":
+        target_transmission = float(
+            input("Enter target transmission fraction, ex: 0.01 for 1%: ")
+        )
+
+        return TransmissionTarget(target_transmission)
+
+    if target_mode == "2":
+        reduction_factor = float(
+            input("Enter reduction factor, ex: 1000 for 1000x reduction: ")
+        )
+
+        return ReductionFactorTarget(reduction_factor)
+
+    if target_mode == "3":
+        target_flux = float(
+            input("Enter target uncollided flux in photons/cm^2/s: ")
+        )
+
+        return FluxTarget(target_flux)
+
+    raise ValueError("Please enter 1, 2, or 3.")
+
+
+def get_optional_max_thickness_from_user() -> float | None:
+    answer = input(
+        "Enter maximum allowed thickness in cm, or press Enter to use detector distance: "
+    ).strip()
+
+    if answer == "":
+        return None
+
+    return float(answer)

@@ -1,3 +1,5 @@
+from target_models import FluxTarget, ReductionFactorTarget, TransmissionTarget
+from thickness_calculator import calculate_isotope_minimum_thickness, calculate_manual_minimum_thickness
 from buildup import calculate_gp_buildup_factor, get_gp_coefficients_at_energy
 from buildup_library import get_gp_coefficients_library
 from material_library import get_material_library
@@ -28,6 +30,15 @@ def assert_greater_than(name: str, actual: float, minimum: float) -> None:
     if actual <= minimum:
         raise AssertionError(
             f"{name} failed: expected greater than {minimum}, got {actual}"
+        )
+
+    print(f"PASS: {name}")
+
+
+def assert_less_than_or_equal(name: str, actual: float, maximum: float) -> None:
+    if actual > maximum:
+        raise AssertionError(
+            f"{name} failed: expected less than or equal to {maximum}, got {actual}"
         )
 
     print(f"PASS: {name}")
@@ -296,6 +307,105 @@ def run_validation_tests() -> None:
         len(am241_result.warnings),
         0,
     )
+
+
+    # Validate V1.07 minimum shielding thickness calculations.
+
+    manual_transmission_target_result = calculate_manual_minimum_thickness(
+        manual_source,
+        materials["lead"],
+        detector_distance,
+        TransmissionTarget(0.1),
+    )
+
+    assert_close(
+        "Manual minimum thickness transmission target",
+        manual_transmission_target_result.final_transmission,
+        0.1,
+        1e-8,
+    )
+
+    manual_reduction_target_result = calculate_manual_minimum_thickness(
+        manual_source,
+        materials["lead"],
+        detector_distance,
+        ReductionFactorTarget(1000.0),
+    )
+
+    assert_close(
+        "Manual minimum thickness reduction factor target",
+        manual_reduction_target_result.final_transmission,
+        0.001,
+        1e-8,
+    )
+
+    manual_flux_target_result = calculate_manual_minimum_thickness(
+        manual_source,
+        materials["lead"],
+        detector_distance,
+        FluxTarget(100.0),
+    )
+
+    assert_less_than_or_equal(
+        "Manual minimum thickness flux target",
+        manual_flux_target_result.final_flux,
+        100.000001,
+    )
+
+    cs137_source = create_isotope_source("cs137", one_ci_bq)
+
+    cs137_flux_target_result = calculate_isotope_minimum_thickness(
+        cs137_source,
+        materials["lead"],
+        detector_distance,
+        FluxTarget(100.0),
+        max_thickness=detector_distance,
+    )
+
+    assert_less_than_or_equal(
+        "Cs-137 isotope minimum thickness flux target",
+        cs137_flux_target_result.final_flux,
+        100.000001,
+    )
+
+    assert_greater_than(
+        "Cs-137 isotope required thickness greater than zero",
+        cs137_flux_target_result.required_thickness,
+        0.0,
+    )
+
+    no_shielding_required_result = calculate_manual_minimum_thickness(
+        manual_source,
+        materials["lead"],
+        detector_distance,
+        FluxTarget(1.0e12),
+    )
+
+    assert_close(
+        "No shielding required returns zero thickness",
+        no_shielding_required_result.required_thickness,
+        0.0,
+        1e-12,
+    )
+
+    assert_greater_than(
+        "No shielding required warning generated",
+        len(no_shielding_required_result.warnings),
+        0,
+    )
+
+    try:
+        calculate_manual_minimum_thickness(
+            manual_source,
+            materials["lead"],
+            detector_distance,
+            FluxTarget(1.0e-30),
+            max_thickness=0.1,
+        )
+        raise AssertionError("Impossible manual thickness target should have failed.")
+    except ValueError:
+        print("PASS: Impossible manual thickness target rejected")
+
 
     # Validate expected error handling for invalid user inputs.
 
