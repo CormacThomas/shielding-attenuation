@@ -2,6 +2,67 @@
 
 All major development milestones for the Shielding Attenuation Simulator are documented here.
 
+## v1.07 - Target Classes and Minimum Shielding Thickness Design
+
+Added target-driven minimum shielding thickness calculations for manual monoenergetic photon sources and isotope sources. Version 1.07 allows the simulator to answer design questions such as how much shielding is required to meet a specified transmission, reduction-factor, or flux target.
+
+Changes:
+- Added target model dataclasses:
+  - `TransmissionTarget`
+  - `ReductionFactorTarget`
+  - `FluxTarget`
+  - `MinimumThicknessResult`
+- Added `thickness_calculator.py` for minimum shielding thickness calculations.
+- Added target conversion logic that converts transmission, reduction-factor, and flux targets into equivalent detector flux requirements.
+- Added analytical narrow-beam minimum-thickness calculation for manual monoenergetic photon sources.
+- Added bisection-based minimum-thickness calculation for isotope sources.
+- Added support for source-level isotope minimum-thickness design using line-by-line flux summation.
+- Added optional buildup-aware minimum-thickness design.
+- Added automatic fallback to narrow-beam design when buildup-aware design is unavailable.
+- Added warnings when buildup is requested but cannot be used within the valid G-P buildup range.
+- Added CLI calculation mode selection:
+  - fixed-thickness shielding calculation
+  - minimum-thickness shielding design
+- Updated minimum-thickness output formatting to report:
+  - calculation mode
+  - selected material
+  - target description
+  - required thickness
+  - final target-comparison flux
+  - final narrow-beam uncollided flux
+  - final buildup-corrected flux when available
+  - warnings
+- Added validation checks for target conversion, manual analytical thickness calculation, isotope bisection, buildup-aware design, fallback behavior, and impossible design target rejection.
+- Added V1.07 validation report for target-driven minimum shielding thickness calculations.
+
+Validated behavior:
+- Manual source transmission targets produce the expected final transmission.
+- Manual source reduction-factor targets produce the expected final transmission.
+- Manual source flux targets produce final flux at or below the requested target.
+- Cs-137 isotope flux targets produce final source flux at or below the requested target.
+- Isotope minimum-thickness calculations return required thickness greater than zero when shielding is required.
+- Very high flux targets correctly return zero required thickness with a warning.
+- Impossible manual-source targets with insufficient maximum thickness are rejected.
+- Buildup-aware manual-source design reaches the requested flux target when buildup is valid.
+- Buildup-aware manual-source design reports `buildup_used = True` when G-P buildup is successfully used.
+- Buildup-aware manual-source required thickness is greater than the equivalent narrow-beam required thickness.
+- Buildup-aware Cs-137 isotope design reaches the requested flux target when buildup is valid.
+- Buildup-aware Cs-137 isotope design reports `buildup_used = True`.
+- Low-energy Am-241-style manual source design falls back to narrow-beam calculation when the buildup-aware solution cannot reach the target within the valid G-P range.
+- Fallback minimum-thickness results still reach the requested narrow-beam flux target.
+- Fallback minimum-thickness results report `buildup_used = False`.
+- Fallback minimum-thickness results generate warnings.
+- Manual source V1.05 regression behavior remains preserved.
+
+Notes:
+- Minimum-thickness design currently evaluates one shielding material at a time.
+- Narrow-beam manual-source minimum thickness uses the analytical attenuation solution.
+- Isotope-source minimum thickness uses bisection because each photon line attenuates differently.
+- Buildup-aware minimum-thickness design uses bisection because the G-P buildup factor depends on shield thickness in mean free paths.
+- Buildup-aware design remains limited to single-layer homogeneous shielding.
+- If buildup-aware design is unavailable, the simulator falls back to narrow-beam design and reports a warning.
+- V1.07 reports photon flux, not dose rate, exposure rate, air kerma, or effective dose.
+
 ## v1.06 - Isotope Source Library and Source-Level Flux Calculation
 
 Added isotope source modeling, activity unit conversion, line-by-line photon source calculations, and warning behavior for buildup requests outside the valid G-P mean-free-path range.
