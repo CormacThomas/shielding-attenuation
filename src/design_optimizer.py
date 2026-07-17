@@ -39,12 +39,16 @@ class MaterialDesignCandidate:
     #
     # A candidate can either PASS or FAILED.
     #
+    # Engineering constraint rejection is handled separately by the V1.09
+    # constraint optimizer
+    #
     # PASS means:
     #   - the material reached the requested target
     #   - required_thickness, final_flux, and final_transmission are available
     #
     # FAILED means:
-    #   - the material could not satisfy the target under the current constraints
+    #   - the material calculation could not produce a usable design within the
+    #     calculation search bounds or current model limitations
     #   - the failure_reason explains why
     #
     # Failed candidates are intentionally kept in the comparison result so the

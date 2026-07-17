@@ -11,7 +11,11 @@ from models import Layer, Material
 from source_library import create_isotope_source, get_available_isotopes
 from source_models import IsotopeSource, ManualPhotonSource
 from unit_conversions import convert_activity_to_bq
-
+from optimization_models import (
+    DesignConstraints,
+    OptimizationMode,
+    OptimizationWeights,
+)
 
 def get_layers_from_user(materials: dict[str, Material]) -> list[Layer]:
     print("Available materials:")
@@ -127,22 +131,15 @@ def get_source_from_user() -> ManualPhotonSource | IsotopeSource:
 
 
 def get_calculation_mode_from_user() -> str:
-    # Select the major simulator workflow.
-    #
-    # fixed_thickness:
-    #   Calculate flux through user-specified shielding layers.
-    #
-    # minimum_thickness:
-    #   Calculate required thickness for one selected material.
-    #
-    # material_comparison:
-    #   Calculate required thickness for multiple candidate materials.
     print("\nCalculation modes:")
     print("1. Calculate shielded flux for a chosen thickness")
     print("2. Calculate required shielding thickness for a target")
     print("3. Compare required shielding thickness across materials")
+    print("4. Optimize material selection using engineering constraints")
 
-    calculation_mode = input("Select calculation mode (1/2/3): ").strip()
+    calculation_mode = input(
+        "Select calculation mode (1/2/3/4): "
+    ).strip()
 
     if calculation_mode == "1":
         return "fixed_thickness"
@@ -153,7 +150,10 @@ def get_calculation_mode_from_user() -> str:
     if calculation_mode == "3":
         return "material_comparison"
 
-    raise ValueError("Please enter 1, 2, or 3.")
+    if calculation_mode == "4":
+        return "material_optimization"
+
+    raise ValueError("Please enter 1, 2, 3, or 4.")
 
 
 def get_single_material_from_user(materials: dict[str, Material]) -> Material:
@@ -201,16 +201,28 @@ def get_target_from_user() -> TransmissionTarget | ReductionFactorTarget | FluxT
     raise ValueError("Please enter 1, 2, or 3.")
 
 
-def get_optional_max_thickness_from_user() -> float | None:
+def get_optional_calculation_max_thickness_from_user() -> float | None:
+    # Calculation search limit used by the minimum-thickness solver.
+    #
+    # This is different from the V1.09 engineering design thickness constraint.
+    # Pressing Enter allows the solver to search up to the detector distance.
+
     answer = input(
-        "Enter maximum allowed thickness in cm, or press Enter to use detector distance: "
+        "Enter calculation thickness search limit in cm, "
+        "or press Enter to use detector distance: "
     ).strip()
 
     if answer == "":
         return None
 
-    return float(answer)
+    value = float(answer)
 
+    if value <= 0:
+        raise ValueError(
+            "Calculation thickness search limit must be greater than zero."
+        )
+
+    return value
 
 def get_materials_for_comparison_from_user(
     materials: dict[str, Material],
@@ -249,3 +261,100 @@ def get_materials_for_comparison_from_user(
         raise ValueError("At least one material must be selected.")
 
     return selected_materials
+
+
+def get_optional_positive_float_from_user(
+    prompt: str,
+) -> float | None:
+    answer = input(prompt).strip()
+
+    if answer == "":
+        return None
+
+    value = float(answer)
+
+    if value <= 0:
+        raise ValueError(
+            "Optional design constraint values must be greater than zero."
+        )
+
+    return value
+
+
+def get_design_constraints_from_user() -> DesignConstraints:
+    # Collect optional V1.09 hard engineering constraints.
+    #
+    # Pressing Enter skips a constraint.
+
+    print("\nOptional engineering design constraints:")
+    print("Press Enter to leave a constraint inactive.")
+
+    max_thickness_cm = get_optional_positive_float_from_user(
+        "Maximum design thickness in cm: "
+    )
+
+    max_mass_per_area = get_optional_positive_float_from_user(
+        "Maximum mass per area in g/cm^2: "
+    )
+
+    max_relative_cost = get_optional_positive_float_from_user(
+        "Maximum relative cost index per area: "
+    )
+
+    return DesignConstraints(
+        max_thickness_cm=max_thickness_cm,
+        max_mass_per_area_g_per_cm2=max_mass_per_area,
+        max_relative_cost_index_per_area=max_relative_cost,
+    )
+
+
+def get_optimization_mode_from_user() -> OptimizationMode:
+    print("\nOptimization objectives:")
+    print("1. Minimum required thickness")
+    print("2. Minimum mass per area")
+    print("3. Minimum relative cost index per area")
+    print("4. Balanced thickness, mass, and relative cost score")
+
+    answer = input(
+        "Select optimization objective (1/2/3/4): "
+    ).strip()
+
+    if answer == "1":
+        return "minimum_thickness"
+
+    if answer == "2":
+        return "minimum_mass"
+
+    if answer == "3":
+        return "minimum_cost"
+
+    if answer == "4":
+        return "balanced"
+
+    raise ValueError("Please enter 1, 2, 3, or 4.")
+
+
+def get_optimization_weights_from_user() -> OptimizationWeights:
+    print("\nBalanced optimization weights:")
+    print(
+        "Weights do not need to add to 1. "
+        "Larger values give a metric more influence."
+    )
+
+    thickness_weight = float(
+        input("Thickness weight: ")
+    )
+
+    mass_weight = float(
+        input("Mass weight: ")
+    )
+
+    cost_weight = float(
+        input("Relative cost weight: ")
+    )
+
+    return OptimizationWeights(
+        thickness_weight=thickness_weight,
+        mass_weight=mass_weight,
+        cost_weight=cost_weight,
+    )

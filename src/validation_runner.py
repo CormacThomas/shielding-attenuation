@@ -19,7 +19,16 @@ from source_library import create_isotope_source, get_available_isotopes
 from source_models import ManualPhotonSource
 from unit_conversions import convert_activity_to_bq
 from design_optimizer import compare_materials_for_target
-
+from constraint_optimizer import (
+    calculate_mass_per_area,
+    calculate_relative_cost_index_per_area,
+    optimize_material_selection,
+)
+from material_cost_library import get_material_cost_library
+from optimization_models import (
+    DesignConstraints,
+    OptimizationWeights,
+)
 
 def assert_close(
     name: str,
@@ -39,6 +48,19 @@ def get_candidate_by_material_key(comparison_result, material_key: str):
             return candidate
 
     raise AssertionError(f"Candidate not found for material key: {material_key}")
+
+
+def get_optimized_candidate_by_material_key(
+    optimization_result,
+    material_key: str,
+):
+    for candidate in optimization_result.all_candidates:
+        if candidate.base_candidate.material.key == material_key:
+            return candidate
+
+    raise AssertionError(
+        f"Optimized candidate not found for material key: {material_key}"
+    )
 
 
 def assert_greater_than(name: str, actual: float, minimum: float) -> None:
@@ -621,6 +643,352 @@ def run_validation_tests() -> None:
         raise AssertionError("Impossible manual thickness target should have failed.")
     except ValueError:
         print("PASS: Impossible manual thickness target rejected")
+
+
+    # Validate V1.09 constraint-based material optimization.
+
+    lead_mass_per_area = calculate_mass_per_area(
+        materials["lead"].density,
+        7.0,
+    )
+
+    assert_close(
+        "V1.09 mass per area equals density times thickness",
+        lead_mass_per_area,
+        79.38,
+        1e-10,
+    )
+
+    material_cost_library = get_material_cost_library()
+    lead_relative_cost_index = (
+        material_cost_library["lead"].relative_cost_index
+    )
+
+    lead_relative_cost_per_area = (
+        calculate_relative_cost_index_per_area(
+            lead_mass_per_area,
+            lead_relative_cost_index,
+        )
+    )
+
+    assert_close(
+        "V1.09 relative cost per area calculation",
+        lead_relative_cost_per_area,
+        79.38 * lead_relative_cost_index,
+        1e-10,
+    )
+
+    minimum_thickness_optimization_result = (
+        optimize_material_selection(
+            source=cs137_source,
+            materials=comparison_materials,
+            detector_distance=detector_distance,
+            target=FluxTarget(100.0),
+            constraints=DesignConstraints(),
+            optimization_mode="minimum_thickness",
+            calculation_max_thickness=detector_distance,
+            apply_buildup=True,
+        )
+    )
+
+    if minimum_thickness_optimization_result.best_candidate is None:
+        raise AssertionError(
+            "Minimum-thickness optimization did not select a candidate."
+        )
+
+    eligible_thicknesses = []
+
+    for candidate in (
+        minimum_thickness_optimization_result.eligible_candidates()
+    ):
+        thickness = assert_not_none(
+            "Eligible V1.09 candidate thickness",
+            candidate.base_candidate.required_thickness,
+        )
+
+        eligible_thicknesses.append(thickness)
+
+    best_thickness = assert_not_none(
+        "Best V1.09 minimum-thickness candidate thickness",
+        minimum_thickness_optimization_result
+        .best_candidate
+        .base_candidate
+        .required_thickness,
+    )
+
+    assert_close(
+        "V1.09 minimum-thickness objective selects smallest thickness",
+        best_thickness,
+        min(eligible_thicknesses),
+        1e-12,
+    )
+
+    thickness_constraint_result = optimize_material_selection(
+        source=cs137_source,
+        materials=comparison_materials,
+        detector_distance=detector_distance,
+        target=FluxTarget(100.0),
+        constraints=DesignConstraints(
+            max_thickness_cm=10.0,
+        ),
+        optimization_mode="minimum_thickness",
+        calculation_max_thickness=detector_distance,
+        apply_buildup=True,
+    )
+
+    water_optimized_candidate = (
+        get_optimized_candidate_by_material_key(
+            thickness_constraint_result,
+            "water",
+        )
+    )
+
+    assert_equal(
+        "V1.09 candidate violating thickness constraint is rejected",
+        water_optimized_candidate.optimization_status,
+        "REJECTED",
+    )
+
+    assert_greater_than(
+        "V1.09 rejected candidate preserves rejection reason",
+        len(water_optimized_candidate.rejection_reasons),
+        0,
+    )
+
+    multiple_constraint_result = optimize_material_selection(
+        source=cs137_source,
+        materials=[materials["water"]],
+        detector_distance=detector_distance,
+        target=FluxTarget(100.0),
+        constraints=DesignConstraints(
+            max_thickness_cm=10.0,
+            max_mass_per_area_g_per_cm2=50.0,
+        ),
+        optimization_mode="minimum_mass",
+        calculation_max_thickness=detector_distance,
+        apply_buildup=False,
+    )
+
+    multiple_rejection_candidate = (
+        get_optimized_candidate_by_material_key(
+            multiple_constraint_result,
+            "water",
+        )
+    )
+
+    assert_equal(
+        "V1.09 candidate can be rejected by multiple constraints",
+        multiple_rejection_candidate.optimization_status,
+        "REJECTED",
+    )
+
+    assert_greater_than(
+        "V1.09 candidate preserves multiple rejection reasons",
+        len(multiple_rejection_candidate.rejection_reasons),
+        1,
+    )
+
+    minimum_mass_result = optimize_material_selection(
+        source=cs137_source,
+        materials=comparison_materials,
+        detector_distance=detector_distance,
+        target=FluxTarget(100.0),
+        constraints=DesignConstraints(),
+        optimization_mode="minimum_mass",
+        calculation_max_thickness=detector_distance,
+        apply_buildup=True,
+    )
+
+    if minimum_mass_result.best_candidate is None:
+        raise AssertionError(
+            "Minimum-mass optimization did not select a candidate."
+        )
+
+    eligible_mass_values = []
+
+    for candidate in minimum_mass_result.eligible_candidates():
+        candidate_mass = assert_not_none(
+            "Eligible V1.09 candidate mass per area",
+            candidate.mass_per_area_g_per_cm2,
+        )
+
+        eligible_mass_values.append(candidate_mass)
+
+    best_mass = assert_not_none(
+        "Best V1.09 mass candidate mass per area",
+        minimum_mass_result
+        .best_candidate
+        .mass_per_area_g_per_cm2,
+    )
+
+    assert_close(
+        "V1.09 minimum-mass objective selects smallest mass",
+        best_mass,
+        min(eligible_mass_values),
+        1e-12,
+    )
+
+    minimum_cost_result = optimize_material_selection(
+        source=cs137_source,
+        materials=comparison_materials,
+        detector_distance=detector_distance,
+        target=FluxTarget(100.0),
+        constraints=DesignConstraints(),
+        optimization_mode="minimum_cost",
+        calculation_max_thickness=detector_distance,
+        apply_buildup=True,
+    )
+
+    if minimum_cost_result.best_candidate is None:
+        raise AssertionError(
+            "Minimum-cost optimization did not select a candidate."
+        )
+
+    eligible_cost_values = []
+
+    for candidate in minimum_cost_result.eligible_candidates():
+        candidate_cost = assert_not_none(
+            "Eligible V1.09 candidate relative cost",
+            candidate.relative_cost_index_per_area,
+        )
+
+        eligible_cost_values.append(candidate_cost)
+
+    best_cost = assert_not_none(
+        "Best V1.09 cost candidate relative cost",
+        minimum_cost_result
+        .best_candidate
+        .relative_cost_index_per_area,
+    )
+
+    assert_close(
+        "V1.09 minimum-cost objective selects smallest relative cost",
+        best_cost,
+        min(eligible_cost_values),
+        1e-12,
+    )
+
+    balanced_result = optimize_material_selection(
+        source=cs137_source,
+        materials=comparison_materials,
+        detector_distance=detector_distance,
+        target=FluxTarget(100.0),
+        constraints=DesignConstraints(),
+        optimization_mode="balanced",
+        weights=OptimizationWeights(
+            thickness_weight=0.5,
+            mass_weight=0.3,
+            cost_weight=0.2,
+        ),
+        calculation_max_thickness=detector_distance,
+        apply_buildup=True,
+    )
+
+    if balanced_result.best_candidate is None:
+        raise AssertionError(
+            "Balanced optimization did not select a candidate."
+        )
+
+    eligible_balanced_scores = []
+
+    for candidate in balanced_result.eligible_candidates():
+        candidate_score = assert_not_none(
+            "Eligible balanced candidate score",
+            candidate.optimization_score,
+        )
+
+        assert_greater_than(
+            f"{candidate.base_candidate.material.key} balanced score "
+            "is not below zero",
+            candidate_score + 1.0e-12,
+            0.0,
+        )
+
+        assert_less_than_or_equal(
+            f"{candidate.base_candidate.material.key} balanced score "
+            "is not above one",
+            candidate_score,
+            1.0,
+        )
+
+        eligible_balanced_scores.append(candidate_score)
+
+    best_balanced_score = assert_not_none(
+        "Best balanced candidate score",
+        balanced_result.best_candidate.optimization_score,
+    )
+
+    assert_close(
+        "V1.09 balanced objective selects smallest score",
+        best_balanced_score,
+        min(eligible_balanced_scores),
+        1e-12,
+    )
+
+    failed_optimization_result = optimize_material_selection(
+        source=cs137_source,
+        materials=[materials["lead"], materials["water"]],
+        detector_distance=detector_distance,
+        target=FluxTarget(1.0e-30),
+        constraints=DesignConstraints(),
+        optimization_mode="minimum_thickness",
+        calculation_max_thickness=0.1,
+        apply_buildup=False,
+    )
+
+    failed_optimized_lead = (
+        get_optimized_candidate_by_material_key(
+            failed_optimization_result,
+            "lead",
+        )
+    )
+
+    assert_equal(
+        "V1.09 preserves failed V1.08 candidates",
+        failed_optimized_lead.optimization_status,
+        "FAILED",
+    )
+
+    no_eligible_result = optimize_material_selection(
+        source=cs137_source,
+        materials=comparison_materials,
+        detector_distance=detector_distance,
+        target=FluxTarget(100.0),
+        constraints=DesignConstraints(
+            max_thickness_cm=0.1,
+        ),
+        optimization_mode="minimum_thickness",
+        calculation_max_thickness=detector_distance,
+        apply_buildup=False,
+    )
+
+    assert_equal(
+        "V1.09 no eligible candidates returns no best candidate",
+        no_eligible_result.best_candidate,
+        None,
+    )
+
+    assert_greater_than(
+        "V1.09 no eligible candidates generates warning",
+        len(no_eligible_result.warnings),
+        0,
+    )
+
+    try:
+        DesignConstraints(max_thickness_cm=-1.0)
+        raise AssertionError(
+            "Negative design constraint should have failed."
+        )
+    except ValueError:
+        print("PASS: Negative V1.09 design constraint rejected")
+
+    try:
+        OptimizationWeights(0.0, 0.0, 0.0)
+        raise AssertionError(
+            "Zero optimization weights should have failed."
+        )
+    except ValueError:
+        print("PASS: Zero V1.09 optimization weights rejected")
 
 
     # Validate expected error handling for invalid user inputs.
