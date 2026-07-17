@@ -1,9 +1,16 @@
 from source_models import IsotopeSource, PhotonLine
 
-
+# Isotope source library.
+#
+# Each isotope source stores selected photon lines useful for shielding examples.
 # Energy values are stored in MeV.
 # Intensities are stored as photons emitted per decay.
-# Source definitions use selected major photon lines, not complete decay spectra.
+#
+# These are not complete decay spectra. Lower-energy X-rays and minor emission
+# lines may be omitted unless they are useful for the simulator examples.
+#
+# The shielding calculator treats each line independently:
+# photon emission rate = activity_bq * intensity
 
 
 def create_cs137_source(activity_bq: float) -> IsotopeSource:
@@ -165,6 +172,13 @@ def get_available_isotopes() -> list[str]:
 
 
 def create_isotope_source(isotope_key: str, activity_bq: float) -> IsotopeSource:
+    # Factory function for isotope sources.
+    #
+    # The user can enter keys with or without hyphens, such as:
+    # cs137 or cs-137
+    #
+    # All source activities are expected to already be converted to Bq before
+    # this function is called.
     key = isotope_key.lower().strip()
 
     if key == "cs137" or key == "cs-137":

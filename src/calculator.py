@@ -1,3 +1,19 @@
+# Core shielding calculator.
+#
+# This module contains the validated narrow-beam attenuation engine.
+# It handles:
+#   - mu/rho lookup at photon energy
+#   - conversion from mass attenuation coefficient to linear attenuation coefficient
+#   - Beer-Lambert transmission through each layer
+#   - total transmission through one or more layers
+#   - mean-free-path calculations
+#   - point-source detector flux
+#
+# Higher-level modules such as source_calculator.py, thickness_calculator.py,
+# and design_optimizer.py depend on this file. Therefore, this module should stay
+# simple, stable, and physics-focused.
+
+
 from models import Layer, LayerResult, ShieldingResult
 from physics import calculate_mu, calculate_transmission, get_mu_over_p_at_energy, calculate_flux
 

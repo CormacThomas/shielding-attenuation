@@ -3,19 +3,32 @@ from dataclasses import dataclass
 
 @dataclass
 class Material:
-    # shielding material with energy dependent attenuation data.
-        # key = internal identifier used for dictionaries and buildup lookup
-        # name = material name ex: "Lead"
-        # density = material density in g/cm^3
-        # energy = photon energy table in MeV
-        # mu_over_p = mass attenuation coefficient in cm^2/g
+    # Shielding material with energy-dependent attenuation data.
+    #
+    # key:
+    #   Stable internal identifier used for dictionaries, input lookup, and
+    #   G-P buildup coefficient lookup.
+    #
+    # name:
+    #   Human-readable display name used in output.
+    #
+    # density:
+    #   Material density in g/cm^3.
+    #
+    # energy:
+    #   Photon energy table in MeV.
+    #
+    # mu_over_p:
+    #   Mass attenuation coefficient table in cm^2/g.
     key: str
     name: str
     density: float
     energy: list[float]
     mu_over_p: list[float]
 
-    def __post_init__(self): # Error checks. Statements to prevent errors that could lead to incorrect values.
+    def __post_init__(self):
+        # Validate material data at object creation so incorrect material tables
+        # are caught before they can produce misleading shielding results.
         if self.key.strip() == "":
             raise ValueError("Material key cannot be empty.")
         
@@ -38,6 +51,8 @@ class Material:
             if mu_over_p_value <= 0:
                 raise ValueError(f"{self.name} has a non positive mu/rho value.")
 
+        # Energies must be sorted so interpolation functions can find the
+        # correct bracketing energy interval.
         for i in range(len(self.energy) - 1):
             if self.energy[i] > self.energy[i + 1]:
                 raise ValueError(f"{self.name} energy values must be sorted.")
@@ -96,6 +111,11 @@ class ShieldingResult:
     # do not need to pass many separate floats.
     # buildup_factor and buildup_corrected_flux are optional because not all
     # calculations use G-P buildup correction.
+
+    # Note:
+    # buildup_factor and buildup_corrected_flux are filled in later by
+    # source_calculator.calculate_buildup_for_result(). They are optional because
+    # the core calculator always starts with narrow-beam uncollided flux.
 
     
     layers: list[Layer]

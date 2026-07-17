@@ -1,21 +1,17 @@
+# Output formatting utilities.
+#
+# This module keeps printing/reporting logic separate from physics calculations.
+# The calculation modules should return result objects. This file decides how
+# those results are displayed to the user in the command-line interface.
+#
+# Keeping output separate makes the code easier to upgrade later when adding
+# plotting, saved reports, scenario files, or a graphical interface.
 
-# Function to print:
-    # Photon energy: MeV
-    # Source strength: photons/s
-    # Distance between source and detector: cm
-    # Number of layers of shielding material
-    # Total MFP (optical thickness)
-    # Total transmission (fractional value)
-    # Flux at detector: photons/cm^2/s
-    # Shielding material properties
-        # Material name
-        # Material thickness: cm
-        # Material density: g/cm^3
 
 from target_models import MinimumThicknessResult
 from models import ShieldingResult
 from source_models import SourceCalculationResult
-
+from design_optimizer import MaterialComparisonResult, MaterialDesignCandidate
 
 def print_results(result: ShieldingResult) -> None:
     if result.buildup_factor is not None and result.buildup_corrected_flux is not None:
@@ -128,3 +124,95 @@ def print_minimum_thickness_result(result: MinimumThicknessResult) -> None:
         print("\nWarnings:")
         for warning in result.warnings:
             print(f"- {warning}")      
+
+
+def get_buildup_display_for_candidate(candidate: MaterialDesignCandidate) -> str:
+    # Convert internal buildup/fallback state into a short table label.
+    #
+    # "Yes" means buildup was successfully used.
+    # "Fallback" means buildup was requested, but the candidate used narrow-beam
+    # design instead and stored a warning.
+    # "No" means buildup was not requested or not used without warning.
+    if candidate.buildup_used:
+        return "Yes"
+
+    if len(candidate.warnings) > 0:
+        return "Fallback"
+
+    return "No"
+
+
+
+def format_optional_float(value: float | None, precision: str = ".6g") -> str:
+    # Format optional numerical values for tables.
+    # Failed candidates may not have thickness or flux values, so None becomes "--".
+    if value is None:
+        return "--"
+
+    return format(value, precision)
+
+
+def print_material_comparison_result(result: MaterialComparisonResult) -> None:
+    # Print the V1.08 material comparison table.
+    #
+    # The table is intentionally compact so it can be pasted into the README,
+    # validation report, or internship/recruiter materials.
+    #
+    # Passing candidates show thickness and final flux.
+    # Failed candidates show "--" in numerical columns and explain the failure below.
+    print("\nMaterial comparison result")
+    print("Calculation mode: Single-material design comparison")
+    print(f"Target: {result.target_description}")
+    buildup_requested_text = "Yes" if result.apply_buildup else "No"
+    print(f"Buildup requested: {buildup_requested_text}")
+
+    print("\nCandidates:")
+    print(
+        f"{'Material':<28}"
+        f"{'Thickness (cm)':<18}"
+        f"{'Final Flux':<18}"
+        f"{'Buildup':<14}"
+        f"{'Status':<10}"
+    )
+    print("-" * 88)
+
+    for candidate in result.candidates:
+        if candidate.status == "PASS":
+            thickness_text = (
+                f"{format_optional_float(candidate.required_thickness)}"
+            )
+            flux_text = (
+                f"{format_optional_float(candidate.final_flux, '.6e')}"
+            )
+            buildup_text = get_buildup_display_for_candidate(candidate)
+
+        else:
+            thickness_text = "--"
+            flux_text = "--"
+            buildup_text = "--"
+
+        print(
+            f"{candidate.material.name:<28}"
+            f"{thickness_text:<18}"
+            f"{flux_text:<18}"
+            f"{buildup_text:<14}"
+            f"{candidate.status:<10}"
+        )
+
+    has_messages = False
+
+    for candidate in result.candidates:
+        if candidate.status == "FAILED":
+            if not has_messages:
+                print("\nFallbacks, failures, and warnings:")
+                has_messages = True
+
+            print(f"- {candidate.material.name}: {candidate.failure_reason}")
+
+        if candidate.status == "PASS" and len(candidate.warnings) > 0:
+            if not has_messages:
+                print("\nFallbacks, failures, and warnings:")
+                has_messages = True
+
+            for warning in candidate.warnings:
+                print(f"- {candidate.material.name}: {warning}")

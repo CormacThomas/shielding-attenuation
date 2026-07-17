@@ -1,3 +1,11 @@
+# Command-line input utilities.
+#
+# This module gathers and converts user input for the CLI.
+# It should not perform physics calculations.
+#
+# Current limitation:
+# Invalid input generally raises ValueError and exits the program.
+# Future CLI polish should replace this with repeated prompts.
 from target_models import FluxTarget, ReductionFactorTarget, TransmissionTarget
 from models import Layer, Material
 from source_library import create_isotope_source, get_available_isotopes
@@ -119,11 +127,22 @@ def get_source_from_user() -> ManualPhotonSource | IsotopeSource:
 
 
 def get_calculation_mode_from_user() -> str:
+    # Select the major simulator workflow.
+    #
+    # fixed_thickness:
+    #   Calculate flux through user-specified shielding layers.
+    #
+    # minimum_thickness:
+    #   Calculate required thickness for one selected material.
+    #
+    # material_comparison:
+    #   Calculate required thickness for multiple candidate materials.
     print("\nCalculation modes:")
     print("1. Calculate shielded flux for a chosen thickness")
     print("2. Calculate required shielding thickness for a target")
+    print("3. Compare required shielding thickness across materials")
 
-    calculation_mode = input("Select calculation mode (1/2): ").strip()
+    calculation_mode = input("Select calculation mode (1/2/3): ").strip()
 
     if calculation_mode == "1":
         return "fixed_thickness"
@@ -131,7 +150,10 @@ def get_calculation_mode_from_user() -> str:
     if calculation_mode == "2":
         return "minimum_thickness"
 
-    raise ValueError("Please enter 1 or 2.")
+    if calculation_mode == "3":
+        return "material_comparison"
+
+    raise ValueError("Please enter 1, 2, or 3.")
 
 
 def get_single_material_from_user(materials: dict[str, Material]) -> Material:
@@ -188,3 +210,42 @@ def get_optional_max_thickness_from_user() -> float | None:
         return None
 
     return float(answer)
+
+
+def get_materials_for_comparison_from_user(
+    materials: dict[str, Material],
+) -> list[Material]:
+    # Get the list of materials to compare in V1.08 material comparison mode.
+    #
+    # Pressing Enter compares every material in the material library.
+    # Otherwise, the user can enter comma-separated material keys such as:
+    #   lead, concrete_ordinary, water
+    #
+    # Material keys are used instead of display names because they are stable
+    # and match the dictionary keys in material_library.py.
+    print("Available materials:")
+    for material_name in materials:
+        print(f"- {material_name}")
+
+    answer = input(
+        "Enter material names separated by commas, or press Enter to compare all materials: "
+    ).lower().strip()
+
+    if answer == "":
+        return list(materials.values())
+
+    selected_materials = []
+    material_names = answer.split(",")
+
+    for material_name in material_names:
+        key = material_name.strip()
+
+        if key not in materials:
+            raise ValueError(f"Material not found: {key}")
+
+        selected_materials.append(materials[key])
+
+    if len(selected_materials) == 0:
+        raise ValueError("At least one material must be selected.")
+
+    return selected_materials

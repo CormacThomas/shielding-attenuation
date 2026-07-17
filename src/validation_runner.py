@@ -1,3 +1,13 @@
+# Validation runner for benchmark and regression tests.
+#
+# This script is intended to be run after major code changes.
+# It validates the physics helpers, source calculations, minimum-thickness
+# design logic, buildup-aware behavior, material comparison behavior, and
+# important error-handling cases.
+#
+# It is intentionally separate from main.py so validation can run without
+# interactive user input.
+
 from target_models import FluxTarget, ReductionFactorTarget, TransmissionTarget
 from thickness_calculator import calculate_isotope_minimum_thickness, calculate_manual_minimum_thickness
 from buildup import calculate_gp_buildup_factor, get_gp_coefficients_at_energy
@@ -8,10 +18,7 @@ from source_calculator import calculate_isotope_source_result, calculate_manual_
 from source_library import create_isotope_source, get_available_isotopes
 from source_models import ManualPhotonSource
 from unit_conversions import convert_activity_to_bq
-
-# Validation runner for benchmark cases.
-# This script is intended for validation after code changes.
-# It is separate from main.py so validation tests can be repeated without user input.
+from design_optimizer import compare_materials_for_target
 
 
 def assert_close(
@@ -24,6 +31,14 @@ def assert_close(
         raise AssertionError(f"{name} failed: expected {expected}, got {actual}")
 
     print(f"PASS: {name}")
+
+
+def get_candidate_by_material_key(comparison_result, material_key: str):
+    for candidate in comparison_result.candidates:
+        if candidate.material.key == material_key:
+            return candidate
+
+    raise AssertionError(f"Candidate not found for material key: {material_key}")
 
 
 def assert_greater_than(name: str, actual: float, minimum: float) -> None:
@@ -474,6 +489,125 @@ def run_validation_tests() -> None:
         len(am241_buildup_fallback_result.warnings),
         0,
     )
+
+
+    # Validate V1.08 single-material design comparison.
+
+    comparison_materials = [
+        materials["lead"],
+        materials["tungsten"],
+        materials["concrete_ordinary"],
+        materials["concrete_barite"],
+        materials["water"],
+        materials["polyethylene"],
+    ]
+
+    material_comparison_result = compare_materials_for_target(
+        cs137_source,
+        comparison_materials,
+        detector_distance,
+        FluxTarget(100.0),
+        max_thickness=detector_distance,
+        apply_buildup=True,
+    )
+
+    assert_equal(
+        "Material comparison returns one candidate per selected material",
+        len(material_comparison_result.candidates),
+        len(comparison_materials),
+    )
+
+    lead_candidate = get_candidate_by_material_key(
+        material_comparison_result,
+        "lead",
+    )
+
+    assert_equal(
+        "Lead material comparison candidate passes",
+        lead_candidate.status,
+        "PASS",
+    )
+
+    lead_final_flux = assert_not_none(
+        "Lead material comparison final flux",
+        lead_candidate.final_flux,
+    )
+
+    assert_less_than_or_equal(
+        "Lead material comparison reaches flux target",
+        lead_final_flux,
+        100.000001,
+    )
+
+    assert_equal(
+        "Lead material comparison uses buildup when valid",
+        lead_candidate.buildup_used,
+        True,
+    )
+
+    for candidate in material_comparison_result.candidates:
+        if candidate.status == "PASS":
+            candidate_final_flux = assert_not_none(
+                f"{candidate.material.key} material comparison final flux",
+                candidate.final_flux,
+            )
+
+            assert_less_than_or_equal(
+                f"{candidate.material.key} material comparison reaches flux target",
+                candidate_final_flux,
+                100.000001,
+            )
+
+    barite_candidate = get_candidate_by_material_key(
+        material_comparison_result,
+        "concrete_barite",
+    )
+
+    assert_equal(
+        "Unsupported buildup material can fall back to narrow-beam",
+        barite_candidate.status,
+        "PASS",
+    )
+
+    assert_equal(
+        "Unsupported buildup material does not use buildup",
+        barite_candidate.buildup_used,
+        False,
+    )
+
+    assert_greater_than(
+        "Unsupported buildup material warning preserved",
+        len(barite_candidate.warnings),
+        0,
+    )
+
+    impossible_comparison_result = compare_materials_for_target(
+        cs137_source,
+        [materials["lead"], materials["water"]],
+        detector_distance,
+        FluxTarget(1.0e-30),
+        max_thickness=0.1,
+        apply_buildup=False,
+    )
+
+    failed_lead_candidate = get_candidate_by_material_key(
+        impossible_comparison_result,
+        "lead",
+    )
+
+    assert_equal(
+        "Failed material comparison candidate preserved",
+        failed_lead_candidate.status,
+        "FAILED",
+    )
+
+    if (
+        failed_lead_candidate.failure_reason is None
+        or failed_lead_candidate.failure_reason.strip() == ""
+    ):
+        raise AssertionError("Failed material candidate did not preserve failure reason.")
+
+    print("PASS: Failed material comparison candidate preserves failure reason")
 
 
     try:

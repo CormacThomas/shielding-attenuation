@@ -1,3 +1,15 @@
+# Target and minimum-thickness result models.
+#
+# Target classes describe what the shielding design must achieve.
+# They are intentionally separate from the calculator logic so future versions
+# can add new target types without rewriting the physics engine.
+#
+# MinimumThicknessResult stores the output of a target-driven design calculation.
+# The final_flux field is the value used to check the target:
+#   - narrow-beam mode: final_flux is uncollided flux
+#   - buildup-aware mode: final_flux is buildup-corrected flux
+
+
 from dataclasses import dataclass
 from models import Material
 

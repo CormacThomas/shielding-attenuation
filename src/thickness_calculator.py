@@ -1,3 +1,24 @@
+# V1.07 target-driven minimum-thickness calculator.
+#
+# This module converts shielding requirements into required material thickness.
+# It does not introduce new attenuation physics. Instead, it uses the validated
+# narrow-beam attenuation engine and source-calculation tools from earlier versions.
+#
+# Supported design targets:
+#   - TransmissionTarget: final flux is a fraction of unshielded flux.
+#   - ReductionFactorTarget: final flux is reduced by a chosen factor.
+#   - FluxTarget: final detector flux is supplied directly by the user.
+#
+# Manual monoenergetic sources can use an analytical narrow-beam solution:
+#   x = -ln(T) / mu
+#
+# Isotope sources use bisection because each photon line attenuates differently,
+# and total source flux is calculated by summing all line contributions.
+#
+# Buildup-aware design also uses bisection because the G-P buildup factor depends
+# on shield thickness in mean free paths.
+
+
 import math
 from calculator import calculate_shielding_result
 from models import Layer, Material
@@ -11,7 +32,8 @@ from target_models import (
     TransmissionTarget,
 )
 
-
+# Type alias used to show that these functions accept any supported target type.
+# This keeps function signatures readable as more target classes are added later.
 Target = TransmissionTarget | ReductionFactorTarget | FluxTarget
 
 
@@ -34,9 +56,12 @@ def calculate_target_flux_from_unshielded_flux(
     target: Target,
     unshielded_flux: float,
 ) -> float:
-    # Convert any supported target type into an equivalent target flux.
-    # This lets the thickness calculator use one common comparison:
-    # final_flux <= target_flux.
+    # All target types are converted to the same comparison form:
+    #
+    #final_flux <= target_flux
+    #
+    # This allows the rest of the calculator to treat transmission targets,
+    # reduction-factor targets, and direct flux targets the same way.
 
     if unshielded_flux < 0:
         raise ValueError("Unshielded flux cannot be negative.")
@@ -57,9 +82,9 @@ def validate_max_thickness(
     detector_distance: float,
     max_thickness: float | None,
 ) -> float:
-    # Determine the largest allowed shield thickness for a thickness search.
-    # The current simulator geometry requires shield thickness to be less than
-    # or equal to the source-to-detector distance.
+    # If the user does not supply a maximum thickness, the detector distance
+    # is used as the default upper bound. This matches the current 1D geometry
+    # assumption that shielding thickness lies between the source and detector.
 
     if detector_distance <= 0:
         raise ValueError("Detector distance must be greater than zero.")
@@ -120,10 +145,10 @@ def calculate_valid_buildup_max_thickness_for_energy(
     photon_energy: float,
     detector_distance: float,
 ) -> float:
-    # Find the maximum shield thickness that keeps this material and photon
-    # energy within the 40 MFP G-P buildup limit.
-    # A zero-thickness buildup calculation is used to confirm that the
-    # material and energy are supported by the G-P coefficient library.
+    # Buildup range helper:
+    # G-P buildup is valid only up to 40 mean free paths.
+    # Since MFP = mu * thickness, this helper converts the 40 MFP limit into
+    # a material/energy-specific maximum physical thickness in cm.
 
     zero_thickness_result = calculate_shielding_result(
         [Layer(0.0, material)],
@@ -277,6 +302,9 @@ def find_minimum_thickness_by_bisection(
     if high_thickness <= 0:
         raise ValueError("High thickness bound must be greater than zero.")
 
+    # First check whether the target is reachable at the upper search bound.
+    # If even the maximum allowed thickness does not reduce flux enough,
+    # bisection would never find a valid solution.
     high_flux = evaluate_flux(high_thickness)
 
     if high_flux > target_flux:
@@ -288,10 +316,18 @@ def find_minimum_thickness_by_bisection(
 
     low_thickness = 0.0
 
+    # Bisection search:
+    #   low_thickness is known to be too thin or equal to zero.
+    #   high_thickness is known to satisfy the target.
+    # Each iteration cuts the interval in half until the required thickness
+    # is found within the requested tolerance.
     for _ in range(max_iterations):
         mid_thickness = (low_thickness + high_thickness) / 2.0
         mid_flux = evaluate_flux(mid_thickness)
 
+        # If the midpoint flux is still too high, more shielding is needed.
+        # Otherwise, the midpoint satisfies the target and becomes the new
+        # upper bound.
         if mid_flux > target_flux:
             low_thickness = mid_thickness
         else:
@@ -302,6 +338,15 @@ def find_minimum_thickness_by_bisection(
 
     return high_thickness
 
+
+# Manual-source minimum thickness workflow:
+#
+# 1. Calculate unshielded flux at the detector.
+# 2. Convert the user's target into a target flux.
+# 3. If no shielding is needed, return zero thickness with a warning.
+# 4. If buildup is requested, try buildup-aware bisection.
+# 5. If buildup-aware design fails, fall back to narrow-beam design and warn.
+# 6. If buildup is not requested, use the analytical narrow-beam solution.
 def calculate_manual_minimum_thickness(
     source: ManualPhotonSource,
     material: Material,
@@ -375,6 +420,14 @@ def calculate_manual_minimum_thickness(
             warnings,
         )
 
+
+    # Buildup-aware design cannot use the simple analytical formula because
+    # buildup depends on shield thickness. Use bisection to solve:
+    #
+    #     buildup_corrected_flux(thickness) <= target_flux
+    #
+    # If the G-P model is unsupported or cannot meet the target within its
+    # valid MFP range, continue to the narrow-beam fallback below.
     if apply_buildup:
         try:
             buildup_max_thickness = calculate_valid_buildup_max_thickness_for_energy(
@@ -482,6 +535,17 @@ def calculate_manual_minimum_thickness(
     )
 
 
+# Isotope-source minimum thickness workflow:
+#
+# Isotope sources may have multiple photon lines. Each line has a different
+# energy, attenuation coefficient, transmission, and flux contribution.
+#
+# Because the total source flux is a sum of multiple attenuated lines, there is
+# no simple one-line analytical thickness solution. Bisection is used instead.
+#
+# If buildup is requested, every photon line must have valid buildup. If any
+# line cannot use buildup, the buildup-aware total is unavailable and the
+# function falls back to narrow-beam design with a warning.
 def calculate_isotope_minimum_thickness(
     source: IsotopeSource,
     material: Material,

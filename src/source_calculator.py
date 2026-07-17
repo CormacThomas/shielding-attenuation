@@ -1,3 +1,19 @@
+# Source-level shielding calculation utilities.
+#
+# This module connects source definitions to the underlying attenuation calculator.
+# The lower-level calculator works with one photon energy and one photon emission
+# rate at a time. This module adds:
+#   - manual monoenergetic source support
+#   - isotope source support
+#   - line-by-line isotope calculations
+#   - source-level flux summation
+#   - optional G-P buildup application
+#
+# Narrow-beam uncollided flux is always reported when mathematically valid.
+# G-P buildup is optional and may be skipped with a warning if the model is
+# unsupported or outside the valid 40 MFP range.
+
+
 from buildup import (
     calculate_buildup_corrected_flux,
     calculate_gp_buildup_factor,

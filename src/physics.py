@@ -1,3 +1,17 @@
+# Basic physics utilities.
+#
+# This module contains small reusable calculations used throughout the simulator:
+#   - linear attenuation coefficient calculation
+#   - Beer-Lambert transmission
+#   - inverse-square point-source flux
+#   - interpolation utilities for tabulated attenuation data
+#
+# NIST XCOM attenuation coefficients are tabulated at discrete photon energies.
+# For photon energies between table values, the simulator uses log-log interpolation
+# because photon attenuation coefficients often vary approximately by power-law
+# behavior between tabulated points.
+
+
 import math
 from models import Material
 
@@ -50,10 +64,12 @@ def calculate_flux(source_strength: float, transmission: float, distance: float)
 
  
 def get_exact_y_value(x: float, x_values: list[float], y_values: list[float]) -> float | None:
-    
-    # Loops through every index in x_values. If x equals x_values[index].
-    # Set exact_value equal to y_values[index]. Returns exact_values or None.
-    
+    # Return the table value if x exactly matches a tabulated x-value.
+    #
+    # Some XCOM tables contain duplicate energies at absorption edges.
+    # This function intentionally keeps searching after a match so the last
+    # matching value is returned. That means the simulator uses the post-edge
+    # value when duplicate edge energies appear in the data.
     exact_value = None
     
     for i in range (len(x_values)):
@@ -109,6 +125,9 @@ def log_log_interpolate(x: float, x_values: list[float], y_values: list[float]) 
         return exact_value
 
     for i in range(len(x_values) - 1):
+        # Log-log interpolation requires positive x and y values.
+        # The attenuation tables should be positive, but this fallback keeps
+        # the function safe if future data contains zeros or invalid values.
         x1 = x_values[i]
         x2 = x_values[i + 1]
 
@@ -129,6 +148,8 @@ def log_log_interpolate(x: float, x_values: list[float], y_values: list[float]) 
             log_y2 = math.log(y2)
 
             log_y = log_y1 + ((log_x - log_x1) / (log_x2 - log_x1)) * (log_y2 - log_y1)
+            
+            # Convert back from log-space to the original coefficient units.
 
             return math.exp(log_y)
 
