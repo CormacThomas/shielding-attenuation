@@ -1,12 +1,12 @@
-# Shielding Attenuation Simulator (v1.07)
+# Shielding Attenuation Simulator (v1.08)
 
-A Python-based photon shielding calculator and design tool for modeling attenuation through shielding materials using NIST XCOM data, Beer-Lambert attenuation, inverse-square geometric spreading, isotope source photon emission data, optional Geometric Progression (G-P) buildup correction, and target-driven minimum shielding thickness calculations.
+A Python-based photon shielding calculator and design tool for modeling attenuation through shielding materials using NIST XCOM data, Beer-Lambert attenuation, inverse-square geometric spreading, isotope source photon emission data, optional Geometric Progression (G-P) buildup correction, target-driven minimum shielding thickness calculations, and single-material design comparison across candidate shielding materials.
 
 ## Overview
 
-This project provides a framework for calculating photon transmission and detector flux from an isotropic point source. The simulator supports multi-layer narrow-beam attenuation calculations, single-layer G-P buildup correction for selected homogeneous shielding materials, manual monoenergetic photon sources, isotope source calculations using selected major photon emission lines, and minimum shielding thickness calculations for user-defined design targets.
+This project provides a framework for calculating photon transmission and detector flux from an isotropic point source. The simulator supports multi-layer narrow-beam attenuation calculations, single-layer G-P buildup correction for selected homogeneous shielding materials, manual monoenergetic photon sources, isotope source calculations using selected major photon emission lines, minimum shielding thickness calculations for user-defined design targets, and material comparison across available shielding materials.
 
-The project is intended as a nuclear engineering portfolio project focused on radiation shielding, attenuation modeling, interpolation, source modeling, validation, shielding design, and future shielding optimization.
+The project is intended as a nuclear engineering portfolio project focused on radiation shielding, attenuation modeling, interpolation, source modeling, validation, shielding design, material comparison, and future shielding optimization.
 
 ## Physics Models
 
@@ -19,6 +19,7 @@ The project is intended as a nuclear engineering portfolio project focused on ra
 - **Line-by-line source summation:** Calculates each isotope photon line independently and sums detector flux at the source level.
 - **Target-driven shielding design:** Converts transmission, reduction-factor, and flux targets into detector flux requirements.
 - **Minimum thickness calculation:** Calculates required single-material shielding thickness using analytical narrow-beam solutions for manual monoenergetic sources and bisection for isotope sources.
+- **Material comparison workflow:** Applies the same source, detector distance, target, maximum thickness setting, and buildup setting across multiple candidate materials.
 
 ## Features
 
@@ -38,10 +39,37 @@ The project is intended as a nuclear engineering portfolio project focused on ra
 - **Isotope-source design by bisection:** Uses numerical bisection to solve minimum-thickness problems for multi-line isotope sources.
 - **Buildup-aware minimum-thickness design:** Attempts to solve target-driven design problems using buildup-corrected flux when the G-P model is valid.
 - **Buildup fallback behavior:** Falls back to narrow-beam minimum-thickness design with a warning when buildup is unsupported or unavailable within the valid G-P range.
-- **Buildup warning behavior:** Reports warnings when buildup is requested outside the valid G-P mean-free-path range while preserving narrow-beam results.
+- **Single-material design comparison mode:** Compares required shielding thickness across multiple candidate materials for the same source, detector distance, target, and buildup setting.
+- **Candidate pass/fail preservation:** Keeps failed material candidates in the comparison result with failure reasons instead of hiding them.
+- **Material comparison sorting:** Sorts passing material candidates by required shielding thickness.
+- **Buildup warning preservation:** Preserves fallback warnings in material comparison mode when buildup is requested but unavailable for a candidate material.
 - **Input validation:** Checks for invalid energies, negative thicknesses, invalid source strength, invalid activity, invalid detector distance, data list mismatches, unsupported buildup cases, impossible design targets, and physically invalid shield geometry.
-- **Command-line interface:** Allows users to select calculation mode, source mode, isotope source, activity, shielding materials, thicknesses or design targets, detector distance, and buildup mode.
-- **Validation runner:** Includes repeatable validation tests for supported buildup materials, source-library behavior, source flux summation, activity conversion, minimum-thickness design, buildup-aware design, fallback behavior, and important edge cases.
+- **Command-line interface:** Allows users to select calculation mode, source mode, isotope source, activity, shielding materials, thicknesses or design targets, detector distance, buildup mode, and material comparison mode.
+- **Validation runner:** Includes repeatable validation tests for supported buildup materials, source-library behavior, source flux summation, activity conversion, minimum-thickness design, buildup-aware design, fallback behavior, material comparison behavior, failed candidate preservation, and important edge cases.
+
+## Example Material Comparison Output
+
+Example case:
+
+- Source: Cs-137
+- Activity: 1 Ci
+- Detector distance: 100 cm
+- Target: flux <= 100 photons/cm²/s
+- Buildup requested: yes
+- Materials compared: all available materials
+
+```text
+Material                    Thickness (cm)    Final Flux        Buildup       Status
+----------------------------------------------------------------------------------------
+Tungsten                    4.90817           9.999991e+01      Yes           PASS
+Lead                        7.08821           9.999994e+01      Yes           PASS
+Copper                      17.2589           9.999997e+01      Yes           PASS
+Tin                         18.6007           9.999999e+01      Yes           PASS
+Concrete (Barite, Type BA)  28.7625           9.999998e+01      Fallback      PASS
+Aluminum                    58.3158           9.999999e+01      Yes           PASS
+Concrete (Ordinary)         62.0647           1.000000e+02      Yes           PASS
+Water                       91.3324           1.000000e+02      Fallback      PASS
+Polyethylene                94.6039           1.000000e+02      Fallback      PASS
 
 ## Current Limitations
 

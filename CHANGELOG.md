@@ -2,6 +2,64 @@
 
 All major development milestones for the Shielding Attenuation Simulator are documented here.
 
+## v1.08 - Single-Material Design Comparison Mode
+
+Added material comparison mode for target-driven shielding design. Version 1.08 allows the simulator to apply the previously validated V1.07 minimum-thickness design pathway across multiple candidate shielding materials and report how much of each material is required for the same source, detector distance, target, maximum thickness setting, and buildup setting.
+
+Changes:
+- Added `design_optimizer.py` for material comparison workflow logic.
+- Added material comparison dataclasses:
+  - `MaterialDesignCandidate`
+  - `MaterialComparisonResult`
+- Added `calculate_material_candidate()` to calculate the required thickness for one material in a shared design problem.
+- Added `compare_materials_for_target()` to run the same target-driven design calculation across multiple selected materials.
+- Added candidate sorting so passing materials are ranked by required shielding thickness.
+- Added failed candidate preservation so materials that cannot meet the target remain visible in the comparison result.
+- Added failure reasons for failed material candidates.
+- Added warning preservation for passing candidates that fall back from buildup-aware design to narrow-beam design.
+- Added material comparison input handling for comma-separated material lists.
+- Added support for pressing Enter to compare all available materials.
+- Added a third CLI calculation mode:
+  - fixed-thickness shielding calculation
+  - minimum-thickness shielding design
+  - material comparison
+- Added material comparison output formatting showing:
+  - material name
+  - required thickness
+  - final target-comparison flux
+  - buildup status
+  - pass/fail status
+  - fallback warnings
+  - failure reasons
+- Updated code comments to explain the V1.08 workflow layer and future maintainability.
+- Added validation checks for material comparison structure, target satisfaction, buildup fallback behavior, warning preservation, and failed candidate preservation.
+- Added V1.08 validation report for single-material design comparison behavior.
+
+Validated behavior:
+- Material comparison returns one candidate per selected material.
+- Lead material comparison candidate passes for the Cs-137 benchmark case.
+- Lead material comparison candidate reaches the requested flux target.
+- Lead material comparison candidate uses buildup when buildup is requested and valid.
+- Every passing material comparison candidate reaches the requested flux target.
+- Unsupported buildup materials can fall back to narrow-beam design when the target is reachable.
+- Unsupported buildup fallback candidates report `buildup_used = False`.
+- Unsupported buildup fallback warnings are preserved.
+- Impossible material candidates are preserved with `status = FAILED`.
+- Failed material candidates preserve failure reasons.
+- Manual command-line testing produces a readable material comparison table.
+- Passing command-line material comparison results are sorted by required shielding thickness.
+- Previous V1.05, V1.06, and V1.07 validation tests remain passing.
+
+Notes:
+- V1.08 does not introduce new attenuation physics, source physics, buildup equations, or target conversion math.
+- V1.08 reuses the V1.07 minimum-thickness design solver for each candidate material.
+- Material comparison currently evaluates one material at a time and compares the results.
+- Material comparison is not yet full constraint-based optimization.
+- Mass, cost, and weighted design scoring are planned for later versions.
+- Buildup-aware material comparison remains limited by the same single-layer homogeneous G-P buildup assumptions as V1.07.
+- If buildup-aware design is unavailable for a material, the simulator falls back to narrow-beam design and reports a warning.
+- V1.08 reports photon flux, not dose rate, exposure rate, air kerma, or effective dose.
+
 ## v1.07 - Target Classes and Minimum Shielding Thickness Design
 
 Added target-driven minimum shielding thickness calculations for manual monoenergetic photon sources and isotope sources. Version 1.07 allows the simulator to answer design questions such as how much shielding is required to meet a specified transmission, reduction-factor, or flux target.
