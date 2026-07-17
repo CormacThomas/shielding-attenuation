@@ -70,11 +70,14 @@ Aluminum                    58.3158           9.999999e+01      Yes           PA
 Concrete (Ordinary)         62.0647           1.000000e+02      Yes           PASS
 Water                       91.3324           1.000000e+02      Fallback      PASS
 Polyethylene                94.6039           1.000000e+02      Fallback      PASS
+```
+This example demonstrates that V1.08 can compare shielding materials for the same design target, sort passing candidates by required thickness, and preserve buildup fallback behavior.
 
 ## Current Limitations
 
-- Minimum-thickness design currently evaluates one shielding material at a time.
-- Minimum-thickness design does not yet perform material optimization, cost optimization, or mass optimization.
+- Material comparison evaluates one material at a time by repeatedly applying the single-material minimum-thickness solver.
+- Material comparison does not yet choose an optimal material using mass, cost, or weighted design constraints.
+- Minimum-thickness design does not yet perform cost optimization or mass optimization.
 - G-P buildup correction currently supports single-layer homogeneous shielding only.
 - Buildup-aware minimum-thickness design is limited to single-layer homogeneous shielding.
 - Multilayer buildup correction is not implemented.
@@ -98,12 +101,12 @@ Detailed physics models and validation benchmarks can be found in the following 
 - **Validation Report V1.05:** Validates expanded single-layer G-P buildup support for lead, aluminum, ordinary concrete, water, tungsten, copper, and tin.
 - **Validation Report V1.06:** Validates isotope source modeling, activity conversion, photon emission rate calculation, line-by-line source summation, manual source regression, and buildup warning behavior outside the valid G-P MFP range.
 - **Validation Report V1.07:** Validates target classes, minimum shielding thickness calculations, analytical manual-source design, isotope-source bisection, buildup-aware design, fallback-to-narrow-beam behavior, and manual source regression preservation.
+- **Validation Report V1.08:** Validates material comparison behavior, candidate pass/fail preservation, buildup fallback warning preservation, CLI material comparison output, and regression preservation of earlier validated physics/design pathways.
 
 **[Validation Reports](https://github.com/CormacThomas/shielding-attenuation/tree/main/docs)**
 
 ## Planned Features
 
-- Add single-material design optimization comparing required thickness across materials.
 - Add constraint-based material selection using target flux, maximum thickness, mass, and cost constraints.
 - Add material cost and mass-per-area estimates.
 - Add plotting for attenuation curves, flux versus thickness, required thickness by material, and optimization tradeoffs.
