@@ -2,6 +2,120 @@
 
 All major development milestones for the Shielding Attenuation Simulator are documented here.
 
+## v1.09 - Constraint-Based Material Selection
+
+Added a constraint-based engineering optimization layer above the V1.08 single-material comparison workflow. Version 1.09 calculates mass per area and a simplified relative-cost metric for each successful material candidate, applies optional hard design constraints, separates feasible designs from engineering rejections and calculation failures, and selects the best eligible material using one of four optimization objectives.
+
+Changes:
+- Added `optimization_models.py` for V1.09 optimization data models and type definitions.
+- Added optimization dataclasses:
+  - `DesignConstraints`
+  - `OptimizationWeights`
+  - `OptimizedMaterialCandidate`
+  - `OptimizedDesignResult`
+- Added explicit optimization statuses:
+  - `ELIGIBLE`
+  - `REJECTED`
+  - `FAILED`
+- Added optimization modes:
+  - `minimum_thickness`
+  - `minimum_mass`
+  - `minimum_cost`
+  - `balanced`
+- Added `material_cost_library.py` with:
+  - `MaterialCostData`
+  - user-editable relative material cost indices
+  - ordinary concrete baseline index of 1.0
+  - warnings that the values are comparative assumptions rather than market prices
+- Added `constraint_optimizer.py` for the complete V1.09 workflow.
+- Added mass-per-area calculation:
+  - `mass per area = density × required thickness`
+  - output units of g/cm²
+- Added relative-cost-index-per-area calculation:
+  - `relative cost per area = mass per area × relative material cost index`
+- Added hard engineering constraints for:
+  - maximum design thickness
+  - maximum mass per area
+  - maximum relative cost index per area
+- Kept the numerical thickness search limit separate from the engineering maximum-thickness constraint.
+- Added candidate conversion from the validated V1.08 `MaterialDesignCandidate` result.
+- Added preservation of all violated engineering constraints so one candidate can report multiple rejection reasons.
+- Added min-max normalization of eligible thickness, mass, and relative-cost metrics.
+- Added weighted balanced scoring with user-selected thickness, mass, and cost weights.
+- Added deterministic objective-specific tie-breaking using secondary metrics and stable material keys.
+- Added best-candidate selection and readable selection explanations.
+- Added infeasibility handling when no material satisfies all active constraints.
+- Added a fourth CLI calculation mode:
+  - fixed-thickness shielding calculation
+  - minimum-thickness shielding design
+  - material comparison
+  - constraint-based material optimization
+- Added CLI prompts for:
+  - optional maximum design thickness
+  - optional maximum mass per area
+  - optional maximum relative cost index per area
+  - optimization objective
+  - balanced optimization weights
+- Added optimized output formatting showing:
+  - material name
+  - required thickness
+  - mass per area
+  - relative cost index per area
+  - objective score
+  - buildup or fallback status
+  - optimization status
+  - rejection reasons
+  - calculation failures
+  - candidate warnings
+  - optimizer warnings
+- Updated V1.08 comments to distinguish lower-level calculation failure from V1.09 engineering rejection.
+- Added V1.09 validation tests for engineering metrics, constraint rejection, multiple rejection reasons, objective selection, balanced scoring, lower-level failure preservation, infeasibility, and invalid optimizer inputs.
+- Added V1.09 validation report for the complete constraint-based material-selection workflow.
+
+Validated behavior:
+- Mass per area equals material density multiplied by required thickness.
+- Relative cost index per area equals mass per area multiplied by the material cost index.
+- A successful V1.08 design becomes `ELIGIBLE` when it satisfies every active engineering constraint.
+- A physically successful design becomes `REJECTED` rather than `FAILED` when it violates a hard engineering constraint.
+- Rejected candidates preserve multiple simultaneous rejection reasons.
+- Lower-level V1.08 calculation failures remain `FAILED`.
+- Minimum-thickness mode selects the eligible candidate with the smallest required thickness.
+- Minimum-mass mode selects the eligible candidate with the smallest mass per area.
+- Minimum-cost mode selects the eligible candidate with the smallest relative cost index per area.
+- Balanced mode produces normalized scores between 0 and 1 and selects the smallest weighted score.
+- Rejected and failed candidates are excluded from balanced normalization and ranking.
+- An infeasible constraint set returns `best_candidate = None` and generates a warning.
+- Negative constraint values are rejected.
+- All-zero balanced optimization weights are rejected.
+- The complete validation runner produces 215 passing assertions and ends with `All validation tests passed.`
+- Previous attenuation, source, buildup, minimum-thickness, fallback, and V1.08 comparison regression tests remain passing.
+
+Validated example:
+- Source: 1 Ci Cs-137
+- Detector distance: 100 cm
+- Target flux: 100 photons/cm²/s
+- Buildup requested
+- Maximum design thickness: 20 cm
+- Maximum mass per area: 120 g/cm²
+- Objective: minimum mass per area
+- Lead and tungsten remain eligible.
+- Lead is selected at 80.3803 g/cm².
+- Tungsten is thinner at 4.90817 cm but has a greater mass per area.
+- Water has the lowest simplified relative-cost value but is rejected by the thickness constraint.
+- Other materials remain visible with explicit rejection reasons.
+
+Notes:
+- V1.09 does not introduce new attenuation physics, source physics, buildup equations, or minimum-thickness solution methods.
+- V1.09 reuses the V1.08 comparison workflow and the V1.07 minimum-thickness solver.
+- The optimizer currently evaluates homogeneous single-material shields.
+- Mass is compared per unit area because a complete three-dimensional shield geometry is not yet defined.
+- Relative-cost indices are simplified, user-editable assumptions and are not currency, market prices, or procurement estimates.
+- Balanced scores depend on the eligible candidate set and user-selected weights.
+- Hard constraints currently cover thickness, mass per area, and relative cost only.
+- Buildup-aware optimization remains limited to supported single-layer homogeneous cases and the 40-MFP validity range.
+- Some candidates may use documented narrow-beam fallback results when buildup is unavailable.
+- V1.09 does not yet calculate total mass, dose rate, exposure rate, air kerma, or effective dose.
+- Multilayer optimization and OpenMC benchmarking are planned for later versions.
 ## v1.08 - Single-Material Design Comparison Mode
 
 Added material comparison mode for target-driven shielding design. Version 1.08 allows the simulator to apply the previously validated V1.07 minimum-thickness design pathway across multiple candidate shielding materials and report how much of each material is required for the same source, detector distance, target, maximum thickness setting, and buildup setting.
