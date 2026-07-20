@@ -9,7 +9,12 @@
 # interactive user input.
 
 from target_models import FluxTarget, ReductionFactorTarget, TransmissionTarget
-from thickness_calculator import calculate_isotope_minimum_thickness, calculate_manual_minimum_thickness
+from thickness_calculator import (
+    calculate_isotope_minimum_thickness,
+    calculate_manual_minimum_thickness,
+    calculate_unshielded_isotope_flux,
+    calculate_unshielded_manual_flux,
+)
 from buildup import calculate_gp_buildup_factor, get_gp_coefficients_at_energy
 from buildup_library import get_gp_coefficients_library
 from material_library import get_material_library
@@ -28,6 +33,18 @@ from material_cost_library import get_material_cost_library
 from optimization_models import (
     DesignConstraints,
     OptimizationWeights,
+)
+from plot_data import (
+    create_constraint_feasibility_rows,
+    create_optimization_plot_data,
+    create_pareto_points,
+    evaluate_maximum_constraint,
+)
+
+from response_curve import (
+    calculate_response_curve_target_flux,
+    create_response_curve,
+    create_thickness_samples,
 )
 
 def assert_close(
@@ -60,6 +77,46 @@ def get_optimized_candidate_by_material_key(
 
     raise AssertionError(
         f"Optimized candidate not found for material key: {material_key}"
+    )
+
+
+def get_material_plot_point_by_key(
+    plot_data,
+    material_key: str,
+):
+    for candidate in plot_data.candidates:
+        if candidate.material_key == material_key:
+            return candidate
+
+    raise AssertionError(
+        f"Material plot point not found for key: {material_key}"
+    )
+
+
+def get_feasibility_row_by_material_key(
+    feasibility_rows,
+    material_key: str,
+):
+    for row in feasibility_rows:
+        if row.material_key == material_key:
+            return row
+
+    raise AssertionError(
+        f"Feasibility row not found for material key: {material_key}"
+    )
+
+
+def get_response_curve_point_by_thickness(
+    curve_result,
+    thickness_cm: float,
+    tolerance: float = 1.0e-12,
+):
+    for point in curve_result.points:
+        if abs(point.thickness_cm - thickness_cm) <= tolerance:
+            return point
+
+    raise AssertionError(
+        f"Response curve does not contain thickness: {thickness_cm}"
     )
 
 
@@ -989,6 +1046,722 @@ def run_validation_tests() -> None:
         )
     except ValueError:
         print("PASS: Zero V1.09 optimization weights rejected")
+
+
+    # Validate V1.10 optimization plot-data preparation.
+
+    constrained_plot_data = create_optimization_plot_data(
+        thickness_constraint_result
+    )
+
+    assert_equal(
+        "V1.10 plot data preserves candidate count",
+        len(constrained_plot_data.candidates),
+        len(thickness_constraint_result.all_candidates),
+    )
+
+    if thickness_constraint_result.best_candidate is None:
+        raise AssertionError(
+            "V1.10 plot-data test requires a selected candidate."
+        )
+
+    expected_selected_material_key = (
+        thickness_constraint_result
+        .best_candidate
+        .base_candidate
+        .material
+        .key
+    )
+
+    assert_equal(
+        "V1.10 plot data preserves selected material",
+        constrained_plot_data.selected_material_key,
+        expected_selected_material_key,
+    )
+
+    plotted_water_candidate = get_material_plot_point_by_key(
+        constrained_plot_data,
+        "water",
+    )
+
+    assert_equal(
+        "V1.10 plot data preserves rejected candidate status",
+        plotted_water_candidate.optimization_status,
+        "REJECTED",
+    )
+
+    assert_equal(
+        "V1.10 plot data preserves rejection reasons",
+        plotted_water_candidate.rejection_reasons,
+        tuple(water_optimized_candidate.rejection_reasons),
+    )
+
+    assert_greater_than(
+        "V1.10 rejected plot candidate has rejection reason",
+        len(plotted_water_candidate.rejection_reasons),
+        0,
+    )
+
+    multiple_constraint_plot_data = create_optimization_plot_data(
+    multiple_constraint_result
+)
+
+    multiple_rejection_plot_point = get_material_plot_point_by_key(
+        multiple_constraint_plot_data,
+        "water",
+    )
+
+    assert_equal(
+        "V1.10 plot data preserves multiple rejection reasons",
+        multiple_rejection_plot_point.rejection_reasons,
+        tuple(multiple_rejection_candidate.rejection_reasons),
+    )
+
+    assert_greater_than(
+        "V1.10 rejected plot candidate can preserve multiple reasons",
+        len(multiple_rejection_plot_point.rejection_reasons),
+        1,
+    )
+
+    failed_plot_data = create_optimization_plot_data(
+        failed_optimization_result
+    )
+
+    failed_feasibility_rows = create_constraint_feasibility_rows(
+    failed_plot_data
+    )
+
+    failed_lead_feasibility = get_feasibility_row_by_material_key(
+        failed_feasibility_rows,
+        "lead",
+    )
+
+    assert_equal(
+        "V1.10 failed candidate thickness check unavailable",
+        failed_lead_feasibility.thickness_status,
+        "UNAVAILABLE",
+    )
+
+    assert_equal(
+        "V1.10 failed candidate mass check unavailable",
+        failed_lead_feasibility.mass_status,
+        "UNAVAILABLE",
+    )
+
+    assert_equal(
+        "V1.10 failed candidate cost check unavailable",
+        failed_lead_feasibility.cost_status,
+        "UNAVAILABLE",
+    )
+
+    failed_lead_plot_point = get_material_plot_point_by_key(
+        failed_plot_data,
+        "lead",
+    )
+
+    assert_equal(
+        "V1.10 plot data preserves failed candidate status",
+        failed_lead_plot_point.optimization_status,
+        "FAILED",
+    )
+
+    assert_equal(
+        "V1.10 failed plot candidate has no thickness",
+        failed_lead_plot_point.required_thickness_cm,
+        None,
+    )
+
+    if failed_lead_plot_point.failure_reason is None:
+        raise AssertionError(
+            "V1.10 failed plot candidate did not preserve failure reason."
+        )
+
+    assert_greater_than(
+        "V1.10 failed plot candidate preserves failure reason",
+        len(failed_lead_plot_point.failure_reason),
+        0,
+    )
+
+
+    visualization_constraint_result = optimize_material_selection(
+        source=cs137_source,
+        materials=list(materials.values()),
+        detector_distance=detector_distance,
+        target=FluxTarget(100.0),
+        constraints=DesignConstraints(
+            max_thickness_cm=20.0,
+            max_mass_per_area_g_per_cm2=120.0,
+        ),
+        optimization_mode="minimum_mass",
+        calculation_max_thickness=detector_distance,
+        apply_buildup=True,
+    )
+
+    visualization_plot_data = create_optimization_plot_data(
+        visualization_constraint_result
+    )
+
+    feasibility_rows = create_constraint_feasibility_rows(
+        visualization_plot_data
+    )
+
+
+    # Validate V1.10 thickness-versus-mass Pareto classification.
+    #
+    # The unconstrained Cs-137 candidate set should have two Pareto-optimal
+    # materials:
+    #
+    # Tungsten:
+    #   smallest required thickness, but greater mass per area
+    #
+    # Lead:
+    #   greater thickness than tungsten, but smallest mass per area
+    #
+    # Neither candidate dominates the other.
+
+    unconstrained_plot_data = create_optimization_plot_data(
+        balanced_result
+    )
+
+    pareto_points = create_pareto_points(
+        unconstrained_plot_data,
+        eligible_only=True,
+    )
+
+    pareto_material_keys = {
+        point.material_key
+        for point in pareto_points
+        if point.is_pareto_optimal
+    }
+
+    assert_equal(
+        "V1.10 Cs-137 Pareto front contains lead and tungsten",
+        pareto_material_keys,
+        {"lead", "tungsten"},
+    )
+
+    pareto_thickness_values = [
+        point.thickness_cm
+        for point in pareto_points
+    ]
+
+    assert_equal(
+        "V1.10 Pareto points are sorted by thickness",
+        pareto_thickness_values,
+        sorted(pareto_thickness_values),
+    )
+
+
+    # Validate V1.10 thickness sampling.
+
+    inserted_required_thickness = 7.08821
+
+    thickness_samples = create_thickness_samples(
+        minimum_thickness_cm=0.0,
+        maximum_thickness_cm=10.0,
+        number_of_points=11,
+        required_thickness_cm=inserted_required_thickness,
+    )
+
+    assert_equal(
+        "V1.10 exact required thickness adds one sampling point",
+        len(thickness_samples),
+        12,
+    )
+
+    assert_close(
+        "V1.10 thickness samples preserve lower endpoint",
+        thickness_samples[0],
+        0.0,
+        1.0e-12,
+    )
+
+    assert_close(
+        "V1.10 thickness samples preserve upper endpoint",
+        thickness_samples[-1],
+        10.0,
+        1.0e-12,
+    )
+
+    exact_thickness_is_present = any(
+        abs(value - inserted_required_thickness) <= 1.0e-12
+        for value in thickness_samples
+    )
+
+    assert_equal(
+        "V1.10 exact required thickness is included",
+        exact_thickness_is_present,
+        True,
+    )
+
+    samples_are_strictly_increasing = all(
+        thickness_samples[index]
+        < thickness_samples[index + 1]
+        for index in range(len(thickness_samples) - 1)
+    )
+
+    assert_equal(
+        "V1.10 thickness samples are strictly increasing",
+        samples_are_strictly_increasing,
+        True,
+    )
+
+
+    # Validate target conversion for response curves.
+
+    manual_unshielded_flux = calculate_unshielded_manual_flux(
+        manual_source,
+        detector_distance,
+    )
+
+    transmission_curve_target = (
+        calculate_response_curve_target_flux(
+            source=manual_source,
+            detector_distance_cm=detector_distance,
+            target=TransmissionTarget(0.1),
+        )
+    )
+
+    transmission_curve_target_value = assert_not_none(
+        "V1.10 transmission curve target",
+        transmission_curve_target,
+    )
+
+    assert_close(
+        "V1.10 transmission target converts to target flux",
+        transmission_curve_target_value,
+        manual_unshielded_flux * 0.1,
+        1.0e-8,
+    )
+
+    reduction_curve_target = (
+        calculate_response_curve_target_flux(
+            source=manual_source,
+            detector_distance_cm=detector_distance,
+            target=ReductionFactorTarget(1000.0),
+        )
+    )
+
+    reduction_curve_target_value = assert_not_none(
+        "V1.10 reduction curve target",
+        reduction_curve_target,
+    )
+
+    assert_close(
+        "V1.10 reduction factor converts to target flux",
+        reduction_curve_target_value,
+        manual_unshielded_flux / 1000.0,
+        1.0e-8,
+    )
+
+
+    # Validate a supported manual-source response curve.
+
+    manual_response_curve = create_response_curve(
+        source=manual_source,
+        material=materials["lead"],
+        detector_distance_cm=detector_distance,
+        minimum_thickness_cm=0.0,
+        maximum_thickness_cm=10.0,
+        number_of_points=21,
+        apply_buildup=True,
+        target=FluxTarget(100.0),
+        required_thickness_cm=(
+            manual_buildup_flux_target_result.required_thickness
+        ),
+    )
+
+    assert_close(
+        "V1.10 manual curve zero-thickness flux equals unshielded flux",
+        manual_response_curve.points[0].uncollided_flux,
+        manual_unshielded_flux,
+        1.0e-6,
+    )
+
+    manual_uncollided_flux_is_monotonic = all(
+        manual_response_curve.points[index + 1].uncollided_flux
+        <= manual_response_curve.points[index].uncollided_flux
+        for index in range(len(manual_response_curve.points) - 1)
+    )
+
+    assert_equal(
+        "V1.10 manual uncollided curve decreases monotonically",
+        manual_uncollided_flux_is_monotonic,
+        True,
+    )
+
+    manual_curve_target_flux = assert_not_none(
+        "V1.10 manual curve target flux",
+        manual_response_curve.target_flux,
+    )
+
+    assert_close(
+        "V1.10 manual response curve stores target flux",
+        manual_curve_target_flux,
+        100.0,
+        1.0e-12,
+    )
+
+    manual_required_curve_point = (
+        get_response_curve_point_by_thickness(
+            manual_response_curve,
+            manual_buildup_flux_target_result.required_thickness,
+        )
+    )
+
+    manual_required_buildup_flux = assert_not_none(
+        "V1.10 manual required-thickness buildup flux",
+        manual_required_curve_point.buildup_corrected_flux,
+    )
+
+    assert_less_than_or_equal(
+        "V1.10 manual curve reaches target at required thickness",
+        manual_required_buildup_flux,
+        100.000001,
+    )
+
+    all_manual_buildup_points_available = all(
+        point.buildup_corrected_flux is not None
+        for point in manual_response_curve.points
+    )
+
+    assert_equal(
+        "V1.10 supported lead curve stores buildup values",
+        all_manual_buildup_points_available,
+        True,
+    )
+
+    lead_feasibility = get_feasibility_row_by_material_key(
+    feasibility_rows,
+    "lead",
+    )
+
+    assert_equal(
+        "V1.10 lead passes thickness constraint",
+        lead_feasibility.thickness_status,
+        "PASS",
+    )
+
+    assert_equal(
+        "V1.10 lead passes mass constraint",
+        lead_feasibility.mass_status,
+        "PASS",
+    )
+
+    assert_equal(
+        "V1.10 lead cost constraint is inactive",
+        lead_feasibility.cost_status,
+        "INACTIVE",
+    )
+
+    assert_equal(
+        "V1.10 lead is selected",
+        lead_feasibility.is_selected,
+        True,
+    )
+
+    copper_feasibility = get_feasibility_row_by_material_key(
+        feasibility_rows,
+        "copper",
+    )
+
+    assert_equal(
+        "V1.10 copper passes thickness constraint",
+        copper_feasibility.thickness_status,
+        "PASS",
+    )
+
+    assert_equal(
+        "V1.10 copper fails mass constraint",
+        copper_feasibility.mass_status,
+        "FAIL",
+    )
+
+    assert_equal(
+        "V1.10 copper is rejected overall",
+        copper_feasibility.optimization_status,
+        "REJECTED",
+    )
+
+    tin_feasibility = get_feasibility_row_by_material_key(
+        feasibility_rows,
+        "tin",
+    )
+
+    assert_equal(
+        "V1.10 tin passes thickness constraint",
+        tin_feasibility.thickness_status,
+        "PASS",
+    )
+
+    assert_equal(
+        "V1.10 tin fails mass constraint",
+        tin_feasibility.mass_status,
+        "FAIL",
+    )
+
+    water_feasibility = get_feasibility_row_by_material_key(
+        feasibility_rows,
+        "water",
+    )
+
+    assert_equal(
+        "V1.10 water fails thickness constraint",
+        water_feasibility.thickness_status,
+        "FAIL",
+    )
+
+    assert_equal(
+        "V1.10 water passes mass constraint",
+        water_feasibility.mass_status,
+        "PASS",
+    )
+
+    concrete_feasibility = get_feasibility_row_by_material_key(
+        feasibility_rows,
+        "concrete_ordinary",
+    )
+
+    assert_equal(
+        "V1.10 ordinary concrete fails thickness constraint",
+        concrete_feasibility.thickness_status,
+        "FAIL",
+    )
+
+    assert_equal(
+        "V1.10 ordinary concrete fails mass constraint",
+        concrete_feasibility.mass_status,
+        "FAIL",
+    )
+
+    # Validate unsupported buildup behavior.
+    #
+    # Polyethylene does not have implemented G-P coefficient data.
+    # Its uncollided curve should still be calculated, while every buildup
+    # value remains unavailable.
+
+    unsupported_buildup_curve = create_response_curve(
+        source=manual_source,
+        material=materials["polyethylene"],
+        detector_distance_cm=detector_distance,
+        minimum_thickness_cm=0.0,
+        maximum_thickness_cm=5.0,
+        number_of_points=6,
+        apply_buildup=True,
+    )
+
+    unsupported_buildup_values_are_none = all(
+        point.buildup_corrected_flux is None
+        for point in unsupported_buildup_curve.points
+    )
+
+    assert_equal(
+        "V1.10 unsupported material does not invent buildup curve values",
+        unsupported_buildup_values_are_none,
+        True,
+    )
+
+    assert_greater_than(
+        "V1.10 unsupported buildup curve generates warning",
+        len(unsupported_buildup_curve.warnings),
+        0,
+    )
+
+
+    # Validate buildup termination at the 40-MFP limit.
+    #
+    # At 0.6617 MeV, lead reaches 40 MFP at approximately 31.75 cm.
+    # The narrow-beam curve continues through 40 cm, while the buildup
+    # series should contain valid early points and unavailable later points.
+
+    limited_buildup_curve = create_response_curve(
+        source=manual_source,
+        material=materials["lead"],
+        detector_distance_cm=detector_distance,
+        minimum_thickness_cm=0.0,
+        maximum_thickness_cm=40.0,
+        number_of_points=7,
+        apply_buildup=True,
+    )
+
+    valid_buildup_point_count = sum(
+        point.buildup_corrected_flux is not None
+        for point in limited_buildup_curve.points
+    )
+
+    unavailable_buildup_point_count = sum(
+        point.buildup_corrected_flux is None
+        for point in limited_buildup_curve.points
+    )
+
+    assert_greater_than(
+        "V1.10 limited buildup curve contains valid early points",
+        valid_buildup_point_count,
+        0,
+    )
+
+    assert_greater_than(
+        "V1.10 limited buildup curve stops outside valid range",
+        unavailable_buildup_point_count,
+        0,
+    )
+
+    first_unavailable_buildup_index = next(
+        index
+        for index, point in enumerate(limited_buildup_curve.points)
+        if point.buildup_corrected_flux is None
+    )
+
+    buildup_remains_unavailable = all(
+        point.buildup_corrected_flux is None
+        for point in limited_buildup_curve.points[
+            first_unavailable_buildup_index:
+        ]
+    )
+
+    assert_equal(
+        "V1.10 buildup remains unavailable after curve termination",
+        buildup_remains_unavailable,
+        True,
+    )
+
+
+    # Validate isotope-source response-curve generation.
+
+    isotope_response_curve = create_response_curve(
+        source=cs137_source,
+        material=materials["lead"],
+        detector_distance_cm=detector_distance,
+        minimum_thickness_cm=0.0,
+        maximum_thickness_cm=10.0,
+        number_of_points=21,
+        apply_buildup=True,
+        target=FluxTarget(100.0),
+        required_thickness_cm=(
+            cs137_buildup_flux_target_result.required_thickness
+        ),
+    )
+
+    assert_equal(
+        "V1.10 isotope response curve preserves source name",
+        isotope_response_curve.source_name,
+        "Cs-137",
+    )
+
+    isotope_unshielded_flux = calculate_unshielded_isotope_flux(
+        cs137_source,
+        detector_distance,
+    )
+
+    assert_close(
+        "V1.10 isotope curve zero-thickness flux equals unshielded flux",
+        isotope_response_curve.points[0].uncollided_flux,
+        isotope_unshielded_flux,
+        1.0e-6,
+    )
+
+    assert_greater_than(
+        "V1.10 isotope uncollided flux decreases with shielding",
+        isotope_response_curve.points[0].uncollided_flux,
+        isotope_response_curve.points[-1].uncollided_flux,
+    )
+
+    isotope_curve_target_flux = assert_not_none(
+        "V1.10 isotope curve target flux",
+        isotope_response_curve.target_flux,
+    )
+
+    assert_close(
+        "V1.10 isotope response curve stores target flux",
+        isotope_curve_target_flux,
+        100.0,
+        1.0e-12,
+    )
+
+    isotope_required_curve_point = (
+        get_response_curve_point_by_thickness(
+            isotope_response_curve,
+            cs137_buildup_flux_target_result.required_thickness,
+        )
+    )
+
+    isotope_required_buildup_flux = assert_not_none(
+        "V1.10 isotope required-thickness buildup flux",
+        isotope_required_curve_point.buildup_corrected_flux,
+    )
+
+    assert_less_than_or_equal(
+        "V1.10 isotope curve reaches target at required thickness",
+        isotope_required_buildup_flux,
+        100.000001,
+    )
+
+    assert_equal(
+        "V1.10 value below maximum passes constraint",
+        evaluate_maximum_constraint(19.0, 20.0),
+        "PASS",
+    )
+
+    assert_equal(
+        "V1.10 value equal to maximum passes constraint",
+        evaluate_maximum_constraint(20.0, 20.0),
+        "PASS",
+    )
+
+    assert_equal(
+        "V1.10 value above maximum fails constraint",
+        evaluate_maximum_constraint(21.0, 20.0),
+        "FAIL",
+    )
+
+    assert_equal(
+        "V1.10 missing maximum produces inactive constraint",
+        evaluate_maximum_constraint(20.0, None),
+        "INACTIVE",
+    )
+
+    assert_equal(
+        "V1.10 missing metric produces unavailable constraint",
+        evaluate_maximum_constraint(None, 20.0),
+        "UNAVAILABLE",
+    )
+
+    # Validate response-curve input rejection.
+
+    try:
+        create_response_curve(
+            source=manual_source,
+            material=materials["lead"],
+            detector_distance_cm=100.0,
+            minimum_thickness_cm=0.0,
+            maximum_thickness_cm=101.0,
+            number_of_points=10,
+        )
+
+        raise AssertionError(
+            "Response curve beyond detector distance should have failed."
+        )
+
+    except ValueError:
+        print(
+            "PASS: V1.10 response curve beyond detector distance rejected"
+        )
+
+    try:
+        create_thickness_samples(
+            minimum_thickness_cm=0.0,
+            maximum_thickness_cm=10.0,
+            number_of_points=1,
+        )
+
+        raise AssertionError(
+            "Response curve with one sample should have failed."
+        )
+
+    except ValueError:
+        print(
+            "PASS: V1.10 response curve with insufficient samples rejected"
+        )
 
 
     # Validate expected error handling for invalid user inputs.
