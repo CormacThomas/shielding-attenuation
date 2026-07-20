@@ -46,6 +46,8 @@ from response_curve import (
     create_response_curve,
     create_thickness_samples,
 )
+from plotting_utils import format_plot_text
+
 
 def assert_close(
     name: str,
@@ -1724,6 +1726,18 @@ def run_validation_tests() -> None:
         "V1.10 missing metric produces unavailable constraint",
         evaluate_maximum_constraint(None, 20.0),
         "UNAVAILABLE",
+    )
+
+    assert_equal(
+        "V1.10 plot typography formats comparison symbols and units",
+        format_plot_text(
+            "Flux target <= 100 photons/cm^2/s; "
+            "density >= 1 g/cm^3"
+        ),
+        (
+            "Flux target ≤ 100 photons/cm²/s; "
+            "density ≥ 1 g/cm³"
+        ),
     )
 
     # Validate response-curve input rejection.
