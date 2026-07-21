@@ -7,13 +7,10 @@ from dataclasses import dataclass
 from pathlib import Path
 
 import matplotlib.pyplot as plt
-from matplotlib.axes import Axes
 from matplotlib.figure import Figure
 from matplotlib.legend import Legend
 
 from plot_models import OptimizationPlotData
-
-from typing import Literal
 
 
 @dataclass(frozen=True)
@@ -47,23 +44,14 @@ class PlotTheme:
     table_fail_background: str = "#FFEDD5"
 
     table_selected_background: str = "#DCFCE7"
-    table_eligible_background: str = "#E8F0FE"
-    table_rejected_background: str = "#FFF1E6"
     table_unavailable_background: str = "#F2F4F7"
 
     border: str = "#D0D5DD"
     grid: str = "#1C1C1C"
 
     primary: str = "#2563EB"
-    secondary: str = "#0F766E"
     warning: str = "#D97706"
     selected: str = "#16A34A"
-
-    success: str = "#16A34A"
-    danger: str = "#DC2626"
-    neutral: str = "#98A2B3"
-
-    soft_fill: str = "#F2F4F7"
 
 
 PLOT_THEME = PlotTheme()
@@ -153,71 +141,6 @@ def apply_project_plot_style() -> None:
             # Export
             "savefig.dpi": 300,
         }
-    )
-
-
-def apply_modern_figure_style(
-    figure: Figure,
-) -> None:
-    # Give every figure the same subtle application-style background.
-
-    figure.patch.set_facecolor(
-        PLOT_THEME.figure_background
-    )
-
-
-def apply_modern_axes_style(
-    axes: Axes,
-    grid_axis: Literal["both", "x", "y"] = "both",
-) -> None:
-    # Apply consistent modern styling to one set of axes.
-    #
-    # Plot-specific functions remain responsible for deciding whether
-    # logarithmic minor grids or special reference lines are needed.
-
-    axes.set_facecolor(
-        PLOT_THEME.axes_background
-    )
-
-    axes.set_axisbelow(
-        True
-    )
-
-    axes.grid(
-        True,
-        axis=grid_axis,
-        which="major",
-        color=PLOT_THEME.grid,
-        linewidth=0.8,
-        alpha=0.85,
-    )
-
-    axes.spines["top"].set_visible(
-        False
-    )
-
-    axes.spines["right"].set_visible(
-        False
-    )
-
-    for spine_name in (
-        "left",
-        "bottom",
-    ):
-        axes.spines[spine_name].set_color(
-            PLOT_THEME.border
-        )
-
-        axes.spines[spine_name].set_linewidth(
-            0.8
-        )
-
-    axes.tick_params(
-        axis="both",
-        which="both",
-        length=0,
-        pad=6,
-        colors=PLOT_THEME.muted_text,
     )
 
 

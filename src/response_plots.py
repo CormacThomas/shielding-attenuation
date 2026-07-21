@@ -7,7 +7,6 @@ import math
 import textwrap
 
 import matplotlib.pyplot as plt
-from matplotlib.colors import to_rgba
 from matplotlib.figure import Figure
 from matplotlib.markers import MarkerStyle
 
@@ -40,8 +39,6 @@ def get_response_point_at_thickness(
         f"Response curve does not contain the required thickness "
         f"{thickness_cm:.6g} cm."
     )
-
-
 
 
 def plot_response_vs_thickness(
@@ -405,11 +402,6 @@ def plot_response_vs_thickness(
         True
     )
 
-    buildup_description = (
-        "requested"
-        if curve_result.buildup_requested
-        else "not requested"
-    )
 
     buildup_description = (
         "requested"

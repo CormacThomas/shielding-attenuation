@@ -10,7 +10,6 @@ import textwrap
 
 import matplotlib.pyplot as plt
 from matplotlib.axes import Axes
-from matplotlib.colors import to_rgba
 from matplotlib.figure import Figure
 from matplotlib.lines import Line2D
 from matplotlib.markers import MarkerStyle
@@ -1266,12 +1265,8 @@ def plot_thickness_mass_tradeoff(
             zorder=2,
         )
 
-    # Label each successful design.
-    #
-    # Alternating offsets provide a reasonable generic starting point.
-    # We can tune individual offsets during the final visual cleanup.
-    # Deterministic offsets prevent nearby engineering designs from receiving
-    # overlapping or ambiguous labels.
+    # Deterministic label offsets and leader lines prevent nearby engineering
+    # designs from receiving overlapping or ambiguous labels.
     #
     # Values are:
     #   horizontal offset in points
@@ -1329,7 +1324,6 @@ def plot_thickness_mass_tradeoff(
             "left",
         ),
     }
-
 
     for point in pareto_points:
         (

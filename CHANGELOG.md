@@ -2,6 +2,195 @@
 
 All major development milestones for the Shielding Attenuation Simulator are documented here.
 
+## v1.10 - Engineering Visualization and Pareto Tradeoff Analysis
+
+Added a reusable engineering visualization subsystem above the validated V1.09 constraint-based optimizer. Version 1.10 converts optimization results into validated plot-ready data, classifies feasible thickness-mass Pareto tradeoffs, samples detector response across shielding thickness, and generates a reproducible four-figure engineering analysis package in PNG and SVG formats.
+
+Changes:
+- Added `plot_models.py` for validated visualization data models.
+- Added plot-ready dataclasses for:
+  - material design points;
+  - optimization plot datasets;
+  - Pareto points;
+  - constraint-feasibility rows;
+  - response-curve points;
+  - response-curve results.
+- Added strict model validation preventing:
+  - fabricated numerical metrics for failed candidates;
+  - objective scores on rejected candidates;
+  - selected status on ineligible candidates;
+  - unordered response-curve thickness values;
+  - buildup values when buildup was not requested;
+  - selected thickness values outside the plotted range.
+- Added `plot_data.py` for numerical data preparation independent of Matplotlib.
+- Added optimizer-to-plot-data conversion preserving:
+  - candidate count;
+  - material identity;
+  - required thickness;
+  - mass per area;
+  - relative cost index;
+  - buildup status;
+  - optimization status;
+  - rejection reasons;
+  - calculation failure reasons;
+  - selected-candidate status;
+  - warnings.
+- Added independent constraint-feasibility classification supporting:
+  - `PASS`;
+  - `FAIL`;
+  - `INACTIVE`;
+  - `UNAVAILABLE`.
+- Added thickness-mass Pareto dominance logic.
+- Added feasible-only Pareto-front classification by default.
+- Preserved rejected designs in the visualization dataset for engineering context without allowing infeasible designs to define the feasible Pareto front.
+- Added deterministic Pareto-point ordering.
+- Added `response_curve.py` for numerical response sampling independent of rendering.
+- Added response-curve range validation.
+- Added ordered shield-thickness sample generation.
+- Added exact insertion of the optimized shielding thickness when it does not coincide with the uniform sampling grid.
+- Added manual monoenergetic response-curve evaluation.
+- Added isotope-source response-curve evaluation.
+- Added separate storage of:
+  - narrow-beam uncollided photon flux;
+  - G-P exposure-buildup target-comparison response.
+- Added transparent handling of unavailable buildup values.
+- Added warning preservation when buildup is unsupported or exceeds the validated 40-MFP range.
+- Prevented silent substitution of narrow-beam values into unavailable buildup series.
+- Added `optimization_plots.py` for:
+  - material design comparison;
+  - engineering constraint-feasibility matrix;
+  - thickness-mass engineering tradeoff visualization.
+- Added `response_plots.py` for detector response versus shielding thickness.
+- Added `plotting_utils.py` for:
+  - shared visual theme;
+  - figure typography;
+  - engineering colors;
+  - legend formatting;
+  - unit and symbol formatting;
+  - PNG and SVG export.
+- Reduced `plotting.py` to a stable public plotting API.
+- Added a modern dark-figure and light-plot visual design.
+- Added consistent visual roles for:
+  - primary engineering data;
+  - selected designs;
+  - feasible candidates;
+  - infeasible candidates;
+  - engineering limits;
+  - PASS and FAIL states.
+- Added scenario context to every finalized figure:
+  - source;
+  - activity;
+  - detector distance;
+  - deterministic model description;
+  - target;
+  - optimization objective;
+  - buildup setting.
+- Added metric-specific engineering-limit visualization.
+- Added selected-design highlighting across all figures.
+- Added deterministic material-label positioning and leader lines in the Pareto figure.
+- Added exact target and selected-thickness annotations in the response figure.
+- Added four finalized engineering figures:
+  - shielding material design comparison;
+  - engineering constraint feasibility by material;
+  - shielding thickness-mass engineering tradeoff;
+  - lead detector response versus shield thickness.
+- Combined required thickness, mass per area, and relative cost index into one aligned three-panel material comparison.
+- Added `examples/generate_v110_figures.py`.
+- Added reproducible generation of the official V1.10 Cs-137 engineering case.
+- Added noninteractive rendering using the Matplotlib `Agg` backend.
+- Added deterministic PNG and SVG output generation.
+- Added automatic output-directory creation.
+- Added figure closing after export.
+- Added a runtime check confirming that the documented scenario continues to select lead.
+- Added Matplotlib to the project requirements.
+- Added V1.10 validation tests for:
+  - plot-data integrity;
+  - selected-candidate preservation;
+  - rejected-candidate preservation;
+  - failed-candidate metadata;
+  - Pareto dominance;
+  - Pareto-front membership;
+  - deterministic Pareto sorting;
+  - response-curve endpoint preservation;
+  - strictly increasing thickness samples;
+  - exact optimized-thickness insertion;
+  - zero-thickness response;
+  - manual-source response curves;
+  - isotope-source response curves;
+  - monotonic narrow-beam attenuation;
+  - target conversion;
+  - target intersection;
+  - unsupported buildup;
+  - 40-MFP buildup termination;
+  - constraint feasibility;
+  - equality at engineering limits;
+  - invalid response-curve ranges.
+- Added the V1.10 validation report.
+- Updated visualization terminology to identify the G-P curve as an exposure-buildup target-comparison response proxy rather than a general photon-flux estimate.
+
+Validated behavior:
+- Optimization plot data preserves all nine candidates in the official Cs-137 case.
+- Lead remains the selected material.
+- Rejected designs preserve every applicable rejection reason.
+- Failed candidates do not receive fabricated thickness, mass, cost, score, or feasibility values.
+- Lead and tungsten form the feasible thickness-mass Pareto front.
+- Rejected candidates remain visible but do not define the feasible Pareto front.
+- Response-curve thickness values are strictly increasing.
+- Response-curve endpoints are preserved.
+- The exact selected lead thickness is inserted into the sampled curve.
+- Zero shielding thickness reproduces the unshielded source response.
+- Narrow-beam response decreases monotonically with increasing shield thickness.
+- Manual monoenergetic and isotope sources use their respective validated calculation pathways.
+- The selected lead thickness reproduces the 100 photons/cm²/s target-comparison response within solver tolerance.
+- Unsupported and out-of-range buildup values remain unavailable and generate warnings.
+- Narrow-beam values continue to be reported when buildup becomes unavailable.
+- Constraint checks correctly distinguish `PASS`, `FAIL`, `INACTIVE`, and `UNAVAILABLE`.
+- Values equal to an active maximum constraint are classified as passing.
+- Invalid curve ranges and insufficient sample counts are rejected.
+- The complete validation runner produces 273 passing assertions.
+- V1.10 adds 58 focused assertions while preserving the 215 previously documented regression assertions.
+- The reproducible figure-generation script selects lead at approximately 7.08821 cm.
+- The script produces four PNG and four SVG files.
+- All eight output files are nonempty.
+- PNG outputs decode successfully.
+- SVG outputs parse as valid XML.
+- All previous attenuation, interpolation, source, buildup, minimum-thickness, material-comparison, and optimization regression tests remain passing.
+
+Validated example:
+- Source: 1.00 Ci Cs-137
+- Activity: 3.70 × 10¹⁰ Bq
+- Detector distance: 100 cm
+- Target-comparison response: ≤ 100 photons/cm²/s
+- Calculation search limit: 100 cm
+- Maximum design thickness: 20 cm
+- Maximum mass per area: 120 g/cm²
+- Optimization objective: minimum mass per area
+- G-P exposure buildup requested
+- Nine candidate materials evaluated
+- Lead and tungsten satisfy both active engineering constraints.
+- Tungsten is the thinner eligible design at 4.90817 cm.
+- Lead has the lower eligible mass per area at 80.3803 g/cm².
+- Lead is selected at approximately 7.08821 cm.
+- Lead and tungsten both belong to the feasible thickness-mass Pareto front.
+- Copper and tin satisfy the thickness limit but violate the mass limit.
+- Water, polyethylene, and barite concrete satisfy the mass limit but violate the thickness limit.
+- Aluminum and ordinary concrete violate both active constraints.
+- The G-P target-comparison response reaches approximately 100 photons/cm²/s at the selected lead thickness.
+- The corresponding narrow-beam uncollided photon flux is approximately 33.1023 photons/cm²/s.
+
+Notes:
+- V1.10 does not introduce a new attenuation equation, source model, buildup equation, minimum-thickness solver, engineering constraint, or optimization objective.
+- Previously validated V1.09 physics and optimization results are reused rather than independently rederived.
+- Plot validation is based on numerical data integrity, deterministic classification, and structural artifact verification rather than pixel-perfect image comparison.
+- Exact pixel output may vary across operating systems, Matplotlib versions, and installed fonts.
+- Recorded file sizes are traceability observations rather than permanent regression thresholds.
+- The plotted buildup-corrected series uses exposure-buildup coefficients and is intentionally labeled a target-comparison response proxy.
+- The G-P response proxy must not be interpreted as a general photon-number-flux estimate.
+- Pareto classification currently evaluates required thickness and mass per unit area.
+- The official figures compare homogeneous single-material designs.
+- Relative-cost indices remain simplified comparative assumptions rather than market prices or currency.
+- Multilayer optimization, total-mass geometry, separated response quantities, and OpenMC benchmarking remain planned for later versions.
+
 ## v1.09 - Constraint-Based Material Selection
 
 Added a constraint-based engineering optimization layer above the V1.08 single-material comparison workflow. Version 1.09 calculates mass per area and a simplified relative-cost metric for each successful material candidate, applies optional hard design constraints, separates feasible designs from engineering rejections and calculation failures, and selects the best eligible material using one of four optimization objectives.

@@ -10,8 +10,6 @@
 from pathlib import Path
 import sys
 
-
-
 # Resolve project paths independently of the current working directory.
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 SRC_DIRECTORY = PROJECT_ROOT / "src"
