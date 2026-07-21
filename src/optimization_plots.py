@@ -216,15 +216,32 @@ def plot_material_comparison_panel(
                 + f" {constraint_units}"
             )
 
-        axes.text(
-            constraint_value,
-            1.015,
+        # Keep the engineering-limit label inside the plotting surface so it
+        # cannot collide with the panel title.
+        axes.annotate(
             constraint_label,
-            transform=axes.get_xaxis_transform(),
-            ha="center",
-            va="bottom",
+            xy=(
+                constraint_value,
+                0.975,
+            ),
+            xycoords=axes.get_xaxis_transform(),
+            xytext=(
+                -6,
+                -2,
+            ),
+            textcoords="offset points",
+            ha="right",
+            va="top",
             fontsize=8,
+            fontweight="medium",
             color=constraint_color,
+            bbox={
+                "boxstyle": "round,pad=0.18",
+                "facecolor": PLOT_THEME.axes_background,
+                "edgecolor": "none",
+                "alpha": 0.94,
+            },
+            zorder=4,
         )
 
     y_positions = list(
@@ -273,7 +290,7 @@ def plot_material_comparison_panel(
         panel_title,
         fontsize=11,
         fontweight="bold",
-        pad=12,
+        pad=10,
     )
 
     axes.set_xlabel(
@@ -397,6 +414,7 @@ def get_active_feasibility_columns(
 
 def plot_constraint_feasibility_matrix(
     plot_data: OptimizationPlotData,
+    scenario_context: str | None = None,
 ) -> Figure:
     # Show whether every material satisfies each active engineering
     # constraint independently.
@@ -626,12 +644,22 @@ def plot_constraint_feasibility_matrix(
                 PLOT_THEME.table_pass_background
             )
 
+            cell.set_text_props(
+                color=PLOT_THEME.axes_text,
+                fontweight="bold",
+            )
+
         elif (
             feasibility_row.optimization_status
             == "REJECTED"
         ):
             cell.set_facecolor(
                 PLOT_THEME.table_fail_background
+            )
+
+            cell.set_text_props(
+                color=PLOT_THEME.axes_text,
+                fontweight="bold",
             )
 
         elif (
@@ -646,7 +674,19 @@ def plot_constraint_feasibility_matrix(
         "Engineering Constraint Feasibility by Material",
         fontsize=14,
         fontweight="bold",
-        y=0.98,
+        y=0.955,
+    )
+
+    figure.text(
+        0.08,
+        0.875,
+        create_plot_subtitle(
+            plot_data,
+            scenario_context,
+        ),
+        ha="left",
+        va="top",
+        fontsize=9,
     )
 
     figure_note = (
@@ -679,7 +719,7 @@ def plot_constraint_feasibility_matrix(
     figure.subplots_adjust(
         left=0.08,
         right=0.95,
-        top=0.81,
+        top=0.785,
         bottom=0.14,
     )
 
@@ -688,6 +728,7 @@ def plot_constraint_feasibility_matrix(
 
 def plot_material_design_comparison(
     plot_data: OptimizationPlotData,
+    scenario_context: str | None = None,
 ) -> Figure:
     # Compare the three primary engineering metrics using aligned panels.
     #
@@ -787,9 +828,38 @@ def plot_material_design_comparison(
         fontsize=9,
     )
 
+    # Align the material labels as a clean category column beside the first
+    # panel rather than leaving them attached to visible tick marks.
+    thickness_axes.tick_params(
+        axis="y",
+        which="both",
+        length=0,
+        pad=8,
+        colors=PLOT_THEME.text,
+    )
+
+    for tick_label in thickness_axes.get_yticklabels():
+        tick_label.set_horizontalalignment(
+            "right"
+        )
+
+    # A horizontal category heading is easier to read than a distant vertical
+    # y-axis title beside long material names.
     thickness_axes.set_ylabel(
+        ""
+    )
+
+    thickness_axes.text(
+        -0.03,
+        1.035,
         "Shielding material",
-        fontsize=10,
+        transform=thickness_axes.transAxes,
+        ha="right",
+        va="bottom",
+        fontsize=9,
+        fontweight="semibold",
+        color=PLOT_THEME.text,
+        clip_on=False,
     )
 
     # The candidates are sorted from smallest to largest required
@@ -828,7 +898,10 @@ def plot_material_design_comparison(
     figure.text(
         0.08,
         0.91,
-        create_plot_subtitle(plot_data),
+        create_plot_subtitle(
+            plot_data,
+            scenario_context,
+        ),
         ha="left",
         va="top",
         fontsize=9.5,
@@ -881,15 +954,21 @@ def plot_material_design_comparison(
         )
 
     if len(legend_handles) > 0:
-        figure.legend(
+        legend = figure.legend(
             handles=legend_handles,
             loc="upper right",
             bbox_to_anchor=(
-                0.95,
+                0.965,
                 0.925,
             ),
             frameon=True,
             ncols=len(legend_handles),
+            columnspacing=1.6,
+            handletextpad=0.7,
+        )
+
+        style_legend(
+            legend
         )
 
     figure_notes = [
@@ -935,11 +1014,11 @@ def plot_material_design_comparison(
     )
 
     figure.subplots_adjust(
-        left=0.22,
-        right=0.96,
+        left=0.175,
+        right=0.985,
         top=0.79,
         bottom=0.16,
-        wspace=0.18,
+        wspace=0.16,
     )
 
     return figure
@@ -948,6 +1027,7 @@ def plot_material_design_comparison(
 def plot_thickness_mass_tradeoff(
     plot_data: OptimizationPlotData,
     eligible_only: bool = True,
+    scenario_context: str | None = None,
 ) -> Figure:
     # Recruiter-facing thickness-versus-mass engineering tradeoff.
     #
@@ -1362,7 +1442,10 @@ def plot_thickness_mass_tradeoff(
     )
 
     axes.set_title(
-        create_plot_subtitle(plot_data),
+        create_plot_subtitle(
+            plot_data,
+            scenario_context,
+        ),
         loc="left",
         fontsize=9,
         pad=12,

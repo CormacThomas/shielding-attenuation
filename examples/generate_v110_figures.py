@@ -68,6 +68,12 @@ RESPONSE_MINIMUM_THICKNESS_CM = 0.0
 RESPONSE_MAXIMUM_THICKNESS_CM = 12.0
 RESPONSE_SAMPLE_COUNT = 121
 
+SCENARIO_CONTEXT = (
+    "Source: Cs-137 | Activity: 1.00 Ci "
+    "(3.70 × 10¹⁰ Bq) | Detector distance: 100 cm "
+    "| Model: deterministic point-source attenuation"
+)
+
 OUTPUT_FORMATS = (
     "png",
     "svg",
@@ -210,19 +216,22 @@ def main() -> None:
         (
             "cs137_material_design_comparison",
             plot_material_design_comparison(
-                optimization_plot_data
+                optimization_plot_data,
+                scenario_context=SCENARIO_CONTEXT,
             ),
         ),
         (
             "cs137_constraint_feasibility",
             plot_constraint_feasibility_matrix(
-                optimization_plot_data
+                optimization_plot_data,
+                scenario_context=SCENARIO_CONTEXT,
             ),
         ),
         (
             "cs137_thickness_mass_tradeoff",
             plot_thickness_mass_tradeoff(
-                optimization_plot_data
+                optimization_plot_data,
+                scenario_context=SCENARIO_CONTEXT,
             ),
         ),
         (
@@ -230,6 +239,7 @@ def main() -> None:
             plot_response_vs_thickness(
                 response_curve_result,
                 logarithmic=True,
+                scenario_context=SCENARIO_CONTEXT,
             ),
         ),
     )

@@ -275,6 +275,7 @@ def format_plot_text(text: str) -> str:
 
 def create_plot_subtitle(
     plot_data: OptimizationPlotData,
+    scenario_context: str | None = None,
 ) -> str:
     buildup_text = (
         "Yes" if plot_data.buildup_requested else "No"
@@ -284,11 +285,29 @@ def create_plot_subtitle(
         plot_data.target_description
     )
 
-    return (
-        f"{target_description}\n"
-        f"Objective: "
-        f"{format_optimization_mode(plot_data.optimization_mode)}"
-        f" | G-P buildup requested: {buildup_text}"
+    subtitle_lines = []
+
+    if (
+        scenario_context is not None
+        and scenario_context.strip() != ""
+    ):
+        subtitle_lines.append(
+            scenario_context.strip()
+        )
+
+    subtitle_lines.extend(
+        [
+            target_description,
+            (
+                f"Objective: "
+                f"{format_optimization_mode(plot_data.optimization_mode)}"
+                f" | G-P buildup requested: {buildup_text}"
+            ),
+        ]
+    )
+
+    return "\n".join(
+        subtitle_lines
     )
 
 

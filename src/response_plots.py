@@ -47,6 +47,7 @@ def get_response_point_at_thickness(
 def plot_response_vs_thickness(
     curve_result: ResponseCurveResult,
     logarithmic: bool = True,
+    scenario_context: str | None = None,
 ) -> Figure:
     # Recruiter-facing detector-response plot for one shielding material.
     #
@@ -148,6 +149,16 @@ def plot_response_vs_thickness(
     plot_text_color = PLOT_THEME.axes_text
     reference_color = PLOT_THEME.axes_muted_text
 
+    reference_line_style = (
+        0,
+        (
+            4,
+            3,
+        ),
+    )
+
+    reference_line_width = 1.6
+
     design_marker = MarkerStyle("o")
 
     display_units = format_plot_units(
@@ -188,25 +199,38 @@ def plot_response_vs_thickness(
         axes.axhline(
             target_flux,
             color=reference_color,
-            linestyle=":",
-            linewidth=1.9,
+            linestyle=reference_line_style,
+            linewidth=reference_line_width,
             zorder=2,
         )
 
-        axes.text(
-            0.985,
-            target_flux,
+        axes.annotate(
             (
                 "Design target: "
                 f"{target_flux:.6g} "
                 f"{display_units}"
             ),
-            transform=axes.get_yaxis_transform(),
+            xy=(
+                0.985,
+                target_flux,
+            ),
+            xycoords=axes.get_yaxis_transform(),
+            xytext=(
+                0,
+                7,
+            ),
+            textcoords="offset points",
             ha="right",
             va="bottom",
             fontsize=8.5,
-            color=reference_color,
-            zorder=5,
+            color=plot_text_color,
+            bbox={
+                "boxstyle": "round,pad=0.2",
+                "facecolor": PLOT_THEME.axes_background,
+                "edgecolor": "none",
+                "alpha": 0.92,
+            },
+            zorder=6,
         )
 
     # Selected design thickness and response.
@@ -218,24 +242,37 @@ def plot_response_vs_thickness(
         axes.axvline(
             required_thickness,
             color=reference_color,
-            linestyle="-.",
-            linewidth=1.7,
+            linestyle=reference_line_style,
+            linewidth=reference_line_width,
             zorder=2,
         )
 
-        axes.text(
-            required_thickness,
-            0.975,
+        axes.annotate(
             (
                 "Selected thickness\n"
                 f"{required_thickness:.6g} cm"
             ),
-            transform=axes.get_xaxis_transform(),
+            xy=(
+                required_thickness,
+                0.975,
+            ),
+            xycoords=axes.get_xaxis_transform(),
+            xytext=(
+                10,
+                -2,
+            ),
+            textcoords="offset points",
             ha="left",
             va="top",
             fontsize=8.5,
-            color=reference_color,
-            zorder=5,
+            color=plot_text_color,
+            bbox={
+                "boxstyle": "round,pad=0.2",
+                "facecolor": PLOT_THEME.axes_background,
+                "edgecolor": "none",
+                "alpha": 0.92,
+            },
+            zorder=6,
         )
 
         required_point = (
@@ -267,11 +304,11 @@ def plot_response_vs_thickness(
             axes.scatter(
                 required_thickness,
                 design_response,
-                s=135,
+                s=82,
                 marker=design_marker,
                 facecolor=design_color,
                 edgecolor=plot_text_color,
-                linewidth=1.2,
+                linewidth=1.0,
                 label="Selected design point",
                 zorder=7,
             )
@@ -374,14 +411,42 @@ def plot_response_vs_thickness(
         else "not requested"
     )
 
-    axes.set_title(
+    buildup_description = (
+        "requested"
+        if curve_result.buildup_requested
+        else "not requested"
+    )
+
+    response_context_lines = []
+
+    if (
+        scenario_context is not None
+        and scenario_context.strip() != ""
+    ):
+        response_context_lines.append(
+            scenario_context.strip()
+        )
+
+    else:
+        response_context_lines.append(
+            (
+                f"Source: {curve_result.source_name}"
+                f" | Detector distance: "
+                f"{curve_result.detector_distance_cm:.6g} cm"
+            )
+        )
+
+    response_context_lines.append(
         (
-            f"{curve_result.source_name} source"
-            f" | Detector distance: "
-            f"{curve_result.detector_distance_cm:.6g} cm"
-            f" | Backend: {curve_result.backend_name}\n"
-            f"G-P exposure buildup: "
+            f"Backend: {curve_result.backend_name}"
+            f" | G-P exposure buildup: "
             f"{buildup_description}"
+        )
+    )
+
+    axes.set_title(
+        "\n".join(
+            response_context_lines
         ),
         loc="left",
         fontsize=9,
