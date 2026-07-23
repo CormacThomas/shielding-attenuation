@@ -18,6 +18,22 @@ Version 1.10 adds a reusable visualization subsystem above the validated V1.09 c
 
 The project is intended as a nuclear engineering portfolio project focused on radiation shielding, source modeling, numerical methods, engineering optimization, validation, visualization, and future comparison with OpenMC photon transport.
 
+## Architecture
+
+Version 1.11 introduces a reproducible scenario layer that separates physical problem definitions from calculation backends.
+
+```text
+Scenario JSON
+      ↓
+Validated ShieldingScenario
+      ├── Deterministic shielding and optimization
+      └── OpenMC photon transport beginning in V1.13
+```
+
+The scenario stores the source, concentric spherical geometry, candidate materials, target, constraints, optimization objective, and deterministic settings. The existing physics and optimization modules remain independent of JSON parsing and file handling.
+
+**[View the V1.11 architecture diagram](docs/architecture/v1.11_scenario_architecture.md)**
+
 ## V1.10 Engineering Visualization
 
 The official V1.10 example uses:
