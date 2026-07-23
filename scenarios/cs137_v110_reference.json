@@ -1,0 +1,45 @@
+{
+  "schema_version": "1.0",
+  "scenario_id": "cs137_v110_reference",
+  "description": "Reproduction of the official V1.10 constrained Cs-137 material-optimization case.",
+  "calculation_mode": "material_optimization",
+  "source": {
+    "type": "isotope",
+    "isotope_key": "cs137",
+    "activity_bq": 37000000000.0
+  },
+  "geometry": {
+    "type": "concentric_spherical",
+    "source_cavity_radius_cm": 0.0,
+    "evaluation_radius_cm": 100.0,
+    "layers": []
+  },
+  "candidate_material_keys": [
+    "lead",
+    "aluminum",
+    "concrete_ordinary",
+    "concrete_barite",
+    "water",
+    "tungsten",
+    "copper",
+    "tin",
+    "polyethylene"
+  ],
+  "target": {
+    "type": "flux",
+    "target_flux": 100.0
+  },
+  "constraints": {
+    "max_thickness_cm": 20.0,
+    "max_mass_per_area_g_per_cm2": 120.0,
+    "max_relative_cost_index_per_area": null
+  },
+  "optimization": {
+    "mode": "minimum_mass",
+    "weights": null
+  },
+  "deterministic_settings": {
+    "apply_buildup": true,
+    "calculation_max_thickness_cm": 100.0
+  }
+}

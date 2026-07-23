@@ -21,7 +21,7 @@ from material_library import get_material_library
 from models import Layer
 from source_calculator import calculate_isotope_source_result, calculate_manual_source_result
 from source_library import create_isotope_source, get_available_isotopes
-from source_models import ManualPhotonSource
+from source_models import ManualPhotonSource, IsotopeSource
 from unit_conversions import convert_activity_to_bq
 from design_optimizer import compare_materials_for_target
 from constraint_optimizer import (
@@ -47,7 +47,32 @@ from response_curve import (
     create_thickness_samples,
 )
 from plotting_utils import format_plot_text
+import json
+from pathlib import Path
+from tempfile import TemporaryDirectory
 
+from geometry_models import (
+    ConcentricSphericalGeometry,
+    ShieldLayerSpec,
+)
+from scenario_io import (
+    load_scenario,
+    save_scenario,
+    scenario_from_dict,
+    scenario_to_dict,
+)
+from scenario_models import (
+    DeterministicSettings,
+    IsotopeSourceSpec,
+    ManualPhotonSourceSpec,
+    ShieldingScenario,
+)
+from scenario_runner import (
+    create_runtime_source,
+    resolve_candidate_materials,
+    run_scenario,
+)
+from collections.abc import Callable
 
 def assert_close(
     name: str,
@@ -59,6 +84,44 @@ def assert_close(
         raise AssertionError(f"{name} failed: expected {expected}, got {actual}")
 
     print(f"PASS: {name}")
+
+
+def assert_raises(
+    name: str,
+    expected_exception: type[Exception],
+    function: Callable[[], object],
+    expected_message: str | None = None,
+) -> None:
+    # Confirm that a callable rejects invalid input using the expected
+    # exception type and, optionally, a recognizable error message.
+
+    try:
+        function()
+
+    except expected_exception as error:
+        if (
+            expected_message is not None
+            and expected_message not in str(error)
+        ):
+            raise AssertionError(
+                f"{name} failed: expected message containing "
+                f"{expected_message!r}, got {str(error)!r}"
+            ) from error
+
+        print(f"PASS: {name}")
+        return
+
+    except Exception as error:
+        raise AssertionError(
+            f"{name} failed: expected "
+            f"{expected_exception.__name__}, got "
+            f"{type(error).__name__}: {error}"
+        ) from error
+
+    raise AssertionError(
+        f"{name} failed: expected "
+        f"{expected_exception.__name__}, but no exception was raised"
+    )
 
 
 def get_candidate_by_material_key(comparison_result, material_key: str):
@@ -1798,7 +1861,634 @@ def run_validation_tests() -> None:
     except ValueError:
         print("PASS: Negative activity rejected")
 
+    run_v111_validation_tests()
     print("\nAll validation tests passed.")
+
+
+def run_v111_validation_tests() -> None:
+    # Validate V1.11 reproducible scenario and spherical geometry behavior.
+    #
+    # These tests focus on:
+    #   - geometry derivation and rejection
+    #   - serializable source specifications
+    #   - runtime source conversion
+    #   - scenario JSON serialization and loading
+    #   - scenario-level combination validation
+    #   - material resolution
+    #   - reproduction of the official V1.10 optimization result
+
+    # ------------------------------------------------------------
+    # Concentric spherical geometry
+    # ------------------------------------------------------------
+
+    lead_layer_spec = ShieldLayerSpec(
+        material_key="  LEAD  ",
+        thickness_cm=5.0,
+    )
+
+    copper_layer_spec = ShieldLayerSpec(
+        material_key="copper",
+        thickness_cm=1.0,
+    )
+
+    assert_equal(
+        "V1.11 shield layer normalizes material key",
+        lead_layer_spec.material_key,
+        "lead",
+    )
+
+    layered_geometry = ConcentricSphericalGeometry(
+        source_cavity_radius_cm=2.0,
+        evaluation_radius_cm=100.0,
+        layers=[
+            lead_layer_spec,
+            copper_layer_spec,
+        ],
+    )
+
+    assert_close(
+        "V1.11 spherical geometry total shield thickness",
+        layered_geometry.total_shield_thickness_cm,
+        6.0,
+        1.0e-12,
+    )
+
+    assert_close(
+        "V1.11 spherical geometry outer shield radius",
+        layered_geometry.outer_shield_radius_cm,
+        8.0,
+        1.0e-12,
+    )
+
+    derived_shells = layered_geometry.create_shells()
+
+    assert_equal(
+        "V1.11 spherical geometry creates two shells",
+        len(derived_shells),
+        2,
+    )
+
+    assert_close(
+        "V1.11 first shell inner radius",
+        derived_shells[0].inner_radius_cm,
+        2.0,
+        1.0e-12,
+    )
+
+    assert_close(
+        "V1.11 first shell outer radius",
+        derived_shells[0].outer_radius_cm,
+        7.0,
+        1.0e-12,
+    )
+
+    assert_close(
+        "V1.11 second shell inner radius",
+        derived_shells[1].inner_radius_cm,
+        7.0,
+        1.0e-12,
+    )
+
+    assert_close(
+        "V1.11 second shell outer radius",
+        derived_shells[1].outer_radius_cm,
+        8.0,
+        1.0e-12,
+    )
+
+    assert_raises(
+        "V1.11 nonpositive layer thickness rejected",
+        ValueError,
+        lambda: ShieldLayerSpec(
+            material_key="lead",
+            thickness_cm=0.0,
+        ),
+        "greater than zero",
+    )
+
+    assert_raises(
+        "V1.11 evaluation radius inside shield rejected",
+        ValueError,
+        lambda: ConcentricSphericalGeometry(
+            source_cavity_radius_cm=2.0,
+            evaluation_radius_cm=7.0,
+            layers=[
+                ShieldLayerSpec(
+                    material_key="lead",
+                    thickness_cm=5.0,
+                )
+            ],
+        ),
+        "beyond the outer shield radius",
+    )
+
+    # ------------------------------------------------------------
+    # Source specifications and runtime conversion
+    # ------------------------------------------------------------
+
+    isotope_source_spec = IsotopeSourceSpec(
+        isotope_key="  CS137  ",
+        activity_bq=3.7e10,
+    )
+
+    assert_equal(
+        "V1.11 isotope source normalizes isotope key",
+        isotope_source_spec.isotope_key,
+        "cs137",
+    )
+
+    manual_source_spec = ManualPhotonSourceSpec(
+        photon_energy_mev=0.661657,
+        photon_rate_per_s=3.7e10,
+    )
+
+    runtime_manual_source = create_runtime_source(
+        manual_source_spec
+    )
+
+    if not isinstance(
+        runtime_manual_source,
+        ManualPhotonSource,
+    ):
+        raise AssertionError(
+            "V1.11 manual source adapter returned "
+            "the wrong runtime source type."
+        )
+
+
+    assert_close(
+        "V1.11 manual source adapter preserves energy",
+        runtime_manual_source.energy,
+        0.661657,
+        1.0e-12,
+    )
+
+    assert_close(
+        "V1.11 manual source adapter preserves photon rate",
+        runtime_manual_source.photon_rate,
+        3.7e10,
+        1.0e-6,
+    )
+
+    runtime_isotope_source = create_runtime_source(
+        isotope_source_spec
+    )
+
+    if not isinstance(
+        runtime_isotope_source,
+        IsotopeSource,
+    ):
+        raise AssertionError(
+            "V1.11 isotope source adapter returned "
+            "the wrong runtime source type."
+        )
+
+
+    assert_equal(
+        "V1.11 isotope source adapter creates Cs-137 source",
+        runtime_isotope_source.name,
+        "Cs-137",
+    )
+
+    assert_close(
+        "V1.11 isotope source adapter preserves activity",
+        runtime_isotope_source.activity_bq,
+        3.7e10,
+        1.0e-6,
+    )
+
+    assert_raises(
+        "V1.11 nonpositive calculation search limit rejected",
+        ValueError,
+        lambda: DeterministicSettings(
+            calculation_max_thickness_cm=0.0
+        ),
+        "greater than zero",
+    )
+
+    # ------------------------------------------------------------
+    # Official JSON scenario
+    # ------------------------------------------------------------
+
+    repository_root = Path(__file__).resolve().parents[1]
+
+    reference_scenario_path = (
+        repository_root
+        / "scenarios"
+        / "cs137_v110_reference.json"
+    )
+
+    assert_equal(
+        "V1.11 official reference scenario file exists",
+        reference_scenario_path.is_file(),
+        True,
+    )
+
+    reference_scenario = load_scenario(
+        reference_scenario_path
+    )
+
+    assert_equal(
+        "V1.11 loaded scenario preserves scenario ID",
+        reference_scenario.scenario_id,
+        "cs137_v110_reference",
+    )
+
+    assert_equal(
+        "V1.11 loaded scenario preserves schema version",
+        reference_scenario.schema_version,
+        "1.0",
+    )
+
+    assert_equal(
+        "V1.11 loaded scenario preserves nine candidates",
+        len(reference_scenario.candidate_material_keys),
+        9,
+    )
+
+    assert_equal(
+        "V1.11 loaded scenario reconstructs spherical geometry",
+        isinstance(
+            reference_scenario.geometry,
+            ConcentricSphericalGeometry,
+        ),
+        True,
+    )
+
+    loaded_target = reference_scenario.target
+
+    if not isinstance(loaded_target, FluxTarget):
+        raise AssertionError(
+            "V1.11 reference scenario did not reconstruct "
+            "a FluxTarget."
+        )
+
+    assert_close(
+        "V1.11 loaded scenario preserves flux target",
+        loaded_target.target_flux,
+        100.0,
+        1.0e-12,
+    )
+
+    assert_equal(
+        "V1.11 loaded scenario preserves buildup setting",
+        (
+            reference_scenario
+            .deterministic_settings
+            .apply_buildup
+        ),
+        True,
+    )
+
+    # ------------------------------------------------------------
+    # Dictionary serialization and reconstruction
+    # ------------------------------------------------------------
+
+    reference_scenario_data = scenario_to_dict(
+        reference_scenario
+    )
+
+    assert_equal(
+        "V1.11 serialized source contains explicit type",
+        reference_scenario_data["source"]["type"],
+        "isotope",
+    )
+
+    assert_equal(
+        "V1.11 serialized geometry contains explicit type",
+        reference_scenario_data["geometry"]["type"],
+        "concentric_spherical",
+    )
+
+    assert_equal(
+        "V1.11 serialized target contains explicit type",
+        reference_scenario_data["target"]["type"],
+        "flux",
+    )
+
+    assert_equal(
+        "V1.11 serialized optimization preserves mode",
+        reference_scenario_data["optimization"]["mode"],
+        "minimum_mass",
+    )
+
+    reconstructed_scenario = scenario_from_dict(
+        reference_scenario_data
+    )
+
+    assert_equal(
+        "V1.11 dictionary reconstruction preserves scenario",
+        reconstructed_scenario,
+        reference_scenario,
+    )
+
+    # ------------------------------------------------------------
+    # File round-trip and malformed-file behavior
+    # ------------------------------------------------------------
+
+    with TemporaryDirectory() as temporary_directory:
+        temporary_path = Path(
+            temporary_directory
+        )
+
+        roundtrip_path = (
+            temporary_path
+            / "roundtrip_scenario.json"
+        )
+
+        saved_path = save_scenario(
+            reference_scenario,
+            roundtrip_path,
+        )
+
+        assert_equal(
+            "V1.11 scenario save creates JSON file",
+            saved_path.is_file(),
+            True,
+        )
+
+        roundtrip_scenario = load_scenario(
+            roundtrip_path
+        )
+
+        assert_equal(
+            "V1.11 scenario JSON round trip preserves object",
+            roundtrip_scenario,
+            reference_scenario,
+        )
+
+        unsupported_schema_data = json.loads(
+            json.dumps(reference_scenario_data)
+        )
+
+        unsupported_schema_data[
+            "schema_version"
+        ] = "99.0"
+
+        assert_raises(
+            "V1.11 unsupported schema version rejected",
+            ValueError,
+            lambda: scenario_from_dict(
+                unsupported_schema_data
+            ),
+            "Unsupported scenario schema version",
+        )
+
+        invalid_json_path = (
+            temporary_path
+            / "invalid.json"
+        )
+
+        invalid_json_path.write_text(
+            '{"scenario_id": ',
+            encoding="utf-8",
+        )
+
+        assert_raises(
+            "V1.11 malformed JSON rejected",
+            ValueError,
+            lambda: load_scenario(
+                invalid_json_path
+            ),
+            "invalid JSON",
+        )
+
+        missing_field_data = json.loads(
+            json.dumps(reference_scenario_data)
+        )
+
+        missing_field_data.pop(
+            "source"
+        )
+
+        missing_field_path = (
+            temporary_path
+            / "missing_source.json"
+        )
+
+        with missing_field_path.open(
+            mode="w",
+            encoding="utf-8",
+        ) as missing_field_file:
+            json.dump(
+                missing_field_data,
+                missing_field_file,
+                indent=2,
+            )
+
+        assert_raises(
+            "V1.11 missing required JSON field rejected",
+            ValueError,
+            lambda: load_scenario(
+                missing_field_path
+            ),
+            "missing required field",
+        )
+
+    # ------------------------------------------------------------
+    # Complete scenario validation
+    # ------------------------------------------------------------
+
+    assert_raises(
+        "V1.11 duplicate candidate materials rejected",
+        ValueError,
+        lambda: ShieldingScenario(
+            scenario_id="duplicate_material_test",
+            description=(
+                "Scenario duplicate-material validation test."
+            ),
+            calculation_mode="material_optimization",
+            source=IsotopeSourceSpec(
+                isotope_key="cs137",
+                activity_bq=3.7e10,
+            ),
+            geometry=ConcentricSphericalGeometry(
+                source_cavity_radius_cm=0.0,
+                evaluation_radius_cm=100.0,
+            ),
+            candidate_material_keys=[
+                "lead",
+                "  LEAD  ",
+            ],
+            target=FluxTarget(
+                target_flux=100.0
+            ),
+            constraints=DesignConstraints(),
+            optimization_mode="minimum_mass",
+        ),
+        "must be unique",
+    )
+
+    assert_raises(
+        "V1.11 optimization scenario rejects fixed layers",
+        ValueError,
+        lambda: ShieldingScenario(
+            scenario_id="fixed_layer_test",
+            description=(
+                "Scenario fixed-layer validation test."
+            ),
+            calculation_mode="material_optimization",
+            source=IsotopeSourceSpec(
+                isotope_key="cs137",
+                activity_bq=3.7e10,
+            ),
+            geometry=ConcentricSphericalGeometry(
+                source_cavity_radius_cm=2.0,
+                evaluation_radius_cm=100.0,
+                layers=[
+                    ShieldLayerSpec(
+                        material_key="lead",
+                        thickness_cm=1.0,
+                    )
+                ],
+            ),
+            candidate_material_keys=[
+                "lead",
+            ],
+            target=FluxTarget(
+                target_flux=100.0
+            ),
+            constraints=DesignConstraints(),
+            optimization_mode="minimum_mass",
+        ),
+        "cannot contain fixed shield layers",
+    )
+
+    assert_raises(
+        "V1.11 calculation limit beyond radial space rejected",
+        ValueError,
+        lambda: ShieldingScenario(
+            scenario_id="radial_limit_test",
+            description=(
+                "Scenario radial-space validation test."
+            ),
+            calculation_mode="material_optimization",
+            source=IsotopeSourceSpec(
+                isotope_key="cs137",
+                activity_bq=3.7e10,
+            ),
+            geometry=ConcentricSphericalGeometry(
+                source_cavity_radius_cm=10.0,
+                evaluation_radius_cm=100.0,
+            ),
+            candidate_material_keys=[
+                "lead",
+            ],
+            target=FluxTarget(
+                target_flux=100.0
+            ),
+            constraints=DesignConstraints(),
+            optimization_mode="minimum_mass",
+            deterministic_settings=DeterministicSettings(
+                calculation_max_thickness_cm=90.1
+            ),
+        ),
+        "cannot exceed the radial space",
+    )
+
+    # ------------------------------------------------------------
+    # Material resolution
+    # ------------------------------------------------------------
+
+    resolved_materials = resolve_candidate_materials(
+        [
+            "lead",
+            "water",
+        ]
+    )
+
+    assert_equal(
+        "V1.11 material resolver preserves candidate count",
+        len(resolved_materials),
+        2,
+    )
+
+    assert_equal(
+        "V1.11 material resolver preserves first material order",
+        resolved_materials[0].key,
+        "lead",
+    )
+
+    assert_equal(
+        "V1.11 material resolver preserves second material order",
+        resolved_materials[1].key,
+        "water",
+    )
+
+    assert_raises(
+        "V1.11 unknown material key rejected",
+        ValueError,
+        lambda: resolve_candidate_materials(
+            [
+                "lead",
+                "unobtainium",
+            ]
+        ),
+        "unknown material keys",
+    )
+
+    # ------------------------------------------------------------
+    # Complete deterministic execution
+    # ------------------------------------------------------------
+
+    scenario_result = run_scenario(
+        reference_scenario
+    )
+
+    assert_equal(
+        "V1.11 reference scenario returns nine candidates",
+        len(scenario_result.all_candidates),
+        9,
+    )
+
+    best_candidate = scenario_result.best_candidate
+
+    assert_equal(
+        "V1.11 reference scenario selects a candidate",
+        best_candidate is not None,
+        True,
+    )
+
+    if best_candidate is None:
+        raise AssertionError(
+            "V1.11 reference scenario requires a selected candidate."
+        )
+
+    assert_equal(
+        "V1.11 reference scenario selects lead",
+        best_candidate.base_candidate.material.key,
+        "lead",
+    )
+
+    lead_required_thickness = assert_not_none(
+        "V1.11 selected Lead required thickness",
+        best_candidate.base_candidate.required_thickness,
+    )
+
+    lead_mass_per_area = assert_not_none(
+        "V1.11 selected Lead mass per area",
+        best_candidate.mass_per_area_g_per_cm2,
+    )
+
+    assert_close(
+        "V1.11 reference scenario reproduces lead thickness",
+        lead_required_thickness,
+        7.088213,
+        1.0e-5,
+    )
+
+    assert_close(
+        "V1.11 reference scenario reproduces lead mass per area",
+        lead_mass_per_area,
+        80.3803,
+        1.0e-3,
+    )
+
+    assert_equal(
+        "V1.11 reference scenario provides selection reason",
+        scenario_result.selection_reason is not None,
+        True,
+    )
 
 
 if __name__ == "__main__":
