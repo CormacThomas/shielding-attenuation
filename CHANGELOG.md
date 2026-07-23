@@ -2,6 +2,105 @@
 
 All major development milestones for the Shielding Attenuation Simulator are documented here.
 
+## v1.11 - Reproducible Scenarios and Spherical Geometry
+
+Added a reproducible scenario layer and concentric spherical geometry foundation above the validated V1.10 deterministic shielding and optimization workflow.
+
+Changes:
+- Added `geometry_models.py` with:
+  - `ShieldLayerSpec`;
+  - `SphericalShell`;
+  - `ConcentricSphericalGeometry`.
+- Added automatic derivation of ordered spherical-shell inner and outer radii.
+- Added validation for:
+  - source-cavity radius;
+  - evaluation radius;
+  - shielding-layer thickness;
+  - outer shield radius;
+  - layer ordering.
+- Added serializable source specifications for:
+  - manual monoenergetic photon sources;
+  - isotope sources.
+- Added `DeterministicSettings` for buildup selection and numerical thickness-search limits.
+- Added the complete `ShieldingScenario` model containing:
+  - scenario metadata;
+  - source specification;
+  - spherical geometry;
+  - candidate materials;
+  - design target;
+  - engineering constraints;
+  - optimization objective;
+  - optional balanced weights;
+  - deterministic settings.
+- Added scenario-level validation preventing:
+  - empty or duplicate candidate material keys;
+  - unsupported calculation modes;
+  - inconsistent optimization weights;
+  - fixed layers in material-optimization scenarios;
+  - numerical search limits beyond available radial space.
+- Added `scenario_io.py` for:
+  - typed dictionary conversion;
+  - formatted JSON saving;
+  - JSON loading;
+  - schema-version validation;
+  - malformed-file rejection;
+  - readable missing-field errors;
+  - save/load round-trip reconstruction.
+- Added JSON schema version `1.0`.
+- Added `scenario_runner.py` to:
+  - convert source specifications into existing runtime source objects;
+  - resolve material keys through the material library;
+  - route validated scenario inputs into the existing optimizer.
+- Added the official reference scenario:
+  - `scenarios/cs137_v110_reference.json`.
+- Added `examples/run_scenario.py` for one-command JSON scenario execution.
+- Added V1.11 architecture documentation showing the planned shared deterministic/OpenMC scenario pathway.
+- Added `examples/openmc_smoke_test.py`.
+- Verified OpenMC 0.15.3 through the official Docker image.
+- Confirmed:
+  - continuous-energy data access;
+  - fixed-source photon transport;
+  - spherical Lead-shell model execution;
+  - statepoint generation;
+  - named tally extraction through Python.
+- Added V1.11 validation coverage for:
+  - shell-radius derivation;
+  - geometry rejection;
+  - source normalization;
+  - runtime-source conversion;
+  - material resolution;
+  - scenario consistency;
+  - JSON serialization;
+  - JSON round trips;
+  - malformed and incomplete JSON;
+  - unsupported schema versions;
+  - official reference-case reproduction.
+- Added the V1.11 validation report.
+
+Validated behavior:
+- A 2 cm source cavity with 5 cm of Lead and 1 cm of Copper produces:
+  - 6 cm total shielding thickness;
+  - 8 cm outer shield radius;
+  - Lead spanning 2–7 cm;
+  - Copper spanning 7–8 cm.
+- Scenario JSON save/load operations reconstruct equivalent `ShieldingScenario` objects.
+- Invalid geometry, unknown materials, duplicate materials, unsupported schemas, malformed JSON, and inconsistent scenario combinations are rejected.
+- The official JSON scenario evaluates all nine candidate materials.
+- Lead remains selected at approximately 7.088213 cm.
+- Lead mass per area remains approximately 80.380339 g/cm².
+- The complete validation runner produces 319 PASS assertions.
+- V1.11 adds 46 focused assertions while preserving all 273 previously documented regression assertions.
+- The OpenMC smoke test successfully produces and reads a statepoint.
+
+Notes:
+- V1.11 does not modify the previously validated attenuation, buildup, source, thickness-solver, optimization, Pareto, or plotting equations.
+- The scenario runner currently supports `material_optimization`.
+- Fixed shielding layers are intentionally rejected in material-optimization scenarios.
+- The deterministic backend does not yet calculate total spherical shield mass or full three-dimensional transport.
+- The OpenMC smoke test is independent of `ShieldingScenario` and verifies environment readiness only.
+- The OpenMC tally is not yet a quantity-matched deterministic comparison.
+- Shared scenario-to-OpenMC model construction is planned for V1.13.
+
 ## v1.10 - Engineering Visualization and Pareto Tradeoff Analysis
 
 Added a reusable engineering visualization subsystem above the validated V1.09 constraint-based optimizer. Version 1.10 converts optimization results into validated plot-ready data, classifies feasible thickness-mass Pareto tradeoffs, samples detector response across shielding thickness, and generates a reproducible four-figure engineering analysis package in PNG and SVG formats.
