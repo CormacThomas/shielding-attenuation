@@ -22,6 +22,7 @@ from optimization_models import (
     VALID_OPTIMIZATION_MODES,
 )
 from target_models import (
+    AirKermaRateTarget,
     FluxTarget,
     ReductionFactorTarget,
     TransmissionTarget,
@@ -87,7 +88,8 @@ SourceSpec: TypeAlias = (
 
 
 TargetSpec: TypeAlias = (
-    FluxTarget
+    AirKermaRateTarget
+    | FluxTarget
     | ReductionFactorTarget
     | TransmissionTarget
 )
@@ -157,8 +159,8 @@ class ShieldingScenario:
     #   Stable material-library keys evaluated by the optimizer.
     #
     # target:
-    #   Existing validated transmission, reduction-factor, or flux target.
-    #
+    #   Validated transmission, reduction-factor, photon-fluence-rate,
+    #   or collision-air-kerma-rate target.
     # constraints:
     #   Existing V1.09 engineering design constraints.
     #
@@ -230,6 +232,7 @@ class ShieldingScenario:
         if not isinstance(
             self.target,
             (
+                AirKermaRateTarget,
                 FluxTarget,
                 ReductionFactorTarget,
                 TransmissionTarget,

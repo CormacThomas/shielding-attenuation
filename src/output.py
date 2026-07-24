@@ -8,13 +8,26 @@
 # plotting, saved reports, scenario files, or a graphical interface.
 
 
-from target_models import MinimumThicknessResult
+from target_models import (
+    AirKermaMinimumThicknessResult,
+    MinimumThicknessResult,
+)
 from models import ShieldingResult
 from source_models import SourceCalculationResult
-from design_optimizer import MaterialComparisonResult, MaterialDesignCandidate
+from design_optimizer import (
+    MaterialComparisonResult,
+)
 from optimization_models import (
+    OptimizationBaseCandidate,
     OptimizedDesignResult,
     OptimizedMaterialCandidate,
+)
+from air_response_models import (
+    SourceAirKermaResult,
+)
+
+from unit_conversions import (
+    convert_gy_per_s_to_microgy_per_h,
 )
 
 def print_results(result: ShieldingResult) -> None:
@@ -100,6 +113,191 @@ def print_source_results(result: SourceCalculationResult) -> None:
             )
 
 
+def print_source_air_kerma_result(
+    result: SourceAirKermaResult,
+) -> None:
+    # Print an explicit collision-air-kerma response result.
+    #
+    # This output intentionally distinguishes:
+    #   - photon fluence rate
+    #   - energy fluence rate
+    #   - uncollided collision air-kerma rate
+    #   - G-P buildup-adjusted collision air-kerma rate
+    #
+    # No air-kerma quantity is labeled as a generic photon flux.
+
+    print("\nCollision air-kerma response result")
+    print(f"Source: {result.source_name}")
+
+    if result.activity_bq is not None:
+        print(
+            f"Activity: "
+            f"{result.activity_bq:.6e} Bq"
+        )
+
+    print(
+        f"Number of photon lines: "
+        f"{len(result.line_results)}"
+    )
+
+    print(
+        "Total uncollided photon fluence rate: "
+        f"{result.total_uncollided_photon_fluence_rate_per_cm2_s:.6e} "
+        "photons/cm^2/s"
+    )
+
+    total_uncollided_microgy_per_h = (
+        convert_gy_per_s_to_microgy_per_h(
+            result
+            .total_uncollided_collision_air_kerma_rate_gy_per_s
+        )
+    )
+
+    print(
+        "Total uncollided collision air-kerma rate: "
+        f"{total_uncollided_microgy_per_h:.6e} µGy/h"
+    )
+
+    print(
+        "Total uncollided collision air-kerma rate "
+        f"(internal): "
+        f"{result.total_uncollided_collision_air_kerma_rate_gy_per_s:.6e} "
+        "Gy/s"
+    )
+
+    print(
+        f"Buildup status: "
+        f"{result.buildup_status}"
+    )
+
+    adjusted_total = (
+        result
+        .total_buildup_adjusted_collision_air_kerma_rate_gy_per_s
+    )
+
+    if adjusted_total is not None:
+        adjusted_total_microgy_per_h = (
+            convert_gy_per_s_to_microgy_per_h(
+                adjusted_total
+            )
+        )
+
+        print(
+            "Total G-P buildup-adjusted collision "
+            "air-kerma rate: "
+            f"{adjusted_total_microgy_per_h:.6e} µGy/h"
+        )
+
+        print(
+            "Total G-P buildup-adjusted collision "
+            "air-kerma rate (internal): "
+            f"{adjusted_total:.6e} Gy/s"
+        )
+
+    if len(result.warnings) > 0:
+        print("\nWarnings:")
+
+        for warning in result.warnings:
+            print(f"- {warning}")
+
+    print("\nPhoton-line contributions:")
+
+    for line_index, line_result in enumerate(
+        result.line_results,
+        start=1,
+    ):
+        line_uncollided_microgy_per_h = (
+            convert_gy_per_s_to_microgy_per_h(
+                line_result
+                .uncollided_collision_air_kerma_rate_gy_per_s
+            )
+        )
+
+        print(f"\nLine {line_index}")
+        print(
+            f"Photon energy: "
+            f"{line_result.photon_energy_mev:.8g} MeV"
+        )
+
+        print(
+            f"Emission intensity: "
+            f"{line_result.emission_intensity:.8g}"
+        )
+
+        print(
+            f"Photon emission rate: "
+            f"{line_result.photon_rate_per_s:.6e} photons/s"
+        )
+
+        print(
+            "Uncollided photon fluence rate: "
+            f"{line_result.uncollided_photon_fluence_rate_per_cm2_s:.6e} "
+            "photons/cm^2/s"
+        )
+
+        print(
+            "Energy fluence rate: "
+            f"{line_result.energy_fluence_rate_mev_per_cm2_s:.6e} "
+            "MeV/cm^2/s"
+        )
+
+        print(
+            "Dry-air mu_en/rho: "
+            f"{line_result.air_mu_en_over_rho_cm2_per_g:.6e} "
+            "cm^2/g"
+        )
+
+        print(
+            "Uncollided collision air-kerma rate: "
+            f"{line_uncollided_microgy_per_h:.6e} µGy/h"
+        )
+
+        print(
+            f"Buildup status: "
+            f"{line_result.buildup_status}"
+        )
+
+        if line_result.buildup_factor is not None:
+            print(
+                f"G-P exposure buildup factor: "
+                f"{line_result.buildup_factor:.6g}"
+            )
+
+        line_adjusted_rate = (
+            line_result
+            .buildup_adjusted_collision_air_kerma_rate_gy_per_s
+        )
+
+        if line_adjusted_rate is not None:
+            line_adjusted_microgy_per_h = (
+                convert_gy_per_s_to_microgy_per_h(
+                    line_adjusted_rate
+                )
+            )
+
+            print(
+                "G-P buildup-adjusted collision "
+                "air-kerma rate: "
+                f"{line_adjusted_microgy_per_h:.6e} µGy/h"
+            )
+
+        print(
+            f"Calculation method: "
+            f"{line_result.calculation_method}"
+        )
+
+        print(
+            f"Coefficient source: "
+            f"{line_result.coefficient_source}"
+        )
+
+        if len(line_result.warnings) > 0:
+            print("Line warnings:")
+
+            for warning in line_result.warnings:
+                print(f"- {warning}")
+
+
 def print_minimum_thickness_result(result: MinimumThicknessResult) -> None:
     print("\nMinimum shielding thickness result")
     print(f"Calculation mode: {result.calculation_mode}")
@@ -130,7 +328,105 @@ def print_minimum_thickness_result(result: MinimumThicknessResult) -> None:
             print(f"- {warning}")      
 
 
-def get_buildup_display_for_candidate(candidate: MaterialDesignCandidate) -> str:
+def print_air_kerma_minimum_thickness_result(
+    result: AirKermaMinimumThicknessResult,
+) -> None:
+    # Print the complete result of an explicit collision-air-kerma
+    # minimum-thickness design.
+
+    print(
+        "\nAir-kerma minimum shielding thickness result"
+    )
+
+    print(
+        f"Calculation mode: "
+        f"{result.calculation_mode}"
+    )
+
+    print(
+        f"Material: "
+        f"{result.material.name}"
+    )
+
+    print(
+        f"Target: "
+        f"{result.target_description}"
+    )
+
+    print(
+        f"Required thickness: "
+        f"{result.required_thickness:.6g} cm"
+    )
+
+    print(
+        "Final target-comparison collision "
+        "air-kerma rate: "
+        f"{result.final_air_kerma_rate_microgy_per_h:.6e} "
+        "µGy/h"
+    )
+
+    uncollided_rate_microgy_per_h = (
+        convert_gy_per_s_to_microgy_per_h(
+            result
+            .final_uncollided_collision_air_kerma_rate_gy_per_s
+        )
+    )
+
+    print(
+        "Final uncollided collision air-kerma rate: "
+        f"{uncollided_rate_microgy_per_h:.6e} µGy/h"
+    )
+
+    adjusted_rate = (
+        result
+        .final_buildup_adjusted_collision_air_kerma_rate_gy_per_s
+    )
+
+    if adjusted_rate is not None:
+        adjusted_rate_microgy_per_h = (
+            convert_gy_per_s_to_microgy_per_h(
+                adjusted_rate
+            )
+        )
+
+        print(
+            "Final G-P buildup-adjusted collision "
+            "air-kerma rate: "
+            f"{adjusted_rate_microgy_per_h:.6e} µGy/h"
+        )
+
+    print(
+        f"Final selected-response ratio: "
+        f"{result.final_response_ratio:.6e}"
+    )
+
+    buildup_text = (
+        "Yes"
+        if result.buildup_used
+        else "No"
+    )
+
+    print(
+        f"Buildup used: "
+        f"{buildup_text}"
+    )
+
+    if len(result.warnings) > 0:
+        print("\nDesign warnings:")
+
+        for warning in result.warnings:
+            print(f"- {warning}")
+
+    print("\nFinal detailed source response:")
+
+    print_source_air_kerma_result(
+        result.final_source_response
+    )
+
+
+def get_buildup_display_for_candidate(
+    candidate: OptimizationBaseCandidate,
+) -> str:
     # Convert internal buildup/fallback state into a short table label.
     #
     # "Yes" means buildup was successfully used.

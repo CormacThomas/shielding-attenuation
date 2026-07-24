@@ -15,30 +15,28 @@ import json
 from pathlib import Path
 from typing import Any
 
-from geometry_models import ConcentricSphericalGeometry
-from scenario_models import (
-    IsotopeSourceSpec,
-    ManualPhotonSourceSpec,
-    ShieldingScenario,
-)
-from target_models import (
-    FluxTarget,
-    ReductionFactorTarget,
-    TransmissionTarget,
-)
 from geometry_models import (
     ConcentricSphericalGeometry,
     ShieldLayerSpec,
 )
+
 from optimization_models import (
     DesignConstraints,
     OptimizationWeights,
 )
+
 from scenario_models import (
     DeterministicSettings,
     IsotopeSourceSpec,
     ManualPhotonSourceSpec,
     ShieldingScenario,
+)
+
+from target_models import (
+    AirKermaRateTarget,
+    FluxTarget,
+    ReductionFactorTarget,
+    TransmissionTarget,
 )
 SUPPORTED_SCHEMA_VERSIONS = {
     "1.0",
@@ -175,12 +173,26 @@ def geometry_from_dict(
 
 def target_to_dict(
     target: (
-        FluxTarget
+        AirKermaRateTarget
+        | FluxTarget
         | ReductionFactorTarget
         | TransmissionTarget
     ),
 ) -> dict[str, Any]:
-    # Convert a validated target object into an explicitly typed JSON object.
+    # Convert a validated target object into an explicitly typed
+    # JSON object.
+
+    if isinstance(
+        target,
+        AirKermaRateTarget,
+    ):
+        return {
+            "type": "air_kerma_rate",
+            "target_air_kerma_rate_microgy_per_h": (
+                target
+                .target_air_kerma_rate_microgy_per_h
+            ),
+        }
 
     if isinstance(target, FluxTarget):
         return {
@@ -188,13 +200,21 @@ def target_to_dict(
             "target_flux": target.target_flux,
         }
 
-    if isinstance(target, ReductionFactorTarget):
+    if isinstance(
+        target,
+        ReductionFactorTarget,
+    ):
         return {
             "type": "reduction_factor",
-            "reduction_factor": target.reduction_factor,
+            "reduction_factor": (
+                target.reduction_factor
+            ),
         }
 
-    if isinstance(target, TransmissionTarget):
+    if isinstance(
+        target,
+        TransmissionTarget,
+    ):
         return {
             "type": "transmission",
             "target_transmission": (
@@ -210,13 +230,25 @@ def target_to_dict(
 def target_from_dict(
     target_data: dict[str, Any],
 ) -> (
-    FluxTarget
+    AirKermaRateTarget
+    | FluxTarget
     | ReductionFactorTarget
     | TransmissionTarget
 ):
     # Reconstruct one validated target from its explicit JSON type.
 
-    target_type = target_data.get("type")
+    target_type = target_data.get(
+        "type"
+    )
+
+    if target_type == "air_kerma_rate":
+        return AirKermaRateTarget(
+            target_air_kerma_rate_microgy_per_h=(
+                target_data[
+                    "target_air_kerma_rate_microgy_per_h"
+                ]
+            )
+        )
 
     if target_type == "flux":
         return FluxTarget(

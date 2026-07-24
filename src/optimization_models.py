@@ -10,8 +10,10 @@
 from dataclasses import dataclass, field
 from typing import Literal
 
-from design_optimizer import MaterialDesignCandidate
-
+from design_optimizer import (
+    AirKermaMaterialDesignCandidate,
+    MaterialDesignCandidate,
+)
 
 OptimizationStatus = Literal[
     "ELIGIBLE",
@@ -40,6 +42,10 @@ VALID_OPTIMIZATION_MODES = (
     "balanced",
 )
 
+OptimizationBaseCandidate = (
+    MaterialDesignCandidate
+    | AirKermaMaterialDesignCandidate
+)
 
 @dataclass
 class DesignConstraints:
@@ -132,7 +138,7 @@ class OptimizedMaterialCandidate:
     #   - normalized metrics
     #   - optimization score
 
-    base_candidate: MaterialDesignCandidate
+    base_candidate: OptimizationBaseCandidate
     optimization_status: OptimizationStatus
 
     mass_per_area_g_per_cm2: float | None = None

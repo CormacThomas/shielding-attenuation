@@ -23,7 +23,7 @@
 
 
 from design_optimizer import (
-    MaterialDesignCandidate,
+    compare_materials_for_air_kerma_target,
     compare_materials_for_target,
 )
 from material_cost_library import (
@@ -36,12 +36,14 @@ from optimization_models import (
     DesignConstraints,
     OptimizedDesignResult,
     OptimizedMaterialCandidate,
+    OptimizationBaseCandidate,
     OptimizationMode,
     OptimizationWeights,
     VALID_OPTIMIZATION_MODES,
 )
 from source_models import IsotopeSource, ManualPhotonSource
 from target_models import (
+    AirKermaRateTarget,
     FluxTarget,
     ReductionFactorTarget,
     TransmissionTarget,
@@ -98,7 +100,7 @@ def calculate_relative_cost_index_per_area(
 
 
 def get_required_thickness(
-    candidate: MaterialDesignCandidate,
+    candidate: OptimizationBaseCandidate,
 ) -> float:
     if candidate.required_thickness is None:
         raise ValueError(
@@ -146,7 +148,7 @@ def get_candidate_score(
 
 
 def create_optimized_candidate(
-    base_candidate: MaterialDesignCandidate,
+    base_candidate: OptimizationBaseCandidate,
     constraints: DesignConstraints,
     cost_library: dict[str, MaterialCostData],
 ) -> OptimizedMaterialCandidate:
@@ -622,6 +624,229 @@ def optimize_material_selection(
     return OptimizedDesignResult(
         target_description=comparison_result.target_description,
         apply_buildup=comparison_result.apply_buildup,
+        optimization_mode=optimization_mode,
+        constraints=constraints,
+        all_candidates=all_candidates,
+        best_candidate=best_candidate,
+        weights=weights,
+        selection_reason=selection_reason,
+        warnings=warnings,
+    )
+
+
+def optimize_air_kerma_material_selection(
+    source: Source,
+    materials: list[Material],
+    detector_distance: float,
+    target: AirKermaRateTarget,
+    constraints: DesignConstraints,
+    optimization_mode: OptimizationMode,
+    weights: OptimizationWeights | None = None,
+    calculation_max_thickness: float | None = None,
+    apply_buildup: bool = False,
+    cost_library: dict[str, MaterialCostData] | None = None,
+    thickness_tolerance_cm: float = 1.0e-8,
+    maximum_iterations: int = 200,
+    bracket_scan_intervals: int = 200,
+) -> OptimizedDesignResult:
+    # Optimize single-material shielding designs for an explicit
+    # collision-air-kerma-rate target.
+    #
+    # Workflow:
+    #
+    #   1. Calculate required air-kerma shielding thickness for
+    #      every material.
+    #   2. Preserve strict G-P buildup failures.
+    #   3. Calculate mass and relative-cost metrics.
+    #   4. Apply engineering constraints.
+    #   5. Normalize eligible candidates.
+    #   6. Assign objective scores.
+    #   7. Rank and select the best eligible design.
+    #
+    # Air-kerma response information remains inside each candidate's
+    # AirKermaMinimumThicknessResult. It is never stored in legacy
+    # final_flux or final_transmission fields.
+
+    if optimization_mode not in VALID_OPTIMIZATION_MODES:
+        raise ValueError(
+            "Unsupported optimization mode."
+        )
+
+    if optimization_mode == "balanced":
+        if weights is None:
+            raise ValueError(
+                "Balanced optimization requires "
+                "optimization weights."
+            )
+
+    elif weights is not None:
+        raise ValueError(
+            "Optimization weights should only be supplied "
+            "for balanced mode."
+        )
+
+    if cost_library is None:
+        cost_library = (
+            get_material_cost_library()
+        )
+
+    comparison_result = (
+        compare_materials_for_air_kerma_target(
+            source=source,
+            materials=materials,
+            detector_distance_cm=(
+                detector_distance
+            ),
+            target=target,
+            max_thickness_cm=(
+                calculation_max_thickness
+            ),
+            apply_buildup=apply_buildup,
+            thickness_tolerance_cm=(
+                thickness_tolerance_cm
+            ),
+            maximum_iterations=(
+                maximum_iterations
+            ),
+            bracket_scan_intervals=(
+                bracket_scan_intervals
+            ),
+        )
+    )
+
+    optimized_candidates: list[
+        OptimizedMaterialCandidate
+    ] = []
+
+    for base_candidate in (
+        comparison_result.candidates
+    ):
+        optimized_candidate = (
+            create_optimized_candidate(
+                base_candidate=base_candidate,
+                constraints=constraints,
+                cost_library=cost_library,
+            )
+        )
+
+        optimized_candidates.append(
+            optimized_candidate
+        )
+
+    assign_normalized_metrics(
+        optimized_candidates
+    )
+
+    assign_optimization_scores(
+        candidates=optimized_candidates,
+        optimization_mode=optimization_mode,
+        weights=weights,
+    )
+
+    ranked_eligible_candidates = (
+        rank_eligible_candidates(
+            candidates=optimized_candidates,
+            optimization_mode=optimization_mode,
+        )
+    )
+
+    rejected_candidates = [
+        candidate
+        for candidate in optimized_candidates
+        if (
+            candidate.optimization_status
+            == "REJECTED"
+        )
+    ]
+
+    failed_candidates = [
+        candidate
+        for candidate in optimized_candidates
+        if (
+            candidate.optimization_status
+            == "FAILED"
+        )
+    ]
+
+    rejected_candidates.sort(
+        key=lambda candidate: (
+            candidate
+            .base_candidate
+            .material
+            .name
+        )
+    )
+
+    failed_candidates.sort(
+        key=lambda candidate: (
+            candidate
+            .base_candidate
+            .material
+            .name
+        )
+    )
+
+    all_candidates = (
+        ranked_eligible_candidates
+        + rejected_candidates
+        + failed_candidates
+    )
+
+    warnings: list[str] = []
+
+    uses_relative_cost = (
+        optimization_mode
+        in [
+            "minimum_cost",
+            "balanced",
+        ]
+        or (
+            constraints
+            .max_relative_cost_index_per_area
+            is not None
+        )
+    )
+
+    if uses_relative_cost:
+        warnings.append(
+            RELATIVE_COST_BASIS_DESCRIPTION
+        )
+
+    if len(ranked_eligible_candidates) == 0:
+        best_candidate = None
+        selection_reason = None
+
+        warnings.append(
+            "No material candidate satisfied all "
+            "active design constraints."
+        )
+
+    else:
+        best_candidate = (
+            ranked_eligible_candidates[0]
+        )
+
+        selection_reason = (
+            get_selection_reason(
+                best_candidate=best_candidate,
+                optimization_mode=(
+                    optimization_mode
+                ),
+                eligible_count=len(
+                    ranked_eligible_candidates
+                ),
+            )
+        )
+
+    return OptimizedDesignResult(
+        target_description=(
+            comparison_result
+            .target_description
+        ),
+        apply_buildup=(
+            comparison_result
+            .apply_buildup
+        ),
         optimization_mode=optimization_mode,
         constraints=constraints,
         all_candidates=all_candidates,

@@ -15,7 +15,10 @@
 #   - generate OpenMC models
 
 
-from constraint_optimizer import optimize_material_selection
+from constraint_optimizer import (
+    optimize_air_kerma_material_selection,
+    optimize_material_selection,
+)
 from material_library import get_material_library
 from models import Material
 from optimization_models import OptimizedDesignResult
@@ -30,6 +33,7 @@ from source_models import (
     IsotopeSource,
     ManualPhotonSource,
 )
+from target_models import AirKermaRateTarget
 
 
 RuntimeSource = (
@@ -108,8 +112,18 @@ def resolve_candidate_materials(
 def run_material_optimization_scenario(
     scenario: ShieldingScenario,
 ) -> OptimizedDesignResult:
-    # Run one V1.11 material-optimization scenario through the existing
-    # deterministic V1.09 optimization pathway.
+    # Run one reproducible material-optimization scenario.
+    #
+    # Target routing:
+    #
+    # AirKermaRateTarget
+    #     -> explicit V1.12 collision-air-kerma optimizer
+    #
+    # TransmissionTarget, ReductionFactorTarget, or FluxTarget
+    #     -> legacy deterministic optimization pathway
+    #
+    # This preserves all V1.11 scenarios while allowing air-kerma
+    # scenarios to retain their response-specific result data.
 
     if scenario.calculation_mode != "material_optimization":
         raise ValueError(
@@ -126,20 +140,58 @@ def run_material_optimization_scenario(
 
     settings = scenario.deterministic_settings
 
+    if isinstance(
+        scenario.target,
+        AirKermaRateTarget,
+    ):
+        return optimize_air_kerma_material_selection(
+            source=runtime_source,
+            materials=candidate_materials,
+            detector_distance=(
+                scenario
+                .geometry
+                .evaluation_radius_cm
+            ),
+            target=scenario.target,
+            constraints=scenario.constraints,
+            optimization_mode=(
+                scenario.optimization_mode
+            ),
+            weights=(
+                scenario.optimization_weights
+            ),
+            calculation_max_thickness=(
+                settings
+                .calculation_max_thickness_cm
+            ),
+            apply_buildup=(
+                settings.apply_buildup
+            ),
+        )
+
     return optimize_material_selection(
         source=runtime_source,
         materials=candidate_materials,
         detector_distance=(
-            scenario.geometry.evaluation_radius_cm
+            scenario
+            .geometry
+            .evaluation_radius_cm
         ),
         target=scenario.target,
         constraints=scenario.constraints,
-        optimization_mode=scenario.optimization_mode,
-        weights=scenario.optimization_weights,
-        calculation_max_thickness=(
-            settings.calculation_max_thickness_cm
+        optimization_mode=(
+            scenario.optimization_mode
         ),
-        apply_buildup=settings.apply_buildup,
+        weights=(
+            scenario.optimization_weights
+        ),
+        calculation_max_thickness=(
+            settings
+            .calculation_max_thickness_cm
+        ),
+        apply_buildup=(
+            settings.apply_buildup
+        ),
     )
 
 

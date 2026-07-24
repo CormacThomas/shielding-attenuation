@@ -8,12 +8,22 @@
 # It is intentionally separate from main.py so validation can run without
 # interactive user input.
 
-from target_models import FluxTarget, ReductionFactorTarget, TransmissionTarget
+from target_models import (
+    AirKermaMinimumThicknessResult,
+    AirKermaRateTarget,
+    FluxTarget,
+    ReductionFactorTarget,
+    TransmissionTarget,
+)
 from thickness_calculator import (
+    calculate_air_kerma_minimum_thickness,
+    calculate_air_kerma_response_at_thickness,
     calculate_isotope_minimum_thickness,
     calculate_manual_minimum_thickness,
+    calculate_maximum_gp_valid_thickness_cm,
     calculate_unshielded_isotope_flux,
     calculate_unshielded_manual_flux,
+    get_source_photon_energies_mev,
 )
 from buildup import calculate_gp_buildup_factor, get_gp_coefficients_at_energy
 from buildup_library import get_gp_coefficients_library
@@ -21,12 +31,20 @@ from material_library import get_material_library
 from models import Layer
 from source_calculator import calculate_isotope_source_result, calculate_manual_source_result
 from source_library import create_isotope_source, get_available_isotopes
-from source_models import ManualPhotonSource, IsotopeSource
-from unit_conversions import convert_activity_to_bq
-from design_optimizer import compare_materials_for_target
+from source_models import (
+    IsotopeSource,
+    ManualPhotonSource,
+    PhotonLine,
+)
+from design_optimizer import (
+    AirKermaMaterialDesignCandidate,
+    compare_materials_for_air_kerma_target,
+    compare_materials_for_target,
+)
 from constraint_optimizer import (
     calculate_mass_per_area,
     calculate_relative_cost_index_per_area,
+    optimize_air_kerma_material_selection,
     optimize_material_selection,
 )
 from material_cost_library import get_material_cost_library
@@ -72,7 +90,38 @@ from scenario_runner import (
     resolve_candidate_materials,
     run_scenario,
 )
+from air_response import (
+    aggregate_source_air_kerma_results,
+    calculate_collision_air_kerma_rate_gy_per_s,
+    calculate_collision_air_kerma_rate_microgy_per_h,
+    calculate_energy_fluence_rate_mev_per_cm2_s,
+    calculate_photon_line_air_kerma_result,
+    calculate_source_air_kerma_result,
+    get_air_kerma_coefficient_at_energy,
+    get_exact_air_kerma_coefficient,
+    log_log_interpolate_positive_value,
+)
+
+from air_response_library import (
+    NIST_DRY_AIR_COEFFICIENT_SOURCE,
+    get_dry_air_mu_en_over_rho_library,
+)
+
+from unit_conversions import (
+    convert_activity_to_bq,
+    convert_energy_fluence_mev_per_cm2_s_to_j_per_m2_s,
+    convert_gy_per_s_to_microgy_per_h,
+    convert_mass_energy_absorption_coefficient_cm2_per_g_to_m2_per_kg,
+    convert_mev_to_joules,
+    convert_microgy_per_h_to_gy_per_s,
+)
 from collections.abc import Callable
+from output import (
+    print_air_kerma_minimum_thickness_result,
+    print_source_air_kerma_result,
+)
+from contextlib import redirect_stdout
+from io import StringIO
 
 def assert_close(
     name: str,
@@ -130,6 +179,20 @@ def get_candidate_by_material_key(comparison_result, material_key: str):
             return candidate
 
     raise AssertionError(f"Candidate not found for material key: {material_key}")
+
+
+def get_air_kerma_candidate_by_material_key(
+    comparison_result,
+    material_key: str,
+):
+    for candidate in comparison_result.candidates:
+        if candidate.material.key == material_key:
+            return candidate
+
+    raise AssertionError(
+        "Air-kerma candidate not found for material key: "
+        f"{material_key}"
+    )
 
 
 def get_optimized_candidate_by_material_key(
@@ -1862,6 +1925,7 @@ def run_validation_tests() -> None:
         print("PASS: Negative activity rejected")
 
     run_v111_validation_tests()
+    run_v112_validation_tests()
     print("\nAll validation tests passed.")
 
 
@@ -2489,6 +2553,3105 @@ def run_v111_validation_tests() -> None:
         scenario_result.selection_reason is not None,
         True,
     )
+
+
+def run_v112_validation_tests() -> None:
+    # Validate the V1.12 radiation-response quantity foundation.
+    #
+    # These tests cover:
+    #   - dry-air coefficient data and provenance
+    #   - exact lookup and log-log interpolation
+    #   - absorption-edge behavior
+    #   - unit conversions
+    #   - energy-fluence and collision-air-kerma calculations
+    #   - line-level response construction
+    #   - source-level response aggregation
+    #   - real shielding and G-P exposure-buildup integration
+    #   - Cs-137, Co-60, and Am-241 behavior
+
+    # ------------------------------------------------------------
+    # Dry-air response-coefficient library
+    # ------------------------------------------------------------
+
+    air_library = (
+        get_dry_air_mu_en_over_rho_library()
+    )
+
+    assert_equal(
+        "V1.12 dry-air coefficient library contains 38 entries",
+        len(air_library),
+        38,
+    )
+
+    assert_equal(
+        "V1.12 dry-air coefficient energies are nondecreasing",
+        all(
+            air_library[index].photon_energy_mev
+            <= air_library[index + 1].photon_energy_mev
+            for index in range(len(air_library) - 1)
+        ),
+        True,
+    )
+
+    exact_006_coefficient = (
+        get_exact_air_kerma_coefficient(
+            0.06
+        )
+    )
+
+    assert_close(
+        "V1.12 exact dry-air coefficient lookup",
+        exact_006_coefficient.mu_en_over_rho_cm2_per_g,
+        0.03041,
+        1.0e-12,
+    )
+
+    assert_equal(
+        "V1.12 dry-air coefficient preserves source metadata",
+        exact_006_coefficient.source,
+        NIST_DRY_AIR_COEFFICIENT_SOURCE,
+    )
+
+    cs137_coefficient = (
+        get_air_kerma_coefficient_at_energy(
+            0.661657
+        )
+    )
+
+    assert_close(
+        "V1.12 Cs-137 dry-air coefficient interpolation",
+        cs137_coefficient.mu_en_over_rho_cm2_per_g,
+        0.02928664455391956,
+        1.0e-12,
+    )
+
+    below_edge = (
+        get_exact_air_kerma_coefficient(
+            0.0032029,
+            edge_side="below",
+        )
+    )
+
+    above_edge = (
+        get_exact_air_kerma_coefficient(
+            0.0032029,
+            edge_side="above",
+        )
+    )
+
+    assert_close(
+        "V1.12 argon edge below-edge coefficient",
+        below_edge.mu_en_over_rho_cm2_per_g,
+        133.0,
+        1.0e-12,
+    )
+
+    assert_close(
+        "V1.12 argon edge above-edge coefficient",
+        above_edge.mu_en_over_rho_cm2_per_g,
+        146.0,
+        1.0e-12,
+    )
+
+    assert_raises(
+        "V1.12 ambiguous absorption-edge lookup rejected",
+        ValueError,
+        lambda: get_exact_air_kerma_coefficient(
+            0.0032029
+        ),
+        "absorption edge",
+    )
+
+    assert_raises(
+        "V1.12 out-of-range dry-air coefficient rejected",
+        ValueError,
+        lambda: get_air_kerma_coefficient_at_energy(
+            25.0
+        ),
+        "outside the dry-air coefficient range",
+    )
+
+    logarithmic_midpoint = (
+        log_log_interpolate_positive_value(
+            x=(0.1 * 0.2) ** 0.5,
+            x1=0.1,
+            y1=0.02325,
+            x2=0.2,
+            y2=0.02672,
+        )
+    )
+
+    assert_close(
+        "V1.12 log-log interpolation geometric midpoint",
+        logarithmic_midpoint,
+        (0.02325 * 0.02672) ** 0.5,
+        1.0e-12,
+    )
+
+    # ------------------------------------------------------------
+    # Unit-conversion foundation
+    # ------------------------------------------------------------
+
+    assert_close(
+        "V1.12 one MeV converts to joules",
+        convert_mev_to_joules(
+            1.0
+        ),
+        1.602176634e-13,
+        1.0e-25,
+    )
+
+    assert_close(
+        "V1.12 energy-fluence SI conversion",
+        convert_energy_fluence_mev_per_cm2_s_to_j_per_m2_s(
+            1.0
+        ),
+        1.602176634e-9,
+        1.0e-21,
+    )
+
+    assert_close(
+        "V1.12 mass energy-absorption coefficient SI conversion",
+        convert_mass_energy_absorption_coefficient_cm2_per_g_to_m2_per_kg(
+            1.0
+        ),
+        0.1,
+        1.0e-12,
+    )
+
+    assert_close(
+        "V1.12 Gy per second converts to microGy per hour",
+        convert_gy_per_s_to_microgy_per_h(
+            1.0
+        ),
+        3.6e9,
+        1.0e-3,
+    )
+
+    assert_close(
+        "V1.12 microGy per hour converts to Gy per second",
+        convert_microgy_per_h_to_gy_per_s(
+            3.6e9
+        ),
+        1.0,
+        1.0e-12,
+    )
+
+    # ------------------------------------------------------------
+    # Energy fluence and collision air kerma
+    # ------------------------------------------------------------
+
+    cs137_energy_fluence = (
+        calculate_energy_fluence_rate_mev_per_cm2_s(
+            photon_energy_mev=0.661657,
+            photon_fluence_rate_per_cm2_s=100.0,
+        )
+    )
+
+    assert_close(
+        "V1.12 Cs-137 energy-fluence calculation",
+        cs137_energy_fluence,
+        66.1657,
+        1.0e-12,
+    )
+
+    cs137_air_kerma_gy_per_s = (
+        calculate_collision_air_kerma_rate_gy_per_s(
+            energy_fluence_rate_mev_per_cm2_s=(
+                cs137_energy_fluence
+            ),
+            mu_en_over_rho_cm2_per_g=(
+                cs137_coefficient
+                .mu_en_over_rho_cm2_per_g
+            ),
+        )
+    )
+
+    assert_close(
+        "V1.12 Cs-137 collision air-kerma rate in Gy per second",
+        cs137_air_kerma_gy_per_s,
+        3.1046519590756025e-10,
+        1.0e-20,
+    )
+
+    assert_close(
+        "V1.12 Cs-137 collision air-kerma rate in microGy per hour",
+        calculate_collision_air_kerma_rate_microgy_per_h(
+            cs137_energy_fluence,
+            cs137_coefficient.mu_en_over_rho_cm2_per_g,
+        ),
+        1.117674705267217,
+        1.0e-10,
+    )
+
+    assert_close(
+        "V1.12 zero energy fluence produces zero air kerma",
+        calculate_collision_air_kerma_rate_gy_per_s(
+            energy_fluence_rate_mev_per_cm2_s=0.0,
+            mu_en_over_rho_cm2_per_g=(
+                cs137_coefficient
+                .mu_en_over_rho_cm2_per_g
+            ),
+        ),
+        0.0,
+        1.0e-20,
+    )
+
+    assert_raises(
+        "V1.12 nonpositive response coefficient rejected",
+        ValueError,
+        lambda: calculate_collision_air_kerma_rate_gy_per_s(
+            energy_fluence_rate_mev_per_cm2_s=1.0,
+            mu_en_over_rho_cm2_per_g=0.0,
+        ),
+        "must be greater than zero",
+    )
+
+    # ------------------------------------------------------------
+    # Photon-line response model
+    # ------------------------------------------------------------
+
+    cs137_line = PhotonLine(
+        energy=0.661657,
+        intensity=0.851,
+    )
+
+    cs137_line_result = (
+        calculate_photon_line_air_kerma_result(
+            photon_line=cs137_line,
+            photon_rate_per_s=3.1487e10,
+            uncollided_photon_fluence_rate_per_cm2_s=100.0,
+        )
+    )
+
+    assert_equal(
+        "V1.12 photon line defaults to no buildup requested",
+        cs137_line_result.buildup_status,
+        "not_requested",
+    )
+
+    assert_close(
+        "V1.12 photon line stores interpolated response coefficient",
+        cs137_line_result.air_mu_en_over_rho_cm2_per_g,
+        0.02928664455391956,
+        1.0e-12,
+    )
+
+    assert_close(
+        "V1.12 photon line stores uncollided air-kerma response",
+        (
+            cs137_line_result
+            .uncollided_collision_air_kerma_rate_gy_per_s
+        ),
+        3.1046519590756025e-10,
+        1.0e-20,
+    )
+
+    assert_equal(
+        "V1.12 unrequested line buildup has no adjusted response",
+        (
+            cs137_line_result
+            .buildup_adjusted_collision_air_kerma_rate_gy_per_s
+        ),
+        None,
+    )
+
+    cs137_buildup_line_result = (
+        calculate_photon_line_air_kerma_result(
+            photon_line=cs137_line,
+            photon_rate_per_s=3.1487e10,
+            uncollided_photon_fluence_rate_per_cm2_s=100.0,
+            buildup_status="applied",
+            buildup_factor=2.5,
+        )
+    )
+
+    assert_equal(
+        "V1.12 photon line stores applied buildup status",
+        cs137_buildup_line_result.buildup_status,
+        "applied",
+    )
+
+    assert_close(
+        "V1.12 photon line stores buildup factor",
+        assert_not_none(
+            "V1.12 buildup factor exists",
+            cs137_buildup_line_result.buildup_factor,
+        ),
+        2.5,
+        1.0e-12,
+    )
+
+    assert_close(
+        "V1.12 buildup-adjusted line response uses supplied factor",
+        assert_not_none(
+            "V1.12 adjusted line response exists",
+            (
+                cs137_buildup_line_result
+                .buildup_adjusted_collision_air_kerma_rate_gy_per_s
+            ),
+        ),
+        (
+            cs137_buildup_line_result
+            .uncollided_collision_air_kerma_rate_gy_per_s
+            * 2.5
+        ),
+        1.0e-20,
+    )
+
+    assert_raises(
+        "V1.12 buildup factor rejected when buildup not requested",
+        ValueError,
+        lambda: calculate_photon_line_air_kerma_result(
+            photon_line=cs137_line,
+            photon_rate_per_s=1.0,
+            uncollided_photon_fluence_rate_per_cm2_s=1.0,
+            buildup_status="not_requested",
+            buildup_factor=2.0,
+        ),
+        "may only be supplied",
+    )
+
+    # ------------------------------------------------------------
+    # Source-level aggregation
+    # ------------------------------------------------------------
+
+    co60_line_1 = PhotonLine(
+        energy=1.173228,
+        intensity=0.9985,
+    )
+
+    co60_line_2 = PhotonLine(
+        energy=1.332492,
+        intensity=0.9998,
+    )
+
+    co60_line_result_1 = (
+        calculate_photon_line_air_kerma_result(
+            photon_line=co60_line_1,
+            photon_rate_per_s=1.0,
+            uncollided_photon_fluence_rate_per_cm2_s=100.0,
+        )
+    )
+
+    co60_line_result_2 = (
+        calculate_photon_line_air_kerma_result(
+            photon_line=co60_line_2,
+            photon_rate_per_s=1.0,
+            uncollided_photon_fluence_rate_per_cm2_s=80.0,
+        )
+    )
+
+    co60_aggregate = (
+        aggregate_source_air_kerma_results(
+            source_name="Co-60",
+            activity_bq=3.7e10,
+            line_results=[
+                co60_line_result_1,
+                co60_line_result_2,
+            ],
+        )
+    )
+
+    assert_close(
+        "V1.12 source aggregation sums photon fluence",
+        (
+            co60_aggregate
+            .total_uncollided_photon_fluence_rate_per_cm2_s
+        ),
+        180.0,
+        1.0e-12,
+    )
+
+    assert_close(
+        "V1.12 source aggregation sums uncollided air kerma",
+        (
+            co60_aggregate
+            .total_uncollided_collision_air_kerma_rate_gy_per_s
+        ),
+        (
+            co60_line_result_1
+            .uncollided_collision_air_kerma_rate_gy_per_s
+            + co60_line_result_2
+            .uncollided_collision_air_kerma_rate_gy_per_s
+        ),
+        1.0e-20,
+    )
+
+    assert_equal(
+        "V1.12 uncollided source aggregation preserves buildup status",
+        co60_aggregate.buildup_status,
+        "not_requested",
+    )
+
+    co60_buildup_line_1 = (
+        calculate_photon_line_air_kerma_result(
+            photon_line=co60_line_1,
+            photon_rate_per_s=1.0,
+            uncollided_photon_fluence_rate_per_cm2_s=100.0,
+            buildup_status="applied",
+            buildup_factor=2.0,
+        )
+    )
+
+    co60_buildup_line_2 = (
+        calculate_photon_line_air_kerma_result(
+            photon_line=co60_line_2,
+            photon_rate_per_s=1.0,
+            uncollided_photon_fluence_rate_per_cm2_s=80.0,
+            buildup_status="applied",
+            buildup_factor=2.5,
+        )
+    )
+
+    co60_buildup_aggregate = (
+        aggregate_source_air_kerma_results(
+            source_name="Co-60",
+            activity_bq=3.7e10,
+            line_results=[
+                co60_buildup_line_1,
+                co60_buildup_line_2,
+            ],
+        )
+    )
+
+    assert_equal(
+        "V1.12 buildup source aggregation stores applied status",
+        co60_buildup_aggregate.buildup_status,
+        "applied",
+    )
+
+    expected_co60_adjusted_total = (
+        assert_not_none(
+            "V1.12 first Co-60 adjusted response exists",
+            (
+                co60_buildup_line_1
+                .buildup_adjusted_collision_air_kerma_rate_gy_per_s
+            ),
+        )
+        + assert_not_none(
+            "V1.12 second Co-60 adjusted response exists",
+            (
+                co60_buildup_line_2
+                .buildup_adjusted_collision_air_kerma_rate_gy_per_s
+            ),
+        )
+    )
+
+    assert_close(
+        "V1.12 source aggregation sums buildup-adjusted air kerma",
+        assert_not_none(
+            "V1.12 Co-60 adjusted source total exists",
+            (
+                co60_buildup_aggregate
+                .total_buildup_adjusted_collision_air_kerma_rate_gy_per_s
+            ),
+        ),
+        expected_co60_adjusted_total,
+        1.0e-20,
+    )
+
+    assert_raises(
+        "V1.12 mixed source buildup settings rejected",
+        ValueError,
+        lambda: aggregate_source_air_kerma_results(
+            source_name="Co-60",
+            activity_bq=3.7e10,
+            line_results=[
+                co60_line_result_1,
+                co60_buildup_line_2,
+            ],
+        ),
+        "cannot mix",
+    )
+
+    # ------------------------------------------------------------
+    # Real shielding and G-P integration
+    # ------------------------------------------------------------
+
+    materials = get_material_library()
+
+    lead_layers = [
+        Layer(
+            thickness=5.0,
+            material=materials["lead"],
+        )
+    ]
+
+    manual_source = ManualPhotonSource(
+        energy=0.661657,
+        photon_rate=3.7e10,
+    )
+
+    manual_result = (
+        calculate_source_air_kerma_result(
+            source=manual_source,
+            layers=lead_layers,
+            detector_distance_cm=100.0,
+            apply_buildup=False,
+        )
+    )
+
+    assert_equal(
+        "V1.12 manual source produces one response line",
+        len(manual_result.line_results),
+        1,
+    )
+
+    assert_greater_than(
+        "V1.12 shielded manual source produces positive air kerma",
+        (
+            manual_result
+            .total_uncollided_collision_air_kerma_rate_gy_per_s
+        ),
+        0.0,
+    )
+
+    manual_buildup_result = (
+        calculate_source_air_kerma_result(
+            source=manual_source,
+            layers=lead_layers,
+            detector_distance_cm=100.0,
+            apply_buildup=True,
+        )
+    )
+
+    assert_equal(
+        "V1.12 shielded manual source applies real G-P buildup",
+        manual_buildup_result.buildup_status,
+        "applied",
+    )
+
+    assert_greater_than(
+        "V1.12 manual buildup-adjusted response exceeds uncollided response",
+        assert_not_none(
+            "V1.12 manual buildup-adjusted response exists",
+            (
+                manual_buildup_result
+                .total_buildup_adjusted_collision_air_kerma_rate_gy_per_s
+            ),
+        ),
+        (
+            manual_buildup_result
+            .total_uncollided_collision_air_kerma_rate_gy_per_s
+        ),
+    )
+
+    one_ci_bq = 3.7e10
+
+    cs137_source = create_isotope_source(
+        "cs137",
+        one_ci_bq,
+    )
+
+    cs137_source_result = (
+        calculate_source_air_kerma_result(
+            source=cs137_source,
+            layers=lead_layers,
+            detector_distance_cm=100.0,
+            apply_buildup=True,
+        )
+    )
+
+    assert_equal(
+        "V1.12 Cs-137 response contains one selected photon line",
+        len(cs137_source_result.line_results),
+        1,
+    )
+
+    assert_equal(
+        "V1.12 Cs-137 applies G-P exposure buildup",
+        cs137_source_result.buildup_status,
+        "applied",
+    )
+
+    co60_source = create_isotope_source(
+        "co60",
+        one_ci_bq,
+    )
+
+    co60_source_result = (
+        calculate_source_air_kerma_result(
+            source=co60_source,
+            layers=lead_layers,
+            detector_distance_cm=100.0,
+            apply_buildup=True,
+        )
+    )
+
+    assert_equal(
+        "V1.12 Co-60 response contains two photon lines",
+        len(co60_source_result.line_results),
+        2,
+    )
+
+    assert_close(
+        "V1.12 Co-60 uncollided total equals line sum",
+        (
+            co60_source_result
+            .total_uncollided_collision_air_kerma_rate_gy_per_s
+        ),
+        sum(
+            line_result
+            .uncollided_collision_air_kerma_rate_gy_per_s
+            for line_result
+            in co60_source_result.line_results
+        ),
+        1.0e-20,
+    )
+
+    assert_close(
+        "V1.12 Co-60 buildup-adjusted total equals line sum",
+        assert_not_none(
+            "V1.12 Co-60 buildup total exists",
+            (
+                co60_source_result
+                .total_buildup_adjusted_collision_air_kerma_rate_gy_per_s
+            ),
+        ),
+        sum(
+            assert_not_none(
+                "V1.12 Co-60 adjusted line exists",
+                (
+                    line_result
+                    .buildup_adjusted_collision_air_kerma_rate_gy_per_s
+                ),
+            )
+            for line_result
+            in co60_source_result.line_results
+        ),
+        1.0e-20,
+    )
+
+    am241_source = create_isotope_source(
+        "am241",
+        one_ci_bq,
+    )
+
+    am241_result = (
+        calculate_source_air_kerma_result(
+            source=am241_source,
+            layers=lead_layers,
+            detector_distance_cm=100.0,
+            apply_buildup=True,
+        )
+    )
+
+    assert_equal(
+        "V1.12 Am-241 buildup is unavailable beyond valid MFP range",
+        am241_result.buildup_status,
+        "unavailable",
+    )
+
+    assert_equal(
+        "V1.12 unavailable Am-241 buildup has no adjusted total",
+        (
+            am241_result
+            .total_buildup_adjusted_collision_air_kerma_rate_gy_per_s
+        ),
+        None,
+    )
+
+    assert_greater_than(
+        "V1.12 unavailable Am-241 buildup preserves warning",
+        len(am241_result.warnings),
+        0,
+    )
+
+    zero_thickness_result = (
+        calculate_source_air_kerma_result(
+            source=cs137_source,
+            layers=[
+                Layer(
+                    thickness=0.0,
+                    material=materials["lead"],
+                )
+            ],
+            detector_distance_cm=100.0,
+            apply_buildup=True,
+        )
+    )
+
+    zero_thickness_line = (
+        zero_thickness_result.line_results[0]
+    )
+
+    assert_close(
+        "V1.12 zero-thickness G-P buildup factor equals one",
+        assert_not_none(
+            "V1.12 zero-thickness buildup factor exists",
+            zero_thickness_line.buildup_factor,
+        ),
+        1.0,
+        1.0e-12,
+    )
+
+    assert_close(
+        "V1.12 zero-thickness adjusted and uncollided responses match",
+        assert_not_none(
+            "V1.12 zero-thickness adjusted response exists",
+            (
+                zero_thickness_line
+                .buildup_adjusted_collision_air_kerma_rate_gy_per_s
+            ),
+        ),
+        (
+            zero_thickness_line
+            .uncollided_collision_air_kerma_rate_gy_per_s
+        ),
+        1.0e-20,
+    )
+
+    # ------------------------------------------------------------
+    # Air-kerma target and minimum-thickness result models
+    # ------------------------------------------------------------
+
+    air_kerma_target = AirKermaRateTarget(
+        target_air_kerma_rate_microgy_per_h=1.0
+    )
+
+    assert_close(
+        "V1.12 air-kerma target converts microGy per hour to Gy per second",
+        air_kerma_target.target_air_kerma_rate_gy_per_s,
+        1.0 / 3.6e9,
+        1.0e-20,
+    )
+
+    assert_raises(
+        "V1.12 nonpositive air-kerma target rejected",
+        ValueError,
+        lambda: AirKermaRateTarget(
+            target_air_kerma_rate_microgy_per_h=0.0
+        ),
+        "must be greater than zero",
+    )
+
+    uncollided_design_result = (
+        AirKermaMinimumThicknessResult(
+            material=materials["lead"],
+            required_thickness=5.0,
+            final_source_response=manual_result,
+            final_response_ratio=0.5,
+            target_description=(
+                "Collision air-kerma-rate target <= 1 µGy/h"
+            ),
+            warnings=[],
+            calculation_mode=(
+                "Uncollided collision air-kerma "
+                "minimum thickness design"
+            ),
+            buildup_used=False,
+        )
+    )
+
+    assert_close(
+        "V1.12 uncollided design selects uncollided air-kerma response",
+        uncollided_design_result.final_air_kerma_rate_gy_per_s,
+        (
+            manual_result
+            .total_uncollided_collision_air_kerma_rate_gy_per_s
+        ),
+        1.0e-20,
+    )
+
+    assert_close(
+        "V1.12 design result converts selected response to microGy per hour",
+        uncollided_design_result.final_air_kerma_rate_microgy_per_h,
+        convert_gy_per_s_to_microgy_per_h(
+            manual_result
+            .total_uncollided_collision_air_kerma_rate_gy_per_s
+        ),
+        1.0e-12,
+    )
+
+    buildup_design_result = (
+        AirKermaMinimumThicknessResult(
+            material=materials["lead"],
+            required_thickness=5.0,
+            final_source_response=cs137_source_result,
+            final_response_ratio=0.5,
+            target_description=(
+                "G-P buildup-adjusted collision "
+                "air-kerma-rate target <= 1 µGy/h"
+            ),
+            warnings=[],
+            calculation_mode=(
+                "G-P buildup-adjusted collision air-kerma "
+                "minimum thickness design"
+            ),
+            buildup_used=True,
+        )
+    )
+
+    assert_close(
+        "V1.12 buildup design selects buildup-adjusted air-kerma response",
+        buildup_design_result.final_air_kerma_rate_gy_per_s,
+        assert_not_none(
+            "V1.12 buildup design adjusted response exists",
+            (
+                cs137_source_result
+                .total_buildup_adjusted_collision_air_kerma_rate_gy_per_s
+            ),
+        ),
+        1.0e-20,
+    )
+
+    assert_close(
+        "V1.12 buildup design preserves uncollided source response",
+        (
+            buildup_design_result
+            .final_uncollided_collision_air_kerma_rate_gy_per_s
+        ),
+        (
+            cs137_source_result
+            .total_uncollided_collision_air_kerma_rate_gy_per_s
+        ),
+        1.0e-20,
+    )
+
+    assert_raises(
+        "V1.12 inconsistent buildup design result rejected",
+        ValueError,
+        lambda: AirKermaMinimumThicknessResult(
+            material=materials["lead"],
+            required_thickness=5.0,
+            final_source_response=manual_result,
+            final_response_ratio=0.5,
+            target_description="Test target",
+            warnings=[],
+            buildup_used=True,
+        ),
+        "requires an applied source buildup result",
+    )
+
+    assert_raises(
+        "V1.12 negative air-kerma response ratio rejected",
+        ValueError,
+        lambda: AirKermaMinimumThicknessResult(
+            material=materials["lead"],
+            required_thickness=5.0,
+            final_source_response=manual_result,
+            final_response_ratio=-0.1,
+            target_description="Test target",
+            warnings=[],
+            buildup_used=False,
+        ),
+        "response ratio cannot be negative",
+    )
+
+    solver_materials = get_material_library()
+
+    solver_lead = solver_materials["lead"]
+
+    solver_target = AirKermaRateTarget(
+        target_air_kerma_rate_microgy_per_h=1.0
+    )
+
+    manual_solver_source = ManualPhotonSource(
+        energy=0.661657,
+        photon_rate=3.7e10,
+    )
+
+    cs137_solver_source = create_isotope_source(
+        "cs137",
+        3.7e10,
+    )
+
+    co60_solver_source = create_isotope_source(
+        "co60",
+        3.7e10,
+    )
+
+    assert_equal(
+        "V1.12 manual source energy extraction",
+        get_source_photon_energies_mev(
+            manual_solver_source
+        ),
+        [
+            0.661657
+        ],
+    )
+
+    assert_equal(
+        "V1.12 Co-60 source energy extraction",
+        get_source_photon_energies_mev(
+            co60_solver_source
+        ),
+        [
+            1.173228,
+            1.332492,
+        ],
+    )
+
+    maximum_gp_thickness_cm = (
+        calculate_maximum_gp_valid_thickness_cm(
+            source=cs137_solver_source,
+            material=solver_lead,
+        )
+    )
+
+    assert_greater_than(
+        "V1.12 G-P-valid thickness limit is positive",
+        maximum_gp_thickness_cm,
+        0.0,
+    )
+
+    near_gp_limit_response, _ = (
+        calculate_air_kerma_response_at_thickness(
+            source=cs137_solver_source,
+            material=solver_lead,
+            detector_distance_cm=100.0,
+            thickness_cm=(
+                maximum_gp_thickness_cm
+                * 0.999999
+            ),
+            apply_buildup=True,
+        )
+    )
+
+    assert_equal(
+        "V1.12 response immediately below G-P limit applies buildup",
+        near_gp_limit_response.buildup_status,
+        "applied",
+    )
+
+    assert_raises(
+        "V1.12 response beyond G-P validity limit rejected",
+        ValueError,
+        lambda: calculate_air_kerma_response_at_thickness(
+            source=cs137_solver_source,
+            material=solver_lead,
+            detector_distance_cm=100.0,
+            thickness_cm=(
+                maximum_gp_thickness_cm
+                * 1.000001
+            ),
+            apply_buildup=True,
+        ),
+        "requires valid G-P exposure buildup",
+    )
+
+    mn54_solver_source = create_isotope_source(
+        "mn54",
+        3.7e10,
+    )
+
+    copper_gp_limit_cm = (
+        calculate_maximum_gp_valid_thickness_cm(
+            source=mn54_solver_source,
+            material=solver_materials["copper"],
+        )
+    )
+
+    copper_limit_response, _ = (
+        calculate_air_kerma_response_at_thickness(
+            source=mn54_solver_source,
+            material=solver_materials["copper"],
+            detector_distance_cm=100.0,
+            thickness_cm=copper_gp_limit_cm,
+            apply_buildup=True,
+        )
+    )
+
+    assert_equal(
+        "V1.12 floating-point 40-MFP boundary remains valid",
+        copper_limit_response.buildup_status,
+        "applied",
+    )
+
+    uncollided_solver_result = (
+        calculate_air_kerma_minimum_thickness(
+            source=cs137_solver_source,
+            material=solver_lead,
+            detector_distance_cm=100.0,
+            target=solver_target,
+            max_thickness_cm=20.0,
+            apply_buildup=False,
+        )
+    )
+
+    assert_greater_than(
+        "V1.12 uncollided air-kerma design requires shielding",
+        uncollided_solver_result.required_thickness,
+        0.0,
+    )
+
+    assert_equal(
+        "V1.12 uncollided air-kerma design satisfies target",
+        (
+            uncollided_solver_result
+            .final_air_kerma_rate_gy_per_s
+            <= solver_target
+            .target_air_kerma_rate_gy_per_s
+        ),
+        True,
+    )
+
+    assert_equal(
+        "V1.12 uncollided air-kerma design does not mark buildup used",
+        uncollided_solver_result.buildup_used,
+        False,
+    )
+
+    assert_equal(
+        "V1.12 uncollided solver describes constrained quantity",
+        uncollided_solver_result.target_description,
+        (
+            "Uncollided collision air-kerma rate "
+            "<= 1 µGy/h"
+        ),
+    )
+
+    buildup_solver_result = (
+        calculate_air_kerma_minimum_thickness(
+            source=cs137_solver_source,
+            material=solver_lead,
+            detector_distance_cm=100.0,
+            target=solver_target,
+            max_thickness_cm=20.0,
+            apply_buildup=True,
+        )
+    )
+
+    assert_greater_than(
+        "V1.12 buildup-aware design requires more Lead than uncollided design",
+        buildup_solver_result.required_thickness,
+        uncollided_solver_result.required_thickness,
+    )
+
+    assert_equal(
+        "V1.12 buildup-aware air-kerma design satisfies target",
+        (
+            buildup_solver_result
+            .final_air_kerma_rate_gy_per_s
+            <= solver_target
+            .target_air_kerma_rate_gy_per_s
+        ),
+        True,
+    )
+
+    assert_equal(
+        "V1.12 buildup-aware air-kerma design marks buildup used",
+        buildup_solver_result.buildup_used,
+        True,
+    )
+
+    assert_equal(
+        "V1.12 buildup-aware design preserves applied source status",
+        (
+            buildup_solver_result
+            .final_source_response
+            .buildup_status
+        ),
+        "applied",
+    )
+
+    assert_equal(
+        "V1.12 buildup-aware design response ratio is physical",
+        (
+            0.0
+            < buildup_solver_result.final_response_ratio
+            <= 1.0
+        ),
+        True,
+    )
+
+    assert_raises(
+        "V1.12 unsupported buildup material is strictly rejected",
+        ValueError,
+        lambda: calculate_air_kerma_minimum_thickness(
+            source=cs137_solver_source,
+            material=solver_materials["polyethylene"],
+            detector_distance_cm=100.0,
+            target=solver_target,
+            max_thickness_cm=20.0,
+            apply_buildup=True,
+        ),
+        "requires valid G-P exposure buildup",
+    )
+
+    assert_raises(
+        "V1.12 insufficient air-kerma search thickness rejected",
+        ValueError,
+        lambda: calculate_air_kerma_minimum_thickness(
+            source=cs137_solver_source,
+            material=solver_lead,
+            detector_distance_cm=100.0,
+            target=solver_target,
+            max_thickness_cm=0.1,
+            apply_buildup=True,
+        ),
+        "cannot reach the requested air-kerma-rate target",
+    )
+
+    no_shielding_result = (
+        calculate_air_kerma_minimum_thickness(
+            source=cs137_solver_source,
+            material=solver_lead,
+            detector_distance_cm=100.0,
+            target=AirKermaRateTarget(
+                target_air_kerma_rate_microgy_per_h=1.0e6
+            ),
+            max_thickness_cm=20.0,
+            apply_buildup=True,
+        )
+    )
+
+    assert_close(
+        "V1.12 satisfied unshielded target returns zero thickness",
+        no_shielding_result.required_thickness,
+        0.0,
+        1.0e-12,
+    )
+
+    assert_greater_than(
+        "V1.12 unshielded target result preserves warning",
+        len(no_shielding_result.warnings),
+        0,
+    )
+
+    assert_raises(
+        "V1.12 air-kerma search limit beyond detector rejected",
+        ValueError,
+        lambda: calculate_air_kerma_minimum_thickness(
+            source=cs137_solver_source,
+            material=solver_lead,
+            detector_distance_cm=100.0,
+            target=solver_target,
+            max_thickness_cm=101.0,
+            apply_buildup=False,
+        ),
+        "cannot exceed the source-to-detector distance",
+    )
+
+    assert_raises(
+        "V1.12 nonpositive air-kerma solver tolerance rejected",
+        ValueError,
+        lambda: calculate_air_kerma_minimum_thickness(
+            source=cs137_solver_source,
+            material=solver_lead,
+            detector_distance_cm=100.0,
+            target=solver_target,
+            max_thickness_cm=20.0,
+            apply_buildup=False,
+            thickness_tolerance_cm=0.0,
+        ),
+        "tolerance must be greater than zero",
+    )
+
+        # ------------------------------------------------------------
+    # Nonmonotonic buildup-response bracketing
+    # ------------------------------------------------------------
+
+    water_buildup_source = ManualPhotonSource(
+        energy=0.1,
+        photon_rate=3.7e10,
+    )
+
+    _, water_unshielded_rate = (
+        calculate_air_kerma_response_at_thickness(
+            source=water_buildup_source,
+            material=solver_materials["water"],
+            detector_distance_cm=100.0,
+            thickness_cm=0.0,
+            apply_buildup=True,
+        )
+    )
+
+    _, water_one_cm_rate = (
+        calculate_air_kerma_response_at_thickness(
+            source=water_buildup_source,
+            material=solver_materials["water"],
+            detector_distance_cm=100.0,
+            thickness_cm=1.0,
+            apply_buildup=True,
+        )
+    )
+
+    assert_greater_than(
+        "V1.12 buildup response can initially increase with shielding",
+        water_one_cm_rate,
+        water_unshielded_rate,
+    )
+
+    water_buildup_target = AirKermaRateTarget(
+        target_air_kerma_rate_microgy_per_h=(
+            convert_gy_per_s_to_microgy_per_h(
+                0.5
+                * water_unshielded_rate
+            )
+        )
+    )
+
+    water_buildup_design = (
+        calculate_air_kerma_minimum_thickness(
+            source=water_buildup_source,
+            material=solver_materials["water"],
+            detector_distance_cm=100.0,
+            target=water_buildup_target,
+            max_thickness_cm=100.0,
+            apply_buildup=True,
+            bracket_scan_intervals=200,
+        )
+    )
+
+    assert_greater_than(
+        "V1.12 bracketed buildup design passes beyond initial response rise",
+        water_buildup_design.required_thickness,
+        1.0,
+    )
+
+    assert_equal(
+        "V1.12 bracketed buildup design satisfies target",
+        (
+            water_buildup_design
+            .final_air_kerma_rate_gy_per_s
+            <= water_buildup_target
+            .target_air_kerma_rate_gy_per_s
+        ),
+        True,
+    )
+
+    slightly_thinner_water_cm = (
+        water_buildup_design.required_thickness
+        - 1.0e-5
+    )
+
+    _, slightly_thinner_water_rate = (
+        calculate_air_kerma_response_at_thickness(
+            source=water_buildup_source,
+            material=solver_materials["water"],
+            detector_distance_cm=100.0,
+            thickness_cm=slightly_thinner_water_cm,
+            apply_buildup=True,
+        )
+    )
+
+    assert_greater_than(
+        "V1.12 slightly thinner bracketed design fails target",
+        slightly_thinner_water_rate,
+        water_buildup_target.target_air_kerma_rate_gy_per_s,
+    )
+
+    assert_raises(
+        "V1.12 nonpositive bracket scan interval count rejected",
+        ValueError,
+        lambda: calculate_air_kerma_minimum_thickness(
+            source=cs137_solver_source,
+            material=solver_lead,
+            detector_distance_cm=100.0,
+            target=solver_target,
+            max_thickness_cm=20.0,
+            apply_buildup=True,
+            bracket_scan_intervals=0,
+        ),
+        "scan interval count must be greater than zero",
+    )
+
+        # ------------------------------------------------------------
+    # Air-kerma material comparison
+    # ------------------------------------------------------------
+
+    air_kerma_comparison = (
+        compare_materials_for_air_kerma_target(
+            source=cs137_solver_source,
+            materials=[
+                solver_materials["lead"],
+                solver_materials["tungsten"],
+                solver_materials["polyethylene"],
+            ],
+            detector_distance_cm=100.0,
+            target=solver_target,
+            max_thickness_cm=20.0,
+            apply_buildup=True,
+        )
+    )
+
+    assert_equal(
+        "V1.12 air-kerma comparison preserves candidate count",
+        len(air_kerma_comparison.candidates),
+        3,
+    )
+
+    assert_equal(
+        "V1.12 air-kerma comparison preserves target description",
+        air_kerma_comparison.target_description,
+        (
+            "G-P exposure-buildup-adjusted collision "
+            "air-kerma rate <= 1 µGy/h"
+        ),
+    )
+
+    assert_equal(
+        "V1.12 air-kerma comparison preserves buildup setting",
+        air_kerma_comparison.apply_buildup,
+        True,
+    )
+
+    assert_equal(
+        "V1.12 air-kerma comparison has two passing candidates",
+        len(
+            air_kerma_comparison
+            .passing_candidates()
+        ),
+        2,
+    )
+
+    assert_equal(
+        "V1.12 air-kerma comparison has one failed candidate",
+        len(
+            air_kerma_comparison
+            .failed_candidates()
+        ),
+        1,
+    )
+
+    lead_air_kerma_candidate = (
+        get_air_kerma_candidate_by_material_key(
+            air_kerma_comparison,
+            "lead",
+        )
+    )
+
+    tungsten_air_kerma_candidate = (
+        get_air_kerma_candidate_by_material_key(
+            air_kerma_comparison,
+            "tungsten",
+        )
+    )
+
+    polyethylene_air_kerma_candidate = (
+        get_air_kerma_candidate_by_material_key(
+            air_kerma_comparison,
+            "polyethylene",
+        )
+    )
+
+    assert_equal(
+        "V1.12 Lead air-kerma comparison candidate passes",
+        lead_air_kerma_candidate.status,
+        "PASS",
+    )
+
+    assert_equal(
+        "V1.12 Tungsten air-kerma comparison candidate passes",
+        tungsten_air_kerma_candidate.status,
+        "PASS",
+    )
+
+    assert_equal(
+        "V1.12 unsupported buildup candidate fails strictly",
+        polyethylene_air_kerma_candidate.status,
+        "FAILED",
+    )
+
+    passing_air_kerma_thicknesses = []
+
+    for candidate in (
+        air_kerma_comparison
+        .passing_candidates()
+    ):
+        required_thickness = (
+            candidate.required_thickness
+        )
+
+        if required_thickness is None:
+            raise AssertionError(
+                "Passing air-kerma candidate did not "
+                "preserve required thickness."
+            )
+
+        final_rate_microgy_per_h = (
+            candidate
+            .final_air_kerma_rate_microgy_per_h
+        )
+
+        if final_rate_microgy_per_h is None:
+            raise AssertionError(
+                "Passing air-kerma candidate did not "
+                "preserve final air-kerma rate."
+            )
+
+        if candidate.design_result is None:
+            raise AssertionError(
+                "Passing air-kerma candidate did not "
+                "preserve its complete design result."
+            )
+
+        passing_air_kerma_thicknesses.append(
+            required_thickness
+        )
+
+        assert_greater_than(
+            f"V1.12 {candidate.material.key} air-kerma "
+            "candidate has positive thickness",
+            required_thickness,
+            0.0,
+        )
+
+        assert_less_than_or_equal(
+            f"V1.12 {candidate.material.key} air-kerma "
+            "candidate satisfies target",
+            final_rate_microgy_per_h,
+            (
+                solver_target
+                .target_air_kerma_rate_microgy_per_h
+                + 1.0e-8
+            ),
+        )
+
+        assert_equal(
+            f"V1.12 {candidate.material.key} air-kerma "
+            "candidate uses buildup",
+            candidate.buildup_used,
+            True,
+        )
+
+        assert_equal(
+            f"V1.12 {candidate.material.key} candidate "
+            "material matches design result",
+            candidate.design_result.material.key,
+            candidate.material.key,
+        )
+
+        assert_greater_than(
+            f"V1.12 {candidate.material.key} candidate "
+            "preserves photon-line response data",
+            len(
+                candidate
+                .design_result
+                .final_source_response
+                .line_results
+            ),
+            0,
+        )
+
+    assert_equal(
+        "V1.12 passing air-kerma candidates are sorted by thickness",
+        passing_air_kerma_thicknesses,
+        sorted(
+            passing_air_kerma_thicknesses
+        ),
+    )
+
+    assert_equal(
+        "V1.12 failed air-kerma candidate has no thickness",
+        polyethylene_air_kerma_candidate.required_thickness,
+        None,
+    )
+
+    assert_equal(
+        "V1.12 failed air-kerma candidate has no final response",
+        (
+            polyethylene_air_kerma_candidate
+            .final_air_kerma_rate_microgy_per_h
+        ),
+        None,
+    )
+
+    assert_equal(
+        "V1.12 failed air-kerma candidate does not claim buildup",
+        polyethylene_air_kerma_candidate.buildup_used,
+        False,
+    )
+
+    if (
+        polyethylene_air_kerma_candidate
+        .failure_reason
+        is None
+        or (
+            polyethylene_air_kerma_candidate
+            .failure_reason
+            .strip()
+            == ""
+        )
+    ):
+        raise AssertionError(
+            "Failed air-kerma candidate did not "
+            "preserve its failure reason."
+        )
+
+    print(
+        "PASS: V1.12 failed air-kerma candidate "
+        "preserves failure reason"
+    )
+
+    polyethylene_uncollided_comparison = (
+        compare_materials_for_air_kerma_target(
+            source=cs137_solver_source,
+            materials=[
+                solver_materials["polyethylene"],
+            ],
+            detector_distance_cm=100.0,
+            target=solver_target,
+            max_thickness_cm=100.0,
+            apply_buildup=False,
+        )
+    )
+
+    polyethylene_uncollided_candidate = (
+        polyethylene_uncollided_comparison
+        .candidates[0]
+    )
+
+    assert_equal(
+        "V1.12 unsupported G-P material can pass uncollided design",
+        polyethylene_uncollided_candidate.status,
+        "PASS",
+    )
+
+    assert_equal(
+        "V1.12 uncollided Polyethylene candidate does not use buildup",
+        polyethylene_uncollided_candidate.buildup_used,
+        False,
+    )
+
+    polyethylene_uncollided_rate = (
+        polyethylene_uncollided_candidate
+        .final_air_kerma_rate_microgy_per_h
+    )
+
+    if polyethylene_uncollided_rate is None:
+        raise AssertionError(
+            "Passing uncollided Polyethylene candidate "
+            "did not preserve its final response."
+        )
+
+    assert_less_than_or_equal(
+        "V1.12 uncollided Polyethylene candidate satisfies target",
+        polyethylene_uncollided_rate,
+        (
+            solver_target
+            .target_air_kerma_rate_microgy_per_h
+            + 1.0e-8
+        ),
+    )
+
+    impossible_air_kerma_comparison = (
+        compare_materials_for_air_kerma_target(
+            source=cs137_solver_source,
+            materials=[
+                solver_lead,
+            ],
+            detector_distance_cm=100.0,
+            target=solver_target,
+            max_thickness_cm=0.1,
+            apply_buildup=False,
+        )
+    )
+
+    impossible_air_kerma_candidate = (
+        impossible_air_kerma_comparison
+        .candidates[0]
+    )
+
+    assert_equal(
+        "V1.12 impossible air-kerma candidate remains visible",
+        impossible_air_kerma_candidate.status,
+        "FAILED",
+    )
+
+    if (
+        impossible_air_kerma_candidate
+        .failure_reason
+        is None
+        or (
+            impossible_air_kerma_candidate
+            .failure_reason
+            .strip()
+            == ""
+        )
+    ):
+        raise AssertionError(
+            "Impossible air-kerma candidate did not "
+            "preserve its failure reason."
+        )
+
+    print(
+        "PASS: V1.12 impossible air-kerma candidate "
+        "preserves failure reason"
+    )
+
+    assert_raises(
+        "V1.12 empty air-kerma material comparison rejected",
+        ValueError,
+        lambda: compare_materials_for_air_kerma_target(
+            source=cs137_solver_source,
+            materials=[],
+            detector_distance_cm=100.0,
+            target=solver_target,
+            max_thickness_cm=20.0,
+            apply_buildup=False,
+        ),
+        "At least one material",
+    )
+
+    assert_raises(
+        "V1.12 passing air-kerma candidate without result rejected",
+        ValueError,
+        lambda: AirKermaMaterialDesignCandidate(
+            material=solver_lead,
+            status="PASS",
+        ),
+        "must store a design result",
+    )
+
+    assert_raises(
+        "V1.12 failed air-kerma candidate without reason rejected",
+        ValueError,
+        lambda: AirKermaMaterialDesignCandidate(
+            material=solver_lead,
+            status="FAILED",
+        ),
+        "must store a failure reason",
+    )
+
+        # ------------------------------------------------------------
+    # Air-kerma engineering optimization
+    # ------------------------------------------------------------
+
+    air_kerma_optimization_materials = [
+        solver_materials["lead"],
+        solver_materials["tungsten"],
+        solver_materials["polyethylene"],
+    ]
+
+    air_kerma_minimum_mass_result = (
+        optimize_air_kerma_material_selection(
+            source=cs137_solver_source,
+            materials=air_kerma_optimization_materials,
+            detector_distance=100.0,
+            target=solver_target,
+            constraints=DesignConstraints(
+                max_thickness_cm=20.0,
+                max_mass_per_area_g_per_cm2=120.0,
+            ),
+            optimization_mode="minimum_mass",
+            calculation_max_thickness=20.0,
+            apply_buildup=True,
+        )
+    )
+
+    assert_equal(
+        "V1.12 air-kerma optimization preserves target description",
+        air_kerma_minimum_mass_result.target_description,
+        (
+            "G-P exposure-buildup-adjusted collision "
+            "air-kerma rate <= 1 µGy/h"
+        ),
+    )
+
+    assert_equal(
+        "V1.12 air-kerma optimization preserves buildup setting",
+        air_kerma_minimum_mass_result.apply_buildup,
+        True,
+    )
+
+    assert_equal(
+        "V1.12 air-kerma optimization preserves candidate count",
+        len(
+            air_kerma_minimum_mass_result
+            .all_candidates
+        ),
+        3,
+    )
+
+    assert_equal(
+        "V1.12 air-kerma optimization has two eligible candidates",
+        len(
+            air_kerma_minimum_mass_result
+            .eligible_candidates()
+        ),
+        2,
+    )
+
+    assert_equal(
+        "V1.12 air-kerma optimization has one failed candidate",
+        len(
+            air_kerma_minimum_mass_result
+            .failed_candidates()
+        ),
+        1,
+    )
+
+    minimum_mass_best_candidate = (
+        air_kerma_minimum_mass_result
+        .best_candidate
+    )
+
+    if minimum_mass_best_candidate is None:
+        raise AssertionError(
+            "V1.12 minimum-mass air-kerma optimization "
+            "did not select a candidate."
+        )
+
+    assert_equal(
+        "V1.12 minimum-mass air-kerma optimization selects Lead",
+        (
+            minimum_mass_best_candidate
+            .base_candidate
+            .material
+            .key
+        ),
+        "lead",
+    )
+
+    selected_air_kerma_base_candidate = (
+        minimum_mass_best_candidate
+        .base_candidate
+    )
+
+    if not isinstance(
+        selected_air_kerma_base_candidate,
+        AirKermaMaterialDesignCandidate,
+    ):
+        raise AssertionError(
+            "V1.12 selected optimization candidate "
+            "did not preserve the air-kerma candidate type."
+        )
+
+    print(
+        "PASS: V1.12 selected optimization candidate "
+        "preserves air-kerma type"
+    )
+
+    selected_air_kerma_rate = (
+        selected_air_kerma_base_candidate
+        .final_air_kerma_rate_microgy_per_h
+    )
+
+    if selected_air_kerma_rate is None:
+        raise AssertionError(
+            "Selected air-kerma optimization candidate "
+            "did not preserve its final response."
+        )
+
+    assert_less_than_or_equal(
+        "V1.12 selected optimization candidate satisfies air-kerma target",
+        selected_air_kerma_rate,
+        (
+            solver_target
+            .target_air_kerma_rate_microgy_per_h
+            + 1.0e-8
+        ),
+    )
+
+    assert_equal(
+        "V1.12 selected optimization candidate used buildup",
+        selected_air_kerma_base_candidate.buildup_used,
+        True,
+    )
+
+    selected_air_kerma_design_result = (
+        selected_air_kerma_base_candidate
+        .design_result
+    )
+
+    if selected_air_kerma_design_result is None:
+        raise AssertionError(
+            "Selected air-kerma optimization candidate "
+            "did not preserve its design result."
+        )
+
+    assert_equal(
+        "V1.12 selected optimization candidate preserves applied source buildup",
+        (
+            selected_air_kerma_design_result
+            .final_source_response
+            .buildup_status
+        ),
+        "applied",
+    )
+
+    selected_required_thickness = (
+        selected_air_kerma_base_candidate
+        .required_thickness
+    )
+
+    if selected_required_thickness is None:
+        raise AssertionError(
+            "Selected air-kerma optimization candidate "
+            "did not preserve required thickness."
+        )
+
+    selected_mass_per_area = (
+        minimum_mass_best_candidate
+        .mass_per_area_g_per_cm2
+    )
+
+    if selected_mass_per_area is None:
+        raise AssertionError(
+            "Selected air-kerma optimization candidate "
+            "did not preserve mass per area."
+        )
+
+    assert_close(
+        "V1.12 optimized air-kerma mass equals density times thickness",
+        selected_mass_per_area,
+        (
+            selected_air_kerma_base_candidate
+            .material
+            .density
+            * selected_required_thickness
+        ),
+        1.0e-10,
+    )
+
+    polyethylene_optimized_air_kerma = (
+        get_optimized_candidate_by_material_key(
+            air_kerma_minimum_mass_result,
+            "polyethylene",
+        )
+    )
+
+    assert_equal(
+        "V1.12 unsupported buildup material remains FAILED in optimization",
+        (
+            polyethylene_optimized_air_kerma
+            .optimization_status
+        ),
+        "FAILED",
+    )
+
+    assert_equal(
+        "V1.12 failed air-kerma optimization candidate has no mass",
+        (
+            polyethylene_optimized_air_kerma
+            .mass_per_area_g_per_cm2
+        ),
+        None,
+    )
+
+    assert_equal(
+        "V1.12 failed air-kerma optimization candidate has no cost",
+        (
+            polyethylene_optimized_air_kerma
+            .relative_cost_index_per_area
+        ),
+        None,
+    )
+
+    polyethylene_failure_reason = (
+        polyethylene_optimized_air_kerma
+        .base_candidate
+        .failure_reason
+    )
+
+    if (
+        polyethylene_failure_reason is None
+        or polyethylene_failure_reason.strip() == ""
+    ):
+        raise AssertionError(
+            "Failed air-kerma optimization candidate "
+            "did not preserve its failure reason."
+        )
+
+    print(
+        "PASS: V1.12 failed air-kerma optimization "
+        "candidate preserves failure reason"
+    )
+
+    air_kerma_minimum_thickness_result = (
+        optimize_air_kerma_material_selection(
+            source=cs137_solver_source,
+            materials=[
+                solver_materials["lead"],
+                solver_materials["tungsten"],
+            ],
+            detector_distance=100.0,
+            target=solver_target,
+            constraints=DesignConstraints(),
+            optimization_mode="minimum_thickness",
+            calculation_max_thickness=20.0,
+            apply_buildup=True,
+        )
+    )
+
+    minimum_thickness_best_candidate = (
+        air_kerma_minimum_thickness_result
+        .best_candidate
+    )
+
+    if minimum_thickness_best_candidate is None:
+        raise AssertionError(
+            "V1.12 minimum-thickness air-kerma optimization "
+            "did not select a candidate."
+        )
+
+    assert_equal(
+        "V1.12 minimum-thickness air-kerma optimization selects Tungsten",
+        (
+            minimum_thickness_best_candidate
+            .base_candidate
+            .material
+            .key
+        ),
+        "tungsten",
+    )
+
+    tungsten_air_kerma_mass = assert_not_none(
+        "V1.12 Tungsten optimized air-kerma mass exists",
+        (
+            get_optimized_candidate_by_material_key(
+                air_kerma_minimum_thickness_result,
+                "tungsten",
+            )
+            .mass_per_area_g_per_cm2
+        ),
+    )
+
+    lead_air_kerma_mass = assert_not_none(
+        "V1.12 Lead optimized air-kerma mass exists",
+        (
+            get_optimized_candidate_by_material_key(
+                air_kerma_minimum_thickness_result,
+                "lead",
+            )
+            .mass_per_area_g_per_cm2
+        ),
+    )
+
+    assert_greater_than(
+        "V1.12 Lead air-kerma design has lower mass than Tungsten",
+        tungsten_air_kerma_mass,
+        lead_air_kerma_mass,
+    )
+
+    tungsten_air_kerma_mass = assert_not_none(
+        "V1.12 Tungsten optimized air-kerma mass exists",
+        (
+            get_optimized_candidate_by_material_key(
+                air_kerma_minimum_thickness_result,
+                "tungsten",
+            )
+            .mass_per_area_g_per_cm2
+        ),
+    )
+
+    lead_air_kerma_mass = assert_not_none(
+        "V1.12 Lead optimized air-kerma mass exists",
+        (
+            get_optimized_candidate_by_material_key(
+                air_kerma_minimum_thickness_result,
+                "lead",
+            )
+            .mass_per_area_g_per_cm2
+        ),
+    )
+
+    assert_greater_than(
+        "V1.12 Lead air-kerma design has lower mass than Tungsten",
+        tungsten_air_kerma_mass,
+        lead_air_kerma_mass,
+    )
+
+    air_kerma_thickness_constraint_result = (
+        optimize_air_kerma_material_selection(
+            source=cs137_solver_source,
+            materials=[
+                solver_materials["lead"],
+                solver_materials["tungsten"],
+            ],
+            detector_distance=100.0,
+            target=solver_target,
+            constraints=DesignConstraints(
+                max_thickness_cm=6.0,
+            ),
+            optimization_mode="minimum_mass",
+            calculation_max_thickness=20.0,
+            apply_buildup=True,
+        )
+    )
+
+    constrained_lead_candidate = (
+        get_optimized_candidate_by_material_key(
+            air_kerma_thickness_constraint_result,
+            "lead",
+        )
+    )
+
+    assert_equal(
+        "V1.12 Lead is rejected by air-kerma thickness constraint",
+        constrained_lead_candidate.optimization_status,
+        "REJECTED",
+    )
+
+    assert_greater_than(
+        "V1.12 rejected Lead preserves thickness rejection reason",
+        len(
+            constrained_lead_candidate
+            .rejection_reasons
+        ),
+        0,
+    )
+
+    constrained_thickness_best_candidate = (
+        air_kerma_thickness_constraint_result
+        .best_candidate
+    )
+
+    if constrained_thickness_best_candidate is None:
+        raise AssertionError(
+            "V1.12 thickness-constrained air-kerma optimization "
+            "did not select a candidate."
+        )
+
+    assert_equal(
+        "V1.12 thickness constraint leaves Tungsten selected",
+        (
+            constrained_thickness_best_candidate
+            .base_candidate
+            .material
+            .key
+        ),
+        "tungsten",
+    )
+
+    air_kerma_mass_constraint_result = (
+        optimize_air_kerma_material_selection(
+            source=cs137_solver_source,
+            materials=[
+                solver_materials["lead"],
+                solver_materials["tungsten"],
+            ],
+            detector_distance=100.0,
+            target=solver_target,
+            constraints=DesignConstraints(
+                max_mass_per_area_g_per_cm2=90.0,
+            ),
+            optimization_mode="minimum_thickness",
+            calculation_max_thickness=20.0,
+            apply_buildup=True,
+        )
+    )
+
+    constrained_tungsten_candidate = (
+        get_optimized_candidate_by_material_key(
+            air_kerma_mass_constraint_result,
+            "tungsten",
+        )
+    )
+
+    assert_equal(
+        "V1.12 Tungsten is rejected by air-kerma mass constraint",
+        constrained_tungsten_candidate.optimization_status,
+        "REJECTED",
+    )
+
+    constrained_mass_best_candidate = (
+        air_kerma_mass_constraint_result
+        .best_candidate
+    )
+
+    if constrained_mass_best_candidate is None:
+        raise AssertionError(
+            "V1.12 mass-constrained air-kerma optimization "
+            "did not select a candidate."
+        )
+
+    assert_equal(
+        "V1.12 mass constraint leaves Lead selected",
+        (
+            constrained_mass_best_candidate
+            .base_candidate
+            .material
+            .key
+        ),
+        "lead",
+    )
+
+    air_kerma_minimum_cost_result = (
+        optimize_air_kerma_material_selection(
+            source=cs137_solver_source,
+            materials=[
+                solver_materials["lead"],
+                solver_materials["tungsten"],
+            ],
+            detector_distance=100.0,
+            target=solver_target,
+            constraints=DesignConstraints(),
+            optimization_mode="minimum_cost",
+            calculation_max_thickness=20.0,
+            apply_buildup=True,
+        )
+    )
+
+    minimum_cost_best_candidate = (
+        air_kerma_minimum_cost_result
+        .best_candidate
+    )
+
+    if minimum_cost_best_candidate is None:
+        raise AssertionError(
+            "V1.12 minimum-cost air-kerma optimization "
+            "did not select a candidate."
+        )
+
+    assert_equal(
+        "V1.12 minimum-cost air-kerma optimization selects Lead",
+        (
+            minimum_cost_best_candidate
+            .base_candidate
+            .material
+            .key
+        ),
+        "lead",
+    )
+
+    assert_greater_than(
+        "V1.12 relative-cost air-kerma optimization preserves warning",
+        len(
+            air_kerma_minimum_cost_result
+            .warnings
+        ),
+        0,
+    )
+
+    air_kerma_balanced_result = (
+        optimize_air_kerma_material_selection(
+            source=cs137_solver_source,
+            materials=[
+                solver_materials["lead"],
+                solver_materials["tungsten"],
+            ],
+            detector_distance=100.0,
+            target=solver_target,
+            constraints=DesignConstraints(),
+            optimization_mode="balanced",
+            weights=OptimizationWeights(
+                thickness_weight=1.0,
+                mass_weight=1.0,
+                cost_weight=1.0,
+            ),
+            calculation_max_thickness=20.0,
+            apply_buildup=True,
+        )
+    )
+
+    balanced_best_candidate = (
+        air_kerma_balanced_result
+        .best_candidate
+    )
+
+    if balanced_best_candidate is None:
+        raise AssertionError(
+            "V1.12 balanced air-kerma optimization "
+            "did not select a candidate."
+        )
+
+    assert_equal(
+        "V1.12 balanced air-kerma optimization selects Lead",
+        (
+            balanced_best_candidate
+            .base_candidate
+            .material
+            .key
+        ),
+        "lead",
+    )
+
+    for candidate in (
+        air_kerma_balanced_result
+        .eligible_candidates()
+    ):
+        candidate_score = assert_not_none(
+            "V1.12 balanced air-kerma score exists",
+            candidate.optimization_score,
+        )
+
+        assert_equal(
+            f"V1.12 {candidate.base_candidate.material.key} "
+            "balanced air-kerma score is bounded",
+            (
+                0.0
+                <= candidate_score
+                <= 1.0
+            ),
+            True,
+        )
+
+    no_eligible_air_kerma_result = (
+        optimize_air_kerma_material_selection(
+            source=cs137_solver_source,
+            materials=[
+                solver_materials["lead"],
+                solver_materials["tungsten"],
+            ],
+            detector_distance=100.0,
+            target=solver_target,
+            constraints=DesignConstraints(
+                max_thickness_cm=1.0,
+            ),
+            optimization_mode="minimum_mass",
+            calculation_max_thickness=20.0,
+            apply_buildup=True,
+        )
+    )
+
+    assert_equal(
+        "V1.12 air-kerma optimization returns no best candidate when all rejected",
+        no_eligible_air_kerma_result.best_candidate,
+        None,
+    )
+
+    assert_equal(
+        "V1.12 all calculated air-kerma candidates can be rejected",
+        len(
+            no_eligible_air_kerma_result
+            .rejected_candidates()
+        ),
+        2,
+    )
+
+    assert_greater_than(
+        "V1.12 no-eligible air-kerma result preserves warning",
+        len(
+            no_eligible_air_kerma_result
+            .warnings
+        ),
+        0,
+    )
+
+    assert_raises(
+        "V1.12 balanced air-kerma optimization requires weights",
+        ValueError,
+        lambda: optimize_air_kerma_material_selection(
+            source=cs137_solver_source,
+            materials=[
+                solver_lead,
+            ],
+            detector_distance=100.0,
+            target=solver_target,
+            constraints=DesignConstraints(),
+            optimization_mode="balanced",
+            calculation_max_thickness=20.0,
+            apply_buildup=True,
+        ),
+        "requires optimization weights",
+    )
+
+    assert_raises(
+        "V1.12 non-balanced air-kerma optimization rejects weights",
+        ValueError,
+        lambda: optimize_air_kerma_material_selection(
+            source=cs137_solver_source,
+            materials=[
+                solver_lead,
+            ],
+            detector_distance=100.0,
+            target=solver_target,
+            constraints=DesignConstraints(),
+            optimization_mode="minimum_mass",
+            weights=OptimizationWeights(
+                thickness_weight=1.0,
+                mass_weight=1.0,
+                cost_weight=1.0,
+            ),
+            calculation_max_thickness=20.0,
+            apply_buildup=True,
+        ),
+        "only be supplied for balanced mode",
+    )
+
+        # ------------------------------------------------------------
+    # Air-kerma optimization plot-data compatibility
+    # ------------------------------------------------------------
+
+    air_kerma_plot_data = (
+        create_optimization_plot_data(
+            air_kerma_minimum_mass_result
+        )
+    )
+
+    assert_equal(
+        "V1.12 air-kerma plot data preserves candidate count",
+        len(air_kerma_plot_data.candidates),
+        len(
+            air_kerma_minimum_mass_result
+            .all_candidates
+        ),
+    )
+
+    assert_equal(
+        "V1.12 air-kerma plot data preserves selected material",
+        air_kerma_plot_data.selected_material_key,
+        "lead",
+    )
+
+    plotted_air_kerma_lead = (
+        get_material_plot_point_by_key(
+            air_kerma_plot_data,
+            "lead",
+        )
+    )
+
+    assert_equal(
+        "V1.12 plotted air-kerma Lead candidate is eligible",
+        plotted_air_kerma_lead.optimization_status,
+        "ELIGIBLE",
+    )
+
+    assert_equal(
+        "V1.12 plotted air-kerma Lead candidate is selected",
+        plotted_air_kerma_lead.is_selected,
+        True,
+    )
+
+    assert_equal(
+        "V1.12 plotted air-kerma Lead candidate shows buildup",
+        plotted_air_kerma_lead.buildup_display,
+        "YES",
+    )
+
+    plotted_lead_thickness = assert_not_none(
+        "V1.12 plotted air-kerma Lead thickness exists",
+        plotted_air_kerma_lead.required_thickness_cm,
+    )
+
+    optimized_lead_candidate = (
+        get_optimized_candidate_by_material_key(
+            air_kerma_minimum_mass_result,
+            "lead",
+        )
+    )
+
+    optimized_lead_thickness = assert_not_none(
+        "V1.12 optimized air-kerma Lead thickness exists",
+        (
+            optimized_lead_candidate
+            .base_candidate
+            .required_thickness
+        ),
+    )
+
+    assert_close(
+        "V1.12 air-kerma plot data preserves Lead thickness",
+        plotted_lead_thickness,
+        optimized_lead_thickness,
+        1.0e-12,
+    )
+
+    plotted_lead_mass = assert_not_none(
+        "V1.12 plotted air-kerma Lead mass exists",
+        (
+            plotted_air_kerma_lead
+            .mass_per_area_g_per_cm2
+        ),
+    )
+
+    optimized_lead_mass = assert_not_none(
+        "V1.12 optimized air-kerma Lead mass exists",
+        (
+            optimized_lead_candidate
+            .mass_per_area_g_per_cm2
+        ),
+    )
+
+    assert_close(
+        "V1.12 air-kerma plot data preserves Lead mass",
+        plotted_lead_mass,
+        optimized_lead_mass,
+        1.0e-12,
+    )
+
+    plotted_air_kerma_polyethylene = (
+        get_material_plot_point_by_key(
+            air_kerma_plot_data,
+            "polyethylene",
+        )
+    )
+
+    assert_equal(
+        "V1.12 failed air-kerma plot candidate remains visible",
+        (
+            plotted_air_kerma_polyethylene
+            .optimization_status
+        ),
+        "FAILED",
+    )
+
+    assert_equal(
+        "V1.12 failed air-kerma plot candidate has unavailable buildup",
+        (
+            plotted_air_kerma_polyethylene
+            .buildup_display
+        ),
+        "UNAVAILABLE",
+    )
+
+    assert_equal(
+        "V1.12 failed air-kerma plot candidate has no thickness",
+        (
+            plotted_air_kerma_polyethylene
+            .required_thickness_cm
+        ),
+        None,
+    )
+
+    assert_equal(
+        "V1.12 failed air-kerma plot candidate has no mass",
+        (
+            plotted_air_kerma_polyethylene
+            .mass_per_area_g_per_cm2
+        ),
+        None,
+    )
+
+    if (
+        plotted_air_kerma_polyethylene
+        .failure_reason
+        is None
+        or (
+            plotted_air_kerma_polyethylene
+            .failure_reason
+            .strip()
+            == ""
+        )
+    ):
+        raise AssertionError(
+            "Failed plotted air-kerma candidate did not "
+            "preserve its failure reason."
+        )
+
+    print(
+        "PASS: V1.12 failed plotted air-kerma candidate "
+        "preserves failure reason"
+    )
+
+    air_kerma_constraint_plot_data = (
+        create_optimization_plot_data(
+            air_kerma_thickness_constraint_result
+        )
+    )
+
+    air_kerma_feasibility_rows = (
+        create_constraint_feasibility_rows(
+            air_kerma_constraint_plot_data
+        )
+    )
+
+    air_kerma_lead_feasibility = (
+        get_feasibility_row_by_material_key(
+            air_kerma_feasibility_rows,
+            "lead",
+        )
+    )
+
+    air_kerma_tungsten_feasibility = (
+        get_feasibility_row_by_material_key(
+            air_kerma_feasibility_rows,
+            "tungsten",
+        )
+    )
+
+    assert_equal(
+        "V1.12 air-kerma Lead fails thickness feasibility check",
+        air_kerma_lead_feasibility.thickness_status,
+        "FAIL",
+    )
+
+    assert_equal(
+        "V1.12 air-kerma Lead remains rejected in feasibility data",
+        (
+            air_kerma_lead_feasibility
+            .optimization_status
+        ),
+        "REJECTED",
+    )
+
+    assert_equal(
+        "V1.12 air-kerma Tungsten passes thickness feasibility check",
+        air_kerma_tungsten_feasibility.thickness_status,
+        "PASS",
+    )
+
+    assert_equal(
+        "V1.12 air-kerma Tungsten is selected in feasibility data",
+        air_kerma_tungsten_feasibility.is_selected,
+        True,
+    )
+
+    assert_equal(
+        "V1.12 inactive air-kerma mass constraint remains inactive",
+        air_kerma_tungsten_feasibility.mass_status,
+        "INACTIVE",
+    )
+
+    assert_equal(
+        "V1.12 inactive air-kerma cost constraint remains inactive",
+        air_kerma_tungsten_feasibility.cost_status,
+        "INACTIVE",
+    )
+
+    air_kerma_pareto_plot_data = (
+        create_optimization_plot_data(
+            air_kerma_minimum_thickness_result
+        )
+    )
+
+    air_kerma_pareto_points = (
+        create_pareto_points(
+            air_kerma_pareto_plot_data,
+            eligible_only=True,
+        )
+    )
+
+    air_kerma_pareto_material_keys = {
+        point.material_key
+        for point in air_kerma_pareto_points
+        if point.is_pareto_optimal
+    }
+
+    assert_equal(
+        "V1.12 air-kerma Pareto front contains Lead and Tungsten",
+        air_kerma_pareto_material_keys,
+        {
+            "lead",
+            "tungsten",
+        },
+    )
+
+    air_kerma_pareto_thicknesses = [
+        point.thickness_cm
+        for point in air_kerma_pareto_points
+    ]
+
+    assert_equal(
+        "V1.12 air-kerma Pareto points are sorted by thickness",
+        air_kerma_pareto_thicknesses,
+        sorted(
+            air_kerma_pareto_thicknesses
+        ),
+    )
+
+        # ------------------------------------------------------------
+    # Explicit air-kerma console output
+    # ------------------------------------------------------------
+
+    source_output_buffer = StringIO()
+
+    with redirect_stdout(
+        source_output_buffer
+    ):
+        print_source_air_kerma_result(
+            buildup_solver_result
+            .final_source_response
+        )
+
+    source_output_text = (
+        source_output_buffer.getvalue()
+    )
+
+    source_output_requirements = [
+        "Collision air-kerma response result",
+        "Total uncollided photon fluence rate:",
+        "Total uncollided collision air-kerma rate:",
+        (
+            "Total G-P buildup-adjusted collision "
+            "air-kerma rate:"
+        ),
+        "Photon-line contributions:",
+        "Energy fluence rate:",
+        "Dry-air mu_en/rho:",
+        "G-P exposure buildup factor:",
+        "Coefficient source:",
+        "µGy/h",
+        "Gy/s",
+    ]
+
+    for required_text in (
+        source_output_requirements
+    ):
+        assert_equal(
+            "V1.12 source air-kerma output contains "
+            f"{required_text}",
+            required_text in source_output_text,
+            True,
+        )
+
+    minimum_output_buffer = StringIO()
+
+    with redirect_stdout(
+        minimum_output_buffer
+    ):
+        print_air_kerma_minimum_thickness_result(
+            buildup_solver_result
+        )
+
+    minimum_output_text = (
+        minimum_output_buffer.getvalue()
+    )
+
+    minimum_output_requirements = [
+        (
+            "Air-kerma minimum shielding "
+            "thickness result"
+        ),
+        "Required thickness:",
+        (
+            "Final target-comparison collision "
+            "air-kerma rate:"
+        ),
+        (
+            "Final uncollided collision "
+            "air-kerma rate:"
+        ),
+        (
+            "Final G-P buildup-adjusted collision "
+            "air-kerma rate:"
+        ),
+        "Final selected-response ratio:",
+        "Buildup used: Yes",
+        "Final detailed source response:",
+        "Photon-line contributions:",
+    ]
+
+    for required_text in (
+        minimum_output_requirements
+    ):
+        assert_equal(
+            "V1.12 minimum-thickness output contains "
+            f"{required_text}",
+            required_text in minimum_output_text,
+            True,
+        )
+
+    # ------------------------------------------------------------
+    # Air-kerma scenario target serialization
+    # ------------------------------------------------------------
+
+    air_kerma_scenario = ShieldingScenario(
+        scenario_id="cs137_air_kerma_serialization_test",
+        description=(
+            "V1.12 reproducible Cs-137 collision "
+            "air-kerma scenario serialization test."
+        ),
+        calculation_mode="material_optimization",
+        source=IsotopeSourceSpec(
+            isotope_key="cs137",
+            activity_bq=3.7e10,
+        ),
+        geometry=ConcentricSphericalGeometry(
+            source_cavity_radius_cm=0.0,
+            evaluation_radius_cm=100.0,
+        ),
+        candidate_material_keys=[
+            "lead",
+            "tungsten",
+        ],
+        target=AirKermaRateTarget(
+            target_air_kerma_rate_microgy_per_h=1.0
+        ),
+        constraints=DesignConstraints(
+            max_thickness_cm=20.0,
+            max_mass_per_area_g_per_cm2=120.0,
+        ),
+        optimization_mode="minimum_mass",
+        deterministic_settings=(
+            DeterministicSettings(
+                apply_buildup=True,
+                calculation_max_thickness_cm=20.0,
+            )
+        ),
+    )
+
+    assert_equal(
+        "V1.12 scenario model accepts air-kerma target",
+        isinstance(
+            air_kerma_scenario.target,
+            AirKermaRateTarget,
+        ),
+        True,
+    )
+
+    air_kerma_scenario_data = (
+        scenario_to_dict(
+            air_kerma_scenario
+        )
+    )
+
+    assert_equal(
+        "V1.12 scenario serializes explicit air-kerma target type",
+        air_kerma_scenario_data[
+            "target"
+        ][
+            "type"
+        ],
+        "air_kerma_rate",
+    )
+
+    assert_close(
+        "V1.12 scenario serializes air-kerma target in microGy per hour",
+        air_kerma_scenario_data[
+            "target"
+        ][
+            "target_air_kerma_rate_microgy_per_h"
+        ],
+        1.0,
+        1.0e-12,
+    )
+
+    reconstructed_air_kerma_scenario = (
+        scenario_from_dict(
+            air_kerma_scenario_data
+        )
+    )
+
+    reconstructed_air_kerma_target = (
+        reconstructed_air_kerma_scenario
+        .target
+    )
+
+    if not isinstance(
+        reconstructed_air_kerma_target,
+        AirKermaRateTarget,
+    ):
+        raise AssertionError(
+            "V1.12 scenario reconstruction did not "
+            "preserve the air-kerma target type."
+        )
+
+    print(
+        "PASS: V1.12 scenario reconstruction "
+        "preserves air-kerma target type"
+    )
+
+    assert_close(
+        "V1.12 reconstructed scenario preserves air-kerma target value",
+        (
+            reconstructed_air_kerma_target
+            .target_air_kerma_rate_microgy_per_h
+        ),
+        1.0,
+        1.0e-12,
+    )
+
+    assert_equal(
+        "V1.12 air-kerma scenario dictionary round trip preserves object",
+        reconstructed_air_kerma_scenario,
+        air_kerma_scenario,
+    )
+
+    with TemporaryDirectory() as (
+        air_kerma_temporary_directory
+    ):
+        air_kerma_scenario_path = (
+            Path(
+                air_kerma_temporary_directory
+            )
+            / "air_kerma_scenario.json"
+        )
+
+        saved_air_kerma_path = (
+            save_scenario(
+                air_kerma_scenario,
+                air_kerma_scenario_path,
+            )
+        )
+
+        assert_equal(
+            "V1.12 air-kerma scenario save creates JSON file",
+            saved_air_kerma_path.is_file(),
+            True,
+        )
+
+        loaded_air_kerma_scenario = (
+            load_scenario(
+                saved_air_kerma_path
+            )
+        )
+
+        assert_equal(
+            "V1.12 air-kerma scenario JSON round trip preserves object",
+            loaded_air_kerma_scenario,
+            air_kerma_scenario,
+        )
+
+    invalid_air_kerma_target_data = (
+        json.loads(
+            json.dumps(
+                air_kerma_scenario_data
+            )
+        )
+    )
+
+    invalid_air_kerma_target_data[
+        "target"
+    ][
+        "target_air_kerma_rate_microgy_per_h"
+    ] = 0.0
+
+    assert_raises(
+        "V1.12 scenario rejects nonpositive air-kerma target",
+        ValueError,
+        lambda: scenario_from_dict(
+            invalid_air_kerma_target_data
+        ),
+        "must be greater than zero",
+    )
+
+    # ------------------------------------------------------------
+    # Reproducible air-kerma scenario execution
+    # ------------------------------------------------------------
+
+    air_kerma_scenario_result = (
+        run_scenario(
+            air_kerma_scenario
+        )
+    )
+
+    assert_equal(
+        "V1.12 air-kerma scenario preserves target description",
+        air_kerma_scenario_result.target_description,
+        (
+            "G-P exposure-buildup-adjusted collision "
+            "air-kerma rate <= 1 µGy/h"
+        ),
+    )
+
+    assert_equal(
+        "V1.12 air-kerma scenario preserves buildup setting",
+        air_kerma_scenario_result.apply_buildup,
+        True,
+    )
+
+    assert_equal(
+        "V1.12 air-kerma scenario preserves candidate count",
+        len(
+            air_kerma_scenario_result
+            .all_candidates
+        ),
+        2,
+    )
+
+    assert_equal(
+        "V1.12 air-kerma scenario has two eligible candidates",
+        len(
+            air_kerma_scenario_result
+            .eligible_candidates()
+        ),
+        2,
+    )
+
+    air_kerma_scenario_best_candidate = (
+        air_kerma_scenario_result
+        .best_candidate
+    )
+
+    if air_kerma_scenario_best_candidate is None:
+        raise AssertionError(
+            "V1.12 air-kerma scenario did not "
+            "select a candidate."
+        )
+
+    assert_equal(
+        "V1.12 minimum-mass air-kerma scenario selects Lead",
+        (
+            air_kerma_scenario_best_candidate
+            .base_candidate
+            .material
+            .key
+        ),
+        "lead",
+    )
+
+    air_kerma_scenario_base_candidate = (
+        air_kerma_scenario_best_candidate
+        .base_candidate
+    )
+
+    if not isinstance(
+        air_kerma_scenario_base_candidate,
+        AirKermaMaterialDesignCandidate,
+    ):
+        raise AssertionError(
+            "V1.12 scenario runner did not preserve "
+            "the air-kerma candidate type."
+        )
+
+    print(
+        "PASS: V1.12 scenario runner preserves "
+        "air-kerma candidate type"
+    )
+
+    air_kerma_scenario_final_rate = (
+        air_kerma_scenario_base_candidate
+        .final_air_kerma_rate_microgy_per_h
+    )
+
+    if air_kerma_scenario_final_rate is None:
+        raise AssertionError(
+            "V1.12 air-kerma scenario did not "
+            "preserve its final response."
+        )
+
+    assert_less_than_or_equal(
+        "V1.12 air-kerma scenario satisfies target",
+        air_kerma_scenario_final_rate,
+        (
+            solver_target
+            .target_air_kerma_rate_microgy_per_h
+            + 1.0e-8
+        ),
+    )
+
+    air_kerma_scenario_design_result = (
+        air_kerma_scenario_base_candidate
+        .design_result
+    )
+
+    if air_kerma_scenario_design_result is None:
+        raise AssertionError(
+            "V1.12 air-kerma scenario did not "
+            "preserve its design result."
+        )
+
+    assert_equal(
+        "V1.12 air-kerma scenario applies source buildup",
+        (
+            air_kerma_scenario_design_result
+            .final_source_response
+            .buildup_status
+        ),
+        "applied",
+    )
+
+    assert_close(
+        "V1.12 scenario and direct solver reproduce Lead thickness",
+        (
+            air_kerma_scenario_design_result
+            .required_thickness
+        ),
+        buildup_solver_result.required_thickness,
+        1.0e-8,
+    )
+
+    scenario_lead_mass = assert_not_none(
+        "V1.12 scenario-selected Lead mass exists",
+        (
+            air_kerma_scenario_best_candidate
+            .mass_per_area_g_per_cm2
+        ),
+    )
+
+    assert_close(
+        "V1.12 scenario-selected Lead mass equals density times thickness",
+        scenario_lead_mass,
+        (
+            air_kerma_scenario_base_candidate
+            .material
+            .density
+            * air_kerma_scenario_design_result
+            .required_thickness
+        ),
+        1.0e-10,
+    )
+
+    assert_equal(
+        "V1.12 air-kerma scenario provides selection reason",
+        (
+            air_kerma_scenario_result
+            .selection_reason
+            is not None
+        ),
+        True,
+    )       
+
+    strict_air_kerma_failure_scenario = (
+        ShieldingScenario(
+            scenario_id=(
+                "air_kerma_strict_buildup_failure"
+            ),
+            description=(
+                "Confirm that air-kerma scenarios do not "
+                "silently fall back when requested G-P "
+                "buildup is unavailable."
+            ),
+            calculation_mode=(
+                "material_optimization"
+            ),
+            source=IsotopeSourceSpec(
+                isotope_key="cs137",
+                activity_bq=3.7e10,
+            ),
+            geometry=(
+                ConcentricSphericalGeometry(
+                    source_cavity_radius_cm=0.0,
+                    evaluation_radius_cm=100.0,
+                )
+            ),
+            candidate_material_keys=[
+                "polyethylene",
+            ],
+            target=AirKermaRateTarget(
+                target_air_kerma_rate_microgy_per_h=1.0
+            ),
+            constraints=DesignConstraints(),
+            optimization_mode="minimum_mass",
+            deterministic_settings=(
+                DeterministicSettings(
+                    apply_buildup=True,
+                    calculation_max_thickness_cm=20.0,
+                )
+            ),
+        )
+    )
+
+    strict_air_kerma_failure_result = (
+        run_scenario(
+            strict_air_kerma_failure_scenario
+        )
+    )
+
+    assert_equal(
+        "V1.12 strict air-kerma scenario has no selected design",
+        strict_air_kerma_failure_result.best_candidate,
+        None,
+    )
+
+    assert_equal(
+        "V1.12 strict air-kerma scenario preserves failed candidate",
+        len(
+            strict_air_kerma_failure_result
+            .failed_candidates()
+        ),
+        1,
+    )
+
+    strict_failed_candidate = (
+        strict_air_kerma_failure_result
+        .failed_candidates()[0]
+    )
+
+    assert_equal(
+        "V1.12 strict scenario marks unsupported buildup as FAILED",
+        strict_failed_candidate.optimization_status,
+        "FAILED",
+    )
+
+    strict_failure_reason = (
+        strict_failed_candidate
+        .base_candidate
+        .failure_reason
+    )
+
+    if (
+        strict_failure_reason is None
+        or strict_failure_reason.strip() == ""
+    ):
+        raise AssertionError(
+            "V1.12 strict air-kerma scenario "
+            "did not preserve its failure reason."
+        )
+
+    assert_equal(
+        "V1.12 strict scenario reports G-P requirement",
+        (
+            "requires valid G-P exposure buildup"
+            in strict_failure_reason
+        ),
+        True,
+    )     
 
 
 if __name__ == "__main__":
