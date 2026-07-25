@@ -24,6 +24,7 @@ from thickness_calculator import (
     calculate_unshielded_isotope_flux,
     calculate_unshielded_manual_flux,
     get_source_photon_energies_mev,
+    get_target_description,
 )
 from buildup import calculate_gp_buildup_factor, get_gp_coefficients_at_energy
 from buildup_library import get_gp_coefficients_library
@@ -117,11 +118,28 @@ from unit_conversions import (
 )
 from collections.abc import Callable
 from output import (
+    print_air_kerma_material_comparison_result,
     print_air_kerma_minimum_thickness_result,
+    print_material_comparison_result,
+    print_minimum_thickness_result,
+    print_optimized_design_result,
     print_source_air_kerma_result,
+    print_source_results,
 )
 from contextlib import redirect_stdout
 from io import StringIO
+from unittest.mock import patch
+from input_handler import (
+    get_response_quantity_from_user,
+    get_target_from_user,
+)
+from main import (
+    run_fixed_thickness_mode,
+    run_material_comparison_mode,
+    run_material_optimization_mode,
+    run_minimum_thickness_mode,
+)
+
 
 def assert_close(
     name: str,
@@ -5651,7 +5669,1949 @@ def run_v112_validation_tests() -> None:
             in strict_failure_reason
         ),
         True,
-    )     
+    )  
+
+    # ------------------------------------------------------------
+    # Official V1.12 air-kerma reference scenario
+    # ------------------------------------------------------------
+
+    air_kerma_reference_scenario_path = (
+        Path(__file__)
+        .resolve()
+        .parents[1]
+        / "scenarios"
+        / "cs137_air_kerma_reference.json"
+    )
+
+    assert_equal(
+        "V1.12 official air-kerma reference scenario file exists",
+        air_kerma_reference_scenario_path.is_file(),
+        True,
+    )
+
+    official_air_kerma_scenario = (
+        load_scenario(
+            air_kerma_reference_scenario_path
+        )
+    )
+
+    assert_equal(
+        "V1.12 official scenario preserves scenario ID",
+        official_air_kerma_scenario.scenario_id,
+        "cs137_air_kerma_reference",
+    )
+
+    assert_equal(
+        "V1.12 official scenario preserves schema version",
+        official_air_kerma_scenario.schema_version,
+        "1.0",
+    )
+
+    assert_equal(
+        "V1.12 official scenario preserves nine materials",
+        len(
+            official_air_kerma_scenario
+            .candidate_material_keys
+        ),
+        9,
+    )
+
+    official_air_kerma_target = (
+        official_air_kerma_scenario.target
+    )
+
+    if not isinstance(
+        official_air_kerma_target,
+        AirKermaRateTarget,
+    ):
+        raise AssertionError(
+            "Official V1.12 scenario did not "
+            "reconstruct an AirKermaRateTarget."
+        )
+
+    print(
+        "PASS: V1.12 official scenario reconstructs "
+        "air-kerma target type"
+    )
+
+    assert_close(
+        "V1.12 official scenario preserves air-kerma target",
+        (
+            official_air_kerma_target
+            .target_air_kerma_rate_microgy_per_h
+        ),
+        1.0,
+        1.0e-12,
+    )
+
+    assert_equal(
+        "V1.12 official scenario requires buildup",
+        (
+            official_air_kerma_scenario
+            .deterministic_settings
+            .apply_buildup
+        ),
+        True,
+    )
+
+    assert_equal(
+        "V1.12 official scenario uses minimum-mass objective",
+        official_air_kerma_scenario.optimization_mode,
+        "minimum_mass",
+    )
+
+    official_air_kerma_result = (
+        run_scenario(
+            official_air_kerma_scenario
+        )
+    )
+
+    assert_equal(
+        "V1.12 official scenario returns nine candidates",
+        len(
+            official_air_kerma_result
+            .all_candidates
+        ),
+        9,
+    )
+
+    assert_equal(
+        "V1.12 official scenario preserves target description",
+        official_air_kerma_result.target_description,
+        (
+            "G-P exposure-buildup-adjusted collision "
+            "air-kerma rate <= 1 µGy/h"
+        ),
+    )
+
+    official_air_kerma_best_candidate = (
+        official_air_kerma_result
+        .best_candidate
+    )
+
+    if official_air_kerma_best_candidate is None:
+        raise AssertionError(
+            "Official V1.12 air-kerma scenario "
+            "did not select a design."
+        )
+
+    assert_equal(
+        "V1.12 official minimum-mass scenario selects Lead",
+        (
+            official_air_kerma_best_candidate
+            .base_candidate
+            .material
+            .key
+        ),
+        "lead",
+    )
+
+    official_air_kerma_base_candidate = (
+        official_air_kerma_best_candidate
+        .base_candidate
+    )
+
+    if not isinstance(
+        official_air_kerma_base_candidate,
+        AirKermaMaterialDesignCandidate,
+    ):
+        raise AssertionError(
+            "Official V1.12 scenario did not preserve "
+            "the air-kerma candidate type."
+        )
+
+    print(
+        "PASS: V1.12 official scenario preserves "
+        "air-kerma candidate type"
+    )
+
+    official_air_kerma_design_result = (
+        official_air_kerma_base_candidate
+        .design_result
+    )
+
+    if official_air_kerma_design_result is None:
+        raise AssertionError(
+            "Official V1.12 selected candidate did not "
+            "preserve its design result."
+        )       
+
+    assert_close(
+        "V1.12 official Lead reference thickness",
+        (
+            official_air_kerma_design_result
+            .required_thickness
+        ),
+        7.180648660287261,
+        1.0e-8,
+    )
+
+    official_air_kerma_mass = assert_not_none(
+        "V1.12 official Lead reference mass exists",
+        (
+            official_air_kerma_best_candidate
+            .mass_per_area_g_per_cm2
+        ),
+    )
+
+    assert_close(
+        "V1.12 official Lead reference mass per area",
+        official_air_kerma_mass,
+        81.42855580765755,
+        1.0e-7,
+    )
+
+    official_air_kerma_final_rate = (
+        official_air_kerma_base_candidate
+        .final_air_kerma_rate_microgy_per_h
+    )
+
+    if official_air_kerma_final_rate is None:
+        raise AssertionError(
+            "Official V1.12 selected design did not "
+            "preserve its final air-kerma rate."
+        )
+
+    assert_less_than_or_equal(
+        "V1.12 official Lead design satisfies target",
+        official_air_kerma_final_rate,
+        1.0 + 1.0e-8,
+    )
+
+    assert_equal(
+        "V1.12 official Lead design uses buildup",
+        official_air_kerma_design_result.buildup_used,
+        True,
+    )
+
+    assert_equal(
+        "V1.12 official Lead source response applies buildup",
+        (
+            official_air_kerma_design_result
+            .final_source_response
+            .buildup_status
+        ),
+        "applied",
+    )
+
+    official_barite_candidate = (
+        get_optimized_candidate_by_material_key(
+            official_air_kerma_result,
+            "concrete_barite",
+        )
+    )
+
+    official_polyethylene_candidate = (
+        get_optimized_candidate_by_material_key(
+            official_air_kerma_result,
+            "polyethylene",
+        )
+    )
+
+    assert_equal(
+        "V1.12 official Barite Concrete candidate remains FAILED",
+        official_barite_candidate.optimization_status,
+        "FAILED",
+    )
+
+    assert_equal(
+        "V1.12 official Polyethylene candidate remains FAILED",
+        official_polyethylene_candidate.optimization_status,
+        "FAILED",
+    )
+
+    for unsupported_candidate in [
+        official_barite_candidate,
+        official_polyethylene_candidate,
+    ]:
+        failure_reason = (
+            unsupported_candidate
+            .base_candidate
+            .failure_reason
+        )
+
+        if (
+            failure_reason is None
+            or failure_reason.strip() == ""
+        ):
+            raise AssertionError(
+                "Official V1.12 unsupported material "
+                "did not preserve its failure reason."
+            )
+
+        assert_equal(
+            "V1.12 official "
+            f"{unsupported_candidate.base_candidate.material.key} "
+            "reports G-P limitation",
+            "G-P" in failure_reason,
+            True,
+        )
+
+    # ------------------------------------------------------------
+    # Explicit CLI response-quantity input
+    # ------------------------------------------------------------
+
+    with patch(
+        "builtins.input",
+        return_value="1",
+    ):
+        cli_photon_response_quantity = (
+            get_response_quantity_from_user()
+        )
+
+    assert_equal(
+        "V1.12 CLI selects photon fluence-rate response",
+        cli_photon_response_quantity,
+        "photon_fluence_rate",
+    )
+
+    with patch(
+        "builtins.input",
+        return_value="2",
+    ):
+        cli_air_kerma_response_quantity = (
+            get_response_quantity_from_user()
+        )
+
+    assert_equal(
+        "V1.12 CLI selects collision air-kerma response",
+        cli_air_kerma_response_quantity,
+        "collision_air_kerma_rate",
+    )
+
+    with patch(
+        "builtins.input",
+        return_value="1.0",
+    ):
+        cli_air_kerma_target = (
+            get_target_from_user(
+                "collision_air_kerma_rate"
+            )
+        )
+
+    if not isinstance(
+        cli_air_kerma_target,
+        AirKermaRateTarget,
+    ):
+        raise AssertionError(
+            "V1.12 CLI did not construct an "
+            "AirKermaRateTarget."
+        )
+
+    print(
+        "PASS: V1.12 CLI constructs "
+        "air-kerma target type"
+    )
+
+    assert_close(
+        "V1.12 CLI preserves air-kerma target value",
+        (
+            cli_air_kerma_target
+            .target_air_kerma_rate_microgy_per_h
+        ),
+        1.0,
+        1.0e-12,
+    )
+
+    with patch(
+        "builtins.input",
+        side_effect=[
+            "3",
+            "100.0",
+        ],
+    ):
+        cli_photon_target = (
+            get_target_from_user(
+                "photon_fluence_rate"
+            )
+        )
+
+    if not isinstance(
+        cli_photon_target,
+        FluxTarget,
+    ):
+        raise AssertionError(
+            "V1.12 CLI did not preserve the "
+            "legacy photon target type."
+        )
+
+    print(
+        "PASS: V1.12 CLI preserves "
+        "photon target type"
+    )
+
+    assert_close(
+        "V1.12 CLI preserves photon fluence-rate target value",
+        cli_photon_target.target_flux,
+        100.0,
+        1.0e-12,
+    )
+
+    with patch(
+        "builtins.input",
+        return_value="9",
+    ):
+        assert_raises(
+            "V1.12 CLI rejects unsupported response choice",
+            ValueError,
+            get_response_quantity_from_user,
+            "Please enter 1 or 2",
+        )
+
+    # ------------------------------------------------------------
+    # Fixed-thickness and minimum-thickness CLI routing
+    # ------------------------------------------------------------
+
+    cli_fixed_air_kerma_layers = [
+        Layer(
+            thickness=5.0,
+            material=solver_lead,
+        )
+    ]
+
+    with (
+        patch(
+            "main.get_material_library",
+            return_value=solver_materials,
+        ),
+        patch(
+            "main.get_source_from_user",
+            return_value=cs137_solver_source,
+        ),
+        patch(
+            "main.get_response_quantity_from_user",
+            return_value=(
+                "collision_air_kerma_rate"
+            ),
+        ),
+        patch(
+            "main.get_layers_from_user",
+            return_value=(
+                cli_fixed_air_kerma_layers
+            ),
+        ),
+        patch(
+            "main.get_detector_distance_from_user",
+            return_value=100.0,
+        ),
+        patch(
+            "main.get_apply_buildup_from_user",
+            return_value=True,
+        ) as fixed_air_buildup_prompt,
+        patch(
+            "main.print_source_air_kerma_result",
+        ) as fixed_air_output,
+        patch(
+            "main.print_source_results",
+        ) as fixed_photon_output,
+    ):
+        run_fixed_thickness_mode()
+
+    assert_equal(
+        "V1.12 fixed-thickness CLI requests buildup for air kerma",
+        fixed_air_buildup_prompt.call_count,
+        1,
+    )
+
+    assert_equal(
+        "V1.12 fixed-thickness CLI uses air-kerma output",
+        fixed_air_output.call_count,
+        1,
+    )
+
+    assert_equal(
+        "V1.12 fixed-thickness air-kerma CLI skips photon output",
+        fixed_photon_output.call_count,
+        0,
+    )
+
+    fixed_air_kerma_result = (
+        fixed_air_output
+        .call_args
+        .args[0]
+    )
+
+    assert_equal(
+        "V1.12 fixed-thickness CLI applies air-kerma buildup",
+        fixed_air_kerma_result.buildup_status,
+        "applied",
+    )
+
+    assert_greater_than(
+        "V1.12 fixed-thickness CLI produces positive air kerma",
+        (
+            fixed_air_kerma_result
+            .total_uncollided_collision_air_kerma_rate_gy_per_s
+        ),
+        0.0,
+    )
+
+    with (
+        patch(
+            "main.get_material_library",
+            return_value=solver_materials,
+        ),
+        patch(
+            "main.get_source_from_user",
+            return_value=manual_solver_source,
+        ),
+        patch(
+            "main.get_response_quantity_from_user",
+            return_value="photon_fluence_rate",
+        ),
+        patch(
+            "main.get_layers_from_user",
+            return_value=(
+                cli_fixed_air_kerma_layers
+            ),
+        ),
+        patch(
+            "main.get_detector_distance_from_user",
+            return_value=100.0,
+        ),
+        patch(
+            "main.get_apply_buildup_from_user",
+            return_value=True,
+        ) as fixed_photon_buildup_prompt,
+        patch(
+            "main.print_source_air_kerma_result",
+        ) as photon_mode_air_output,
+        patch(
+            "main.print_source_results",
+        ) as photon_mode_output,
+    ):
+        run_fixed_thickness_mode()
+
+    assert_equal(
+        "V1.12 photon fixed-thickness CLI does not request exposure buildup",
+        fixed_photon_buildup_prompt.call_count,
+        0,
+    )
+
+    assert_equal(
+        "V1.12 photon fixed-thickness CLI uses photon output",
+        photon_mode_output.call_count,
+        1,
+    )
+
+    assert_equal(
+        "V1.12 photon fixed-thickness CLI skips air-kerma output",
+        photon_mode_air_output.call_count,
+        0,
+    )
+
+    fixed_photon_result = (
+        photon_mode_output
+        .call_args
+        .args[0]
+    )
+
+    assert_equal(
+        "V1.12 photon fixed-thickness CLI stores no buildup total",
+        (
+            fixed_photon_result
+            .total_buildup_corrected_flux
+        ),
+        None,
+    )
+
+    with (
+        patch(
+            "main.get_material_library",
+            return_value=solver_materials,
+        ),
+        patch(
+            "main.get_source_from_user",
+            return_value=cs137_solver_source,
+        ),
+        patch(
+            "main.get_response_quantity_from_user",
+            return_value=(
+                "collision_air_kerma_rate"
+            ),
+        ),
+        patch(
+            "main.get_single_material_from_user",
+            return_value=solver_lead,
+        ),
+        patch(
+            "main.get_detector_distance_from_user",
+            return_value=100.0,
+        ),
+        patch(
+            "main.get_target_from_user",
+            return_value=solver_target,
+        ) as minimum_air_target_prompt,
+        patch(
+            "main.get_optional_calculation_max_thickness_from_user",
+            return_value=20.0,
+        ),
+        patch(
+            "main.get_apply_buildup_from_user",
+            return_value=True,
+        ) as minimum_air_buildup_prompt,
+        patch(
+            "main.print_air_kerma_minimum_thickness_result",
+        ) as minimum_air_output,
+        patch(
+            "main.print_minimum_thickness_result",
+        ) as minimum_photon_output,
+    ):
+        run_minimum_thickness_mode()
+
+    assert_equal(
+        "V1.12 minimum-thickness CLI passes response to target prompt",
+        (
+            minimum_air_target_prompt
+            .call_args
+            .args[0]
+        ),
+        "collision_air_kerma_rate",
+    )
+
+    assert_equal(
+        "V1.12 minimum-thickness CLI requests air-kerma buildup",
+        minimum_air_buildup_prompt.call_count,
+        1,
+    )
+
+    assert_equal(
+        "V1.12 minimum-thickness CLI uses air-kerma output",
+        minimum_air_output.call_count,
+        1,
+    )
+
+    assert_equal(
+        "V1.12 air-kerma minimum-thickness CLI skips photon output",
+        minimum_photon_output.call_count,
+        0,
+    )
+
+    cli_air_kerma_design = (
+        minimum_air_output
+        .call_args
+        .args[0]
+    )
+
+    assert_equal(
+        "V1.12 minimum-thickness CLI preserves buildup use",
+        cli_air_kerma_design.buildup_used,
+        True,
+    )
+
+    assert_less_than_or_equal(
+        "V1.12 minimum-thickness CLI satisfies air-kerma target",
+        (
+            cli_air_kerma_design
+            .final_air_kerma_rate_microgy_per_h
+        ),
+        1.0 + 1.0e-8,
+    )
+
+    assert_close(
+        "V1.12 minimum-thickness CLI reproduces Lead design",
+        cli_air_kerma_design.required_thickness,
+        buildup_solver_result.required_thickness,
+        1.0e-8,
+    )
+
+    cli_photon_target = FluxTarget(
+        target_flux=100.0
+    )
+
+    with (
+        patch(
+            "main.get_material_library",
+            return_value=solver_materials,
+        ),
+        patch(
+            "main.get_source_from_user",
+            return_value=cs137_solver_source,
+        ),
+        patch(
+            "main.get_response_quantity_from_user",
+            return_value="photon_fluence_rate",
+        ),
+        patch(
+            "main.get_single_material_from_user",
+            return_value=solver_lead,
+        ),
+        patch(
+            "main.get_detector_distance_from_user",
+            return_value=100.0,
+        ),
+        patch(
+            "main.get_target_from_user",
+            return_value=cli_photon_target,
+        ),
+        patch(
+            "main.get_optional_calculation_max_thickness_from_user",
+            return_value=20.0,
+        ),
+        patch(
+            "main.get_apply_buildup_from_user",
+            return_value=True,
+        ) as minimum_photon_buildup_prompt,
+        patch(
+            "main.print_air_kerma_minimum_thickness_result",
+        ) as photon_minimum_air_output,
+        patch(
+            "main.print_minimum_thickness_result",
+        ) as photon_minimum_output,
+    ):
+        run_minimum_thickness_mode()
+
+    assert_equal(
+        "V1.12 photon minimum-thickness CLI does not request exposure buildup",
+        minimum_photon_buildup_prompt.call_count,
+        0,
+    )
+
+    assert_equal(
+        "V1.12 photon minimum-thickness CLI uses photon output",
+        photon_minimum_output.call_count,
+        1,
+    )
+
+    assert_equal(
+        "V1.12 photon minimum-thickness CLI skips air-kerma output",
+        photon_minimum_air_output.call_count,
+        0,
+    )
+
+    cli_photon_design = (
+        photon_minimum_output
+        .call_args
+        .args[0]
+    )
+
+    assert_equal(
+        "V1.12 photon minimum-thickness CLI does not use buildup",
+        cli_photon_design.buildup_used,
+        False,
+    )
+
+    assert_less_than_or_equal(
+        "V1.12 photon minimum-thickness CLI satisfies fluence target",
+        cli_photon_design.final_flux,
+        100.0 + 1.0e-6,
+    )
+
+
+    # ------------------------------------------------------------
+    # Air-kerma material-comparison console output
+    # ------------------------------------------------------------
+
+    air_kerma_comparison_output_buffer = (
+        StringIO()
+    )
+
+    with redirect_stdout(
+        air_kerma_comparison_output_buffer
+    ):
+        print_air_kerma_material_comparison_result(
+            air_kerma_comparison
+        )
+
+    air_kerma_comparison_output_text = (
+        air_kerma_comparison_output_buffer
+        .getvalue()
+    )
+
+    air_kerma_comparison_output_requirements = [
+        (
+            "Collision air-kerma material "
+            "comparison result"
+        ),
+        (
+            "Single-material collision air-kerma "
+            "design comparison"
+        ),
+        (
+            "G-P exposure buildup requested: Yes"
+        ),
+        "Thickness (cm)",
+        "Final Air Kerma",
+        "Response Ratio",
+        "Final Air Kerma units: µGy/h",
+        "Lead",
+        "Tungsten",
+        "Polyethylene",
+        "PASS",
+        "FAILED",
+        "G-P",
+    ]
+
+    for required_text in (
+        air_kerma_comparison_output_requirements
+    ):
+        assert_equal(
+            "V1.12 air-kerma comparison output "
+            f"contains {required_text}",
+            (
+                required_text
+                in air_kerma_comparison_output_text
+            ),
+            True,
+        )
+
+    assert_equal(
+        "V1.12 air-kerma comparison output does not use Final Flux column",
+        (
+            "Final Flux"
+            in air_kerma_comparison_output_text
+        ),
+        False,
+    )
+
+    assert_equal(
+        "V1.12 air-kerma comparison output displays microGy per hour units",
+        (
+            "µGy/h"
+            in air_kerma_comparison_output_text
+        ),
+        True,
+    )
+
+    assert_equal(
+        "V1.12 air-kerma comparison output preserves strict failure",
+        (
+            polyethylene_air_kerma_candidate
+            .failure_reason
+            in air_kerma_comparison_output_text
+        ),
+        True,
+    )
+
+    # ------------------------------------------------------------
+    # Material-comparison CLI routing
+    # ------------------------------------------------------------
+
+    cli_comparison_materials = [
+        solver_materials["lead"],
+        solver_materials["tungsten"],
+        solver_materials["polyethylene"],
+    ]
+
+    with (
+        patch(
+            "main.get_material_library",
+            return_value=solver_materials,
+        ),
+        patch(
+            "main.get_source_from_user",
+            return_value=cs137_solver_source,
+        ),
+        patch(
+            "main.get_response_quantity_from_user",
+            return_value=(
+                "collision_air_kerma_rate"
+            ),
+        ),
+        patch(
+            "main.get_materials_for_comparison_from_user",
+            return_value=cli_comparison_materials,
+        ),
+        patch(
+            "main.get_detector_distance_from_user",
+            return_value=100.0,
+        ),
+        patch(
+            "main.get_target_from_user",
+            return_value=solver_target,
+        ) as comparison_air_target_prompt,
+        patch(
+            "main.get_optional_calculation_max_thickness_from_user",
+            return_value=20.0,
+        ),
+        patch(
+            "main.get_apply_buildup_from_user",
+            return_value=True,
+        ) as comparison_air_buildup_prompt,
+        patch(
+            "main.compare_materials_for_air_kerma_target",
+            return_value=air_kerma_comparison,
+        ) as air_kerma_comparison_function,
+        patch(
+            "main.compare_materials_for_target",
+        ) as photon_comparison_function,
+        patch(
+            "main.print_air_kerma_material_comparison_result",
+        ) as air_kerma_comparison_output,
+        patch(
+            "main.print_material_comparison_result",
+        ) as photon_comparison_output,
+    ):
+        run_material_comparison_mode()
+
+    assert_equal(
+        "V1.12 comparison CLI passes air-kerma response to target prompt",
+        (
+            comparison_air_target_prompt
+            .call_args
+            .args[0]
+        ),
+        "collision_air_kerma_rate",
+    )
+
+    assert_equal(
+        "V1.12 air-kerma comparison CLI requests buildup setting",
+        comparison_air_buildup_prompt.call_count,
+        1,
+    )
+
+    assert_equal(
+        "V1.12 air-kerma comparison CLI calls response-specific solver",
+        air_kerma_comparison_function.call_count,
+        1,
+    )
+
+    assert_equal(
+        "V1.12 air-kerma comparison CLI skips photon solver",
+        photon_comparison_function.call_count,
+        0,
+    )
+
+    assert_equal(
+        "V1.12 air-kerma comparison CLI uses dedicated output",
+        air_kerma_comparison_output.call_count,
+        1,
+    )
+
+    assert_equal(
+        "V1.12 air-kerma comparison CLI skips photon output",
+        photon_comparison_output.call_count,
+        0,
+    )
+
+    assert_equal(
+        "V1.12 air-kerma comparison CLI preserves comparison result",
+        (
+            air_kerma_comparison_output
+            .call_args
+            .args[0]
+        ),
+        air_kerma_comparison,
+    )
+
+    air_kerma_comparison_call = (
+        air_kerma_comparison_function
+        .call_args
+    )
+
+    assert_equal(
+        "V1.12 air-kerma comparison CLI passes source",
+        air_kerma_comparison_call.kwargs[
+            "source"
+        ],
+        cs137_solver_source,
+    )
+
+    assert_equal(
+        "V1.12 air-kerma comparison CLI passes selected materials",
+        air_kerma_comparison_call.kwargs[
+            "materials"
+        ],
+        cli_comparison_materials,
+    )
+
+    assert_close(
+        "V1.12 air-kerma comparison CLI passes detector distance",
+        air_kerma_comparison_call.kwargs[
+            "detector_distance_cm"
+        ],
+        100.0,
+        1.0e-12,
+    )
+
+    assert_equal(
+        "V1.12 air-kerma comparison CLI passes strict buildup request",
+        air_kerma_comparison_call.kwargs[
+            "apply_buildup"
+        ],
+        True,
+    )
+
+    assert_close(
+        "V1.12 air-kerma comparison CLI passes calculation limit",
+        air_kerma_comparison_call.kwargs[
+            "max_thickness_cm"
+        ],
+        20.0,
+        1.0e-12,
+    )
+
+    cli_photon_comparison_target = (
+        FluxTarget(
+            target_flux=100.0
+        )
+    )
+
+    cli_photon_comparison_result = (
+        compare_materials_for_target(
+            source=cs137_solver_source,
+            materials=cli_comparison_materials,
+            detector_distance=100.0,
+            target=cli_photon_comparison_target,
+            max_thickness=20.0,
+            apply_buildup=False,
+        )
+    )
+
+    with (
+        patch(
+            "main.get_material_library",
+            return_value=solver_materials,
+        ),
+        patch(
+            "main.get_source_from_user",
+            return_value=cs137_solver_source,
+        ),
+        patch(
+            "main.get_response_quantity_from_user",
+            return_value="photon_fluence_rate",
+        ),
+        patch(
+            "main.get_materials_for_comparison_from_user",
+            return_value=cli_comparison_materials,
+        ),
+        patch(
+            "main.get_detector_distance_from_user",
+            return_value=100.0,
+        ),
+        patch(
+            "main.get_target_from_user",
+            return_value=(
+                cli_photon_comparison_target
+            ),
+        ) as comparison_photon_target_prompt,
+        patch(
+            "main.get_optional_calculation_max_thickness_from_user",
+            return_value=20.0,
+        ),
+        patch(
+            "main.get_apply_buildup_from_user",
+            return_value=True,
+        ) as comparison_photon_buildup_prompt,
+        patch(
+            "main.compare_materials_for_air_kerma_target",
+        ) as photon_mode_air_comparison,
+        patch(
+            "main.compare_materials_for_target",
+            return_value=cli_photon_comparison_result,
+        ) as photon_mode_comparison,
+        patch(
+            "main.print_air_kerma_material_comparison_result",
+        ) as photon_mode_air_output,
+        patch(
+            "main.print_material_comparison_result",
+        ) as photon_mode_output,
+    ):
+        run_material_comparison_mode()
+
+    assert_equal(
+        "V1.12 photon comparison CLI passes response to target prompt",
+        (
+            comparison_photon_target_prompt
+            .call_args
+            .args[0]
+        ),
+        "photon_fluence_rate",
+    )
+
+    assert_equal(
+        "V1.12 photon comparison CLI does not request exposure buildup",
+        comparison_photon_buildup_prompt.call_count,
+        0,
+    )
+
+    assert_equal(
+        "V1.12 photon comparison CLI calls photon solver",
+        photon_mode_comparison.call_count,
+        1,
+    )
+
+    assert_equal(
+        "V1.12 photon comparison CLI skips air-kerma solver",
+        photon_mode_air_comparison.call_count,
+        0,
+    )
+
+    assert_equal(
+        "V1.12 photon comparison CLI uses photon output",
+        photon_mode_output.call_count,
+        1,
+    )
+
+    assert_equal(
+        "V1.12 photon comparison CLI skips air-kerma output",
+        photon_mode_air_output.call_count,
+        0,
+    )
+
+    assert_equal(
+        "V1.12 photon comparison CLI disables exposure buildup",
+        (
+            photon_mode_comparison
+            .call_args
+            .kwargs[
+                "apply_buildup"
+            ]
+        ),
+        False,
+    )
+
+    # ------------------------------------------------------------
+    # Material-optimization CLI routing
+    # ------------------------------------------------------------
+
+    cli_optimization_materials = [
+        solver_materials["lead"],
+        solver_materials["tungsten"],
+        solver_materials["polyethylene"],
+    ]
+
+    cli_optimization_constraints = (
+        DesignConstraints(
+            max_thickness_cm=20.0,
+            max_mass_per_area_g_per_cm2=120.0,
+        )
+    )
+
+    with (
+        patch(
+            "main.get_material_library",
+            return_value=solver_materials,
+        ),
+        patch(
+            "main.get_source_from_user",
+            return_value=cs137_solver_source,
+        ),
+        patch(
+            "main.get_response_quantity_from_user",
+            return_value=(
+                "collision_air_kerma_rate"
+            ),
+        ),
+        patch(
+            "main.get_materials_for_comparison_from_user",
+            return_value=cli_optimization_materials,
+        ),
+        patch(
+            "main.get_detector_distance_from_user",
+            return_value=100.0,
+        ),
+        patch(
+            "main.get_target_from_user",
+            return_value=solver_target,
+        ) as optimization_air_target_prompt,
+        patch(
+            "main.get_optional_calculation_max_thickness_from_user",
+            return_value=20.0,
+        ),
+        patch(
+            "main.get_design_constraints_from_user",
+            return_value=(
+                cli_optimization_constraints
+            ),
+        ),
+        patch(
+            "main.get_optimization_mode_from_user",
+            return_value="minimum_mass",
+        ),
+        patch(
+            "main.get_optimization_weights_from_user",
+        ) as air_optimization_weight_prompt,
+        patch(
+            "main.get_apply_buildup_from_user",
+            return_value=True,
+        ) as air_optimization_buildup_prompt,
+        patch(
+            "main.optimize_air_kerma_material_selection",
+            return_value=(
+                air_kerma_minimum_mass_result
+            ),
+        ) as air_kerma_optimizer,
+        patch(
+            "main.optimize_material_selection",
+        ) as photon_optimizer,
+        patch(
+            "main.print_optimized_design_result",
+        ) as air_optimization_output,
+    ):
+        run_material_optimization_mode()
+
+    assert_equal(
+        "V1.12 optimization CLI passes air-kerma response to target prompt",
+        (
+            optimization_air_target_prompt
+            .call_args
+            .args[0]
+        ),
+        "collision_air_kerma_rate",
+    )
+
+    assert_equal(
+        "V1.12 minimum-mass air-kerma optimization does not request weights",
+        air_optimization_weight_prompt.call_count,
+        0,
+    )
+
+    assert_equal(
+        "V1.12 air-kerma optimization requests buildup setting",
+        air_optimization_buildup_prompt.call_count,
+        1,
+    )
+
+    assert_equal(
+        "V1.12 air-kerma optimization calls response-specific optimizer",
+        air_kerma_optimizer.call_count,
+        1,
+    )
+
+    assert_equal(
+        "V1.12 air-kerma optimization skips photon optimizer",
+        photon_optimizer.call_count,
+        0,
+    )
+
+    assert_equal(
+        "V1.12 air-kerma optimization uses engineering output",
+        air_optimization_output.call_count,
+        1,
+    )
+
+    assert_equal(
+        "V1.12 air-kerma optimization preserves result",
+        (
+            air_optimization_output
+            .call_args
+            .args[0]
+        ),
+        air_kerma_minimum_mass_result,
+    )
+
+    air_kerma_optimizer_call = (
+        air_kerma_optimizer.call_args
+    )
+
+    assert_equal(
+        "V1.12 air-kerma optimization passes source",
+        air_kerma_optimizer_call.kwargs[
+            "source"
+        ],
+        cs137_solver_source,
+    )
+
+    assert_equal(
+        "V1.12 air-kerma optimization passes selected materials",
+        air_kerma_optimizer_call.kwargs[
+            "materials"
+        ],
+        cli_optimization_materials,
+    )
+
+    assert_close(
+        "V1.12 air-kerma optimization passes detector distance",
+        air_kerma_optimizer_call.kwargs[
+            "detector_distance"
+        ],
+        100.0,
+        1.0e-12,
+    )
+
+    assert_equal(
+        "V1.12 air-kerma optimization passes target",
+        air_kerma_optimizer_call.kwargs[
+            "target"
+        ],
+        solver_target,
+    )
+
+    assert_equal(
+        "V1.12 air-kerma optimization passes constraints",
+        air_kerma_optimizer_call.kwargs[
+            "constraints"
+        ],
+        cli_optimization_constraints,
+    )
+
+    assert_equal(
+        "V1.12 air-kerma optimization passes minimum-mass objective",
+        air_kerma_optimizer_call.kwargs[
+            "optimization_mode"
+        ],
+        "minimum_mass",
+    )
+
+    assert_equal(
+        "V1.12 air-kerma optimization passes no weights",
+        air_kerma_optimizer_call.kwargs[
+            "weights"
+        ],
+        None,
+    )
+
+    assert_equal(
+        "V1.12 air-kerma optimization passes strict buildup request",
+        air_kerma_optimizer_call.kwargs[
+            "apply_buildup"
+        ],
+        True,
+    )
+
+    assert_close(
+        "V1.12 air-kerma optimization passes calculation limit",
+        air_kerma_optimizer_call.kwargs[
+            "calculation_max_thickness"
+        ],
+        20.0,
+        1.0e-12,
+    )
+
+    cli_air_optimization_best_candidate = (
+        air_optimization_output
+        .call_args
+        .args[0]
+        .best_candidate
+    )
+
+    if cli_air_optimization_best_candidate is None:
+        raise AssertionError(
+            "V1.12 CLI air-kerma optimization "
+            "did not preserve a selected design."
+        )
+
+    assert_equal(
+        "V1.12 CLI minimum-mass air-kerma optimization selects Lead",
+        (
+            cli_air_optimization_best_candidate
+            .base_candidate
+            .material
+            .key
+        ),
+        "lead",
+    )
+
+    cli_photon_optimization_target = (
+        FluxTarget(
+            target_flux=100.0
+        )
+    )
+
+    cli_photon_optimization_result = (
+        optimize_material_selection(
+            source=cs137_solver_source,
+            materials=cli_optimization_materials,
+            detector_distance=100.0,
+            target=cli_photon_optimization_target,
+            constraints=(
+                cli_optimization_constraints
+            ),
+            optimization_mode="minimum_mass",
+            calculation_max_thickness=20.0,
+            apply_buildup=False,
+        )
+    )
+
+    with (
+        patch(
+            "main.get_material_library",
+            return_value=solver_materials,
+        ),
+        patch(
+            "main.get_source_from_user",
+            return_value=cs137_solver_source,
+        ),
+        patch(
+            "main.get_response_quantity_from_user",
+            return_value="photon_fluence_rate",
+        ),
+        patch(
+            "main.get_materials_for_comparison_from_user",
+            return_value=cli_optimization_materials,
+        ),
+        patch(
+            "main.get_detector_distance_from_user",
+            return_value=100.0,
+        ),
+        patch(
+            "main.get_target_from_user",
+            return_value=(
+                cli_photon_optimization_target
+            ),
+        ) as photon_optimization_target_prompt,
+        patch(
+            "main.get_optional_calculation_max_thickness_from_user",
+            return_value=20.0,
+        ),
+        patch(
+            "main.get_design_constraints_from_user",
+            return_value=(
+                cli_optimization_constraints
+            ),
+        ),
+        patch(
+            "main.get_optimization_mode_from_user",
+            return_value="minimum_mass",
+        ),
+        patch(
+            "main.get_optimization_weights_from_user",
+        ) as photon_optimization_weight_prompt,
+        patch(
+            "main.get_apply_buildup_from_user",
+            return_value=True,
+        ) as photon_optimization_buildup_prompt,
+        patch(
+            "main.optimize_air_kerma_material_selection",
+        ) as photon_mode_air_optimizer,
+        patch(
+            "main.optimize_material_selection",
+            return_value=(
+                cli_photon_optimization_result
+            ),
+        ) as photon_mode_optimizer,
+        patch(
+            "main.print_optimized_design_result",
+        ) as photon_optimization_output,
+    ):
+        run_material_optimization_mode()
+
+    assert_equal(
+        "V1.12 photon optimization passes response to target prompt",
+        (
+            photon_optimization_target_prompt
+            .call_args
+            .args[0]
+        ),
+        "photon_fluence_rate",
+    )
+
+    assert_equal(
+        "V1.12 minimum-mass photon optimization does not request weights",
+        photon_optimization_weight_prompt.call_count,
+        0,
+    )
+
+    assert_equal(
+        "V1.12 photon optimization does not request exposure buildup",
+        photon_optimization_buildup_prompt.call_count,
+        0,
+    )
+
+    assert_equal(
+        "V1.12 photon optimization calls photon optimizer",
+        photon_mode_optimizer.call_count,
+        1,
+    )
+
+    assert_equal(
+        "V1.12 photon optimization skips air-kerma optimizer",
+        photon_mode_air_optimizer.call_count,
+        0,
+    )
+
+    assert_equal(
+        "V1.12 photon optimization uses engineering output",
+        photon_optimization_output.call_count,
+        1,
+    )
+
+    assert_equal(
+        "V1.12 photon optimization disables exposure buildup",
+        (
+            photon_mode_optimizer
+            .call_args
+            .kwargs[
+                "apply_buildup"
+            ]
+        ),
+        False,
+    )
+
+    cli_balanced_weights = (
+        OptimizationWeights(
+            thickness_weight=1.0,
+            mass_weight=2.0,
+            cost_weight=3.0,
+        )
+    )
+
+    with (
+        patch(
+            "main.get_material_library",
+            return_value=solver_materials,
+        ),
+        patch(
+            "main.get_source_from_user",
+            return_value=cs137_solver_source,
+        ),
+        patch(
+            "main.get_response_quantity_from_user",
+            return_value=(
+                "collision_air_kerma_rate"
+            ),
+        ),
+        patch(
+            "main.get_materials_for_comparison_from_user",
+            return_value=cli_optimization_materials,
+        ),
+        patch(
+            "main.get_detector_distance_from_user",
+            return_value=100.0,
+        ),
+        patch(
+            "main.get_target_from_user",
+            return_value=solver_target,
+        ),
+        patch(
+            "main.get_optional_calculation_max_thickness_from_user",
+            return_value=20.0,
+        ),
+        patch(
+            "main.get_design_constraints_from_user",
+            return_value=(
+                cli_optimization_constraints
+            ),
+        ),
+        patch(
+            "main.get_optimization_mode_from_user",
+            return_value="balanced",
+        ),
+        patch(
+            "main.get_optimization_weights_from_user",
+            return_value=cli_balanced_weights,
+        ) as balanced_weight_prompt,
+        patch(
+            "main.get_apply_buildup_from_user",
+            return_value=True,
+        ),
+        patch(
+            "main.optimize_air_kerma_material_selection",
+            return_value=air_kerma_balanced_result,
+        ) as balanced_air_optimizer,
+        patch(
+            "main.print_optimized_design_result",
+        ),
+    ):
+        run_material_optimization_mode()
+
+    assert_equal(
+        "V1.12 balanced air-kerma optimization requests weights",
+        balanced_weight_prompt.call_count,
+        1,
+    )
+
+    assert_equal(
+        "V1.12 balanced air-kerma optimization passes weights",
+        (
+            balanced_air_optimizer
+            .call_args
+            .kwargs[
+                "weights"
+            ]
+        ),
+        cli_balanced_weights,
+    )
+
+    assert_equal(
+        "V1.12 balanced air-kerma optimization passes objective",
+        (
+            balanced_air_optimizer
+            .call_args
+            .kwargs[
+                "optimization_mode"
+            ]
+        ),
+        "balanced",
+    )
+
+    # ------------------------------------------------------------
+    # Response-aware engineering optimization output
+    # ------------------------------------------------------------
+
+    air_kerma_optimization_output_buffer = (
+        StringIO()
+    )
+
+    with redirect_stdout(
+        air_kerma_optimization_output_buffer
+    ):
+        print_optimized_design_result(
+            air_kerma_minimum_mass_result
+        )
+
+    air_kerma_optimization_output_text = (
+        air_kerma_optimization_output_buffer
+        .getvalue()
+    )
+
+    air_kerma_optimization_output_requirements = [
+        "Optimized material selection",
+        "Best material: Lead",
+        (
+            "Selected final G-P exposure-buildup-"
+            "adjusted collision air-kerma rate:"
+        ),
+        "Selected final response ratio:",
+        "µGy/h",
+        "Lead",
+        "Tungsten",
+        "Polyethylene",
+        "Unavailable",
+        "FAILED",
+    ]
+
+    for required_text in (
+        air_kerma_optimization_output_requirements
+    ):
+        assert_equal(
+            "V1.12 air-kerma optimization output "
+            f"contains {required_text}",
+            (
+                required_text
+                in air_kerma_optimization_output_text
+            ),
+            True,
+        )
+
+    # ------------------------------------------------------------
+    # Response-aware engineering optimization output
+    # ------------------------------------------------------------
+
+    air_kerma_optimization_output_buffer = (
+        StringIO()
+    )
+
+    with redirect_stdout(
+        air_kerma_optimization_output_buffer
+    ):
+        print_optimized_design_result(
+            air_kerma_minimum_mass_result
+        )
+
+    air_kerma_optimization_output_text = (
+        air_kerma_optimization_output_buffer
+        .getvalue()
+    )
+
+    air_kerma_optimization_output_requirements = [
+        "Optimized material selection",
+        "Best material: Lead",
+        (
+            "Selected final G-P exposure-buildup-"
+            "adjusted collision air-kerma rate:"
+        ),
+        "Selected final response ratio:",
+        "µGy/h",
+        "Lead",
+        "Tungsten",
+        "Polyethylene",
+        "Unavailable",
+        "FAILED",
+    ]
+
+    for required_text in (
+        air_kerma_optimization_output_requirements
+    ):
+        assert_equal(
+            "V1.12 air-kerma optimization output "
+            f"contains {required_text}",
+            (
+                required_text
+                in air_kerma_optimization_output_text
+            ),
+            True,
+        )
+
+    strict_optimization_output_buffer = (
+        StringIO()
+    )
+
+    with redirect_stdout(
+        strict_optimization_output_buffer
+    ):
+        print_optimized_design_result(
+            strict_air_kerma_failure_result
+        )
+
+    strict_optimization_output_text = (
+        strict_optimization_output_buffer
+        .getvalue()
+    )
+
+    strict_output_requirements = [
+        "Best material: None",
+        "Polyethylene",
+        "Unavailable",
+        "FAILED",
+        "requires valid G-P exposure buildup",
+    ]
+
+    for required_text in strict_output_requirements:
+        assert_equal(
+            "V1.12 strict optimization output "
+            f"contains {required_text}",
+            (
+                required_text
+                in strict_optimization_output_text
+            ),
+            True,
+        )
+
+    assert_equal(
+        "V1.12 strict failed candidate is not displayed as fallback",
+        (
+            "Fallback"
+            in strict_optimization_output_text
+        ),
+        False,
+    )
+
+    uncollided_warning_optimization_result = (
+        optimize_air_kerma_material_selection(
+            source=cs137_solver_source,
+            materials=[
+                solver_lead,
+            ],
+            detector_distance=100.0,
+            target=AirKermaRateTarget(
+                target_air_kerma_rate_microgy_per_h=(
+                    1.0e6
+                )
+            ),
+            constraints=DesignConstraints(),
+            optimization_mode="minimum_mass",
+            calculation_max_thickness=20.0,
+            apply_buildup=False,
+        )
+    )
+
+    uncollided_warning_output_buffer = (
+        StringIO()
+    )
+
+    with redirect_stdout(
+        uncollided_warning_output_buffer
+    ):
+        print_optimized_design_result(
+            uncollided_warning_optimization_result
+        )
+
+    uncollided_warning_output_text = (
+        uncollided_warning_output_buffer
+        .getvalue()
+    )
+
+    assert_equal(
+        "V1.12 uncollided optimization output identifies response",
+        (
+            "Selected final uncollided collision "
+            "air-kerma rate:"
+            in uncollided_warning_output_text
+        ),
+        True,
+    )
+
+    assert_equal(
+        "V1.12 uncollided air-kerma warning is not labeled fallback",
+        (
+            "Fallback"
+            in uncollided_warning_output_text
+        ),
+        False,
+    )
+
+    assert_equal(
+        "V1.12 uncollided air-kerma output reports buildup not requested",
+        (
+            "Buildup requested: No"
+            in uncollided_warning_output_text
+        ),
+        True,
+    )
+
+    legacy_fallback_optimization_result = (
+        optimize_material_selection(
+            source=cs137_solver_source,
+            materials=[
+                solver_materials[
+                    "concrete_barite"
+                ],
+            ],
+            detector_distance=100.0,
+            target=FluxTarget(
+                target_flux=100.0
+            ),
+            constraints=DesignConstraints(),
+            optimization_mode="minimum_thickness",
+            calculation_max_thickness=100.0,
+            apply_buildup=True,
+        )
+    )
+
+    legacy_fallback_output_buffer = (
+        StringIO()
+    )
+
+    with redirect_stdout(
+        legacy_fallback_output_buffer
+    ):
+        print_optimized_design_result(
+            legacy_fallback_optimization_result
+        )
+
+    legacy_fallback_output_text = (
+        legacy_fallback_output_buffer
+        .getvalue()
+    )
+
+    assert_equal(
+        "V1.12 output preserves legacy photon fallback display",
+        (
+            "Fallback"
+            in legacy_fallback_output_text
+        ),
+        True,
+    )
+
+    # ------------------------------------------------------------
+    # Remaining photon-response terminology
+    # ------------------------------------------------------------
+
+    assert_equal(
+        "V1.12 photon target description identifies uncollided fluence rate",
+        get_target_description(
+            FluxTarget(
+                target_flux=100.0
+            ),
+            apply_buildup=False,
+        ),
+        (
+            "Uncollided photon fluence-rate target "
+            "<= 100 photons/cm^2/s"
+        ),
+    )
+
+    assert_equal(
+        "V1.12 historical buildup target description identifies proxy",
+        get_target_description(
+            FluxTarget(
+                target_flux=100.0
+            ),
+            apply_buildup=True,
+        ),
+        (
+            "Legacy G-P exposure-buildup-adjusted "
+            "photon-response proxy target <= 100"
+        ),
+    )
+
+    photon_minimum_output_buffer = (
+        StringIO()
+    )
+
+    with redirect_stdout(
+        photon_minimum_output_buffer
+    ):
+        print_minimum_thickness_result(
+            cli_photon_design
+        )
+
+    photon_minimum_output_text = (
+        photon_minimum_output_buffer
+        .getvalue()
+    )
+
+    photon_minimum_requirements = [
+        (
+            "Photon-response minimum shielding "
+            "thickness result"
+        ),
+        (
+            "Final selected-response ratio:"
+        ),
+        (
+            "Final target-comparison uncollided "
+            "photon fluence rate:"
+        ),
+        (
+            "Final uncollided photon "
+            "fluence rate:"
+        ),
+        "photons/cm^2/s",
+    ]
+
+    for required_text in (
+        photon_minimum_requirements
+    ):
+        assert_equal(
+            "V1.12 photon minimum output "
+            f"contains {required_text}",
+            (
+                required_text
+                in photon_minimum_output_text
+            ),
+            True,
+        )
+
+    assert_equal(
+        "V1.12 photon minimum output removes generic flux label",
+        (
+            "Final target-comparison flux:"
+            in photon_minimum_output_text
+        ),
+        False,
+    )
+
+    photon_comparison_output_buffer = (
+        StringIO()
+    )
+
+    with redirect_stdout(
+        photon_comparison_output_buffer
+    ):
+        print_material_comparison_result(
+            cli_photon_comparison_result
+        )
+
+    photon_comparison_output_text = (
+        photon_comparison_output_buffer
+        .getvalue()
+    )
+
+    photon_comparison_requirements = [
+        (
+            "Photon-response material "
+            "comparison result"
+        ),
+        "Final Fluence Rate",
+        "Response Basis",
+        "Uncollided fluence",
+        "photons/cm^2/s",
+    ]
+
+    for required_text in (
+        photon_comparison_requirements
+    ):
+        assert_equal(
+            "V1.12 photon comparison output "
+            f"contains {required_text}",
+            (
+                required_text
+                in photon_comparison_output_text
+            ),
+            True,
+        )
+
+    assert_equal(
+        "V1.12 photon comparison output removes Final Flux column",
+        (
+            "Final Flux"
+            in photon_comparison_output_text
+        ),
+        False,
+    )
 
 
 if __name__ == "__main__":

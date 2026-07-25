@@ -1,17 +1,18 @@
-# Source-level shielding calculation utilities.
+# Legacy-compatible photon source calculation utilities.
 #
-# This module connects source definitions to the underlying attenuation calculator.
-# The lower-level calculator works with one photon energy and one photon emission
-# rate at a time. This module adds:
-#   - manual monoenergetic source support
-#   - isotope source support
+# This module connects manual and isotope source definitions to the
+# narrow-beam attenuation calculator. It provides:
+#   - manual monoenergetic source calculations
 #   - line-by-line isotope calculations
-#   - source-level flux summation
-#   - optional G-P buildup application
+#   - source-level uncollided photon fluence-rate aggregation
+#   - historical G-P exposure-buildup-scaled response fields
 #
-# Narrow-beam uncollided flux is always reported when mathematically valid.
-# G-P buildup is optional and may be skipped with a warning if the model is
-# unsupported or outside the valid 40 MFP range.
+# Current public photon-response CLI paths use the explicitly uncollided
+# result and do not apply exposure buildup to photon-number fluence.
+#
+# The historical buildup fields remain for regression compatibility with
+# V1.06 through V1.11 scenarios. They are response proxies and are not
+# interpreted as physical photon-number fluence rates.
 
 
 from buildup import (
@@ -37,9 +38,14 @@ from source_models import (
 
 
 def calculate_buildup_for_result(result: ShieldingResult) -> None:
-    # Apply G-P exposure buildup correction to a single ShieldingResult.
-    # V1.06 only supports G-P buildup for one homogeneous shielding layer.
-    # Multilayer buildup requires a more advanced treatment and is not included yet.
+    # Populate the historical G-P exposure-buildup-scaled response fields
+    # on one ShieldingResult.
+    #
+    # This legacy pathway is retained for regression compatibility.
+    # The resulting scaled value is a response proxy, not a physical
+    # photon-number fluence rate.
+    #
+    # Only one homogeneous shielding layer is supported.
 
     if len(result.layers) != 1:
         raise ValueError("G-P buildup mode currently supports only one shielding layer.")

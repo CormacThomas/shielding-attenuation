@@ -1,14 +1,16 @@
 # Reproducible shielding scenario models.
 #
-# V1.11 introduces serializable input specifications that describe a
-# shielding problem independently of the calculation backend.
-#
-# This module initially defines:
-#   - manual photon-source specifications
-#   - isotope-source specifications
+# This module defines serializable specifications for:
+#   - manual and isotope photon sources
+#   - response targets
+#   - concentric spherical geometry
+#   - candidate material sets
+#   - engineering constraints
+#   - optimization objectives and weights
 #   - deterministic calculation settings
 #
-# Runtime source objects are created later by scenario_runner.py.
+# scenario_runner.py converts these specifications into validated
+# runtime calculation objects.
 
 
 from dataclasses import dataclass, field

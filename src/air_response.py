@@ -1,15 +1,19 @@
-# V1.12 deterministic air-response calculations.
+# V1.12 deterministic collision-air-kerma calculations.
 #
-# This module currently provides:
-#   - exact dry-air coefficient lookup
-#   - absorption-edge-aware lookup
-#   - log-log interpolation of mu_en/rho
+# This module provides:
+#   - exact and absorption-edge-aware dry-air coefficient lookup
+#   - log-log interpolation of dry-air mu_en/rho
+#   - photon energy-fluence-rate calculations
+#   - collision air-kerma-rate calculations
+#   - line-by-line manual and isotope source responses
+#   - optional G-P exposure-buildup adjustment
+#   - source-level response aggregation
 #
-# Later steps will add:
-#   - energy fluence
-#   - collision air-kerma rate
-#   - line-by-line source response
-#   - exposure-buildup adjustment
+# Canonical internal air-kerma-rate unit:
+#   Gy/s
+#
+# Primary engineering display unit:
+#   microGy/h
 
 
 import math
@@ -344,8 +348,8 @@ def calculate_gp_exposure_buildup_factor_for_shielding_result(
     # ShieldingResult. It returns only the dimensionless exposure
     # buildup factor.
     #
-    # The factor will later be applied to the compatible collision
-    # air-kerma response.
+    # The caller applies the returned factor only to the compatible
+    # collision-air-kerma response.
 
     if len(shielding_result.layers) != 1:
         raise ValueError(

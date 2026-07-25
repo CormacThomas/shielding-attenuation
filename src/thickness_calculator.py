@@ -51,19 +51,87 @@ AirKermaSource = (
     | IsotopeSource
 )
 
-def get_target_description(target: Target) -> str:
-    # Convert a target object into a readable description for output/reporting.
+def get_target_description(
+    target: Target,
+    apply_buildup: bool = False,
+) -> str:
+    # Describe the exact response constrained by a legacy-compatible
+    # photon minimum-thickness calculation.
+    #
+    # Current public photon CLI paths always use apply_buildup=False.
+    # The buildup-aware descriptions remain only for historical
+    # regression compatibility.
 
-    if isinstance(target, TransmissionTarget):
-        return f"Transmission target <= {target.target_transmission:.6g}"
+    if not apply_buildup:
+        if isinstance(
+            target,
+            TransmissionTarget,
+        ):
+            return (
+                "Uncollided transmission target <= "
+                f"{target.target_transmission:.6g}"
+            )
 
-    if isinstance(target, ReductionFactorTarget):
-        return f"Reduction factor target >= {target.reduction_factor:.6g}"
+        if isinstance(
+            target,
+            ReductionFactorTarget,
+        ):
+            return (
+                "Uncollided photon fluence-rate "
+                "reduction factor >= "
+                f"{target.reduction_factor:.6g}"
+            )
 
-    if isinstance(target, FluxTarget):
-        return f"Flux target <= {target.target_flux:.6g} photons/cm^2/s"
+        if isinstance(
+            target,
+            FluxTarget,
+        ):
+            return (
+                "Uncollided photon fluence-rate target <= "
+                f"{target.target_flux:.6g} photons/cm^2/s"
+            )
 
-    raise ValueError("Unsupported target type.")
+        raise ValueError(
+            "Unsupported target type."
+        )
+
+    # This branch documents the historical V1.06–V1.11 behavior.
+    # Exposure buildup is not interpreted as a photon-number fluence
+    # correction in the revised V1.12 public pathways.
+
+    if isinstance(
+        target,
+        TransmissionTarget,
+    ):
+        return (
+            "Legacy G-P exposure-buildup-adjusted "
+            "response-ratio target <= "
+            f"{target.target_transmission:.6g}"
+        )
+
+    if isinstance(
+        target,
+        ReductionFactorTarget,
+    ):
+        return (
+            "Legacy G-P exposure-buildup-adjusted "
+            "response reduction factor >= "
+            f"{target.reduction_factor:.6g}"
+        )
+
+    if isinstance(
+        target,
+        FluxTarget,
+    ):
+        return (
+            "Legacy G-P exposure-buildup-adjusted "
+            "photon-response proxy target <= "
+            f"{target.target_flux:.6g}"
+        )
+
+    raise ValueError(
+        "Unsupported target type."
+    )
 
 
 def get_air_kerma_target_description(
@@ -926,7 +994,10 @@ def calculate_manual_minimum_thickness(
     if max_iterations <= 0:
         raise ValueError("Maximum iterations must be greater than zero.")
 
-    target_description = get_target_description(target)
+    target_description = get_target_description(
+        target,
+        apply_buildup=apply_buildup,
+    )
     warnings = []
 
     unshielded_flux = calculate_unshielded_manual_flux(
@@ -1122,7 +1193,10 @@ def calculate_isotope_minimum_thickness(
     if max_iterations <= 0:
         raise ValueError("Maximum iterations must be greater than zero.")
 
-    target_description = get_target_description(target)
+    target_description = get_target_description(
+        target,
+        apply_buildup=apply_buildup,
+    )
     warnings = []
 
     unshielded_flux = calculate_unshielded_isotope_flux(

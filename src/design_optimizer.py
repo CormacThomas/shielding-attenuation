@@ -657,7 +657,10 @@ def compare_materials_for_target(
     sorted_candidates = sort_material_candidates(candidates)
 
     return MaterialComparisonResult(
-        get_target_description(target),
+        get_target_description(
+            target,
+            apply_buildup=apply_buildup,
+        ),
         apply_buildup,
         sorted_candidates,
     )

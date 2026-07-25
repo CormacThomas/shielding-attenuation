@@ -3,10 +3,14 @@
 # This module gathers and converts user input for the CLI.
 # It should not perform physics calculations.
 #
-# Current limitation:
-# Invalid input generally raises ValueError and exits the program.
-# Future CLI polish should replace this with repeated prompts.
-from target_models import FluxTarget, ReductionFactorTarget, TransmissionTarget
+# Invalid input currently raises ValueError and exits the program
+# rather than repeating the prompt.
+from target_models import (
+    AirKermaRateTarget,
+    FluxTarget,
+    ReductionFactorTarget,
+    TransmissionTarget,
+)
 from models import Layer, Material
 from source_library import create_isotope_source, get_available_isotopes
 from source_models import IsotopeSource, ManualPhotonSource
@@ -16,6 +20,12 @@ from optimization_models import (
     OptimizationMode,
     OptimizationWeights,
 )
+from typing import Literal
+
+ResponseQuantity = Literal[
+    "photon_fluence_rate",
+    "collision_air_kerma_rate",
+]
 
 def get_layers_from_user(materials: dict[str, Material]) -> list[Layer]:
     print("Available materials:")
@@ -57,7 +67,10 @@ def get_source_strength_from_user() -> float:
 
 
 def get_apply_buildup_from_user() -> bool:
-    answer = input("Apply G-P buildup correction? (y/n): ").lower().strip()
+    answer = input(
+        "Apply G-P exposure buildup to the "
+        "collision-air-kerma response? (y/n): "
+    ).lower().strip()
 
     if answer == "y" or answer == "yes":
         return True
@@ -130,9 +143,37 @@ def get_source_from_user() -> ManualPhotonSource | IsotopeSource:
     raise ValueError("Invalid source mode.")
 
 
+def get_response_quantity_from_user() -> ResponseQuantity:
+    # Select the physical response quantity used by the calculation.
+    #
+    # photon_fluence_rate:
+    #   Preserves the existing narrow-beam photon-number pathway.
+    #
+    # collision_air_kerma_rate:
+    #   Uses the V1.12 dry-air response-coefficient pathway.
+
+    print("\nResponse quantities:")
+    print("1. Uncollided photon fluence rate")
+    print("2. Collision air-kerma rate")
+
+    answer = input(
+        "Select response quantity (1/2): "
+    ).strip()
+
+    if answer == "1":
+        return "photon_fluence_rate"
+
+    if answer == "2":
+        return "collision_air_kerma_rate"
+
+    raise ValueError(
+        "Please enter 1 or 2."
+    )
+
+
 def get_calculation_mode_from_user() -> str:
     print("\nCalculation modes:")
-    print("1. Calculate shielded flux for a chosen thickness")
+    print("1. Calculate shielding response for a chosen thickness")
     print("2. Calculate required shielding thickness for a target")
     print("3. Compare required shielding thickness across materials")
     print("4. Optimize material selection using engineering constraints")
@@ -169,36 +210,95 @@ def get_single_material_from_user(materials: dict[str, Material]) -> Material:
     return materials[material_name]
 
 
-def get_target_from_user() -> TransmissionTarget | ReductionFactorTarget | FluxTarget:
-    print("\nTarget types:")
+def get_target_from_user(
+    response_quantity: ResponseQuantity,
+) -> (
+    AirKermaRateTarget
+    | TransmissionTarget
+    | ReductionFactorTarget
+    | FluxTarget
+):
+    # Collect a target compatible with the selected response quantity.
+    #
+    # Collision air kerma currently supports an explicit absolute
+    # air-kerma-rate target in microGy per hour.
+    #
+    # The legacy photon-number pathway retains its existing transmission,
+    # reduction-factor, and photon fluence-rate target options.
+
+    if response_quantity == "collision_air_kerma_rate":
+        print("\nCollision air-kerma target:")
+        print(
+            "The target is entered in microgray per hour "
+            "(µGy/h)."
+        )
+
+        target_air_kerma_rate = float(
+            input(
+                "Enter target collision air-kerma rate "
+                "in µGy/h: "
+            )
+        )
+
+        return AirKermaRateTarget(
+            target_air_kerma_rate_microgy_per_h=(
+                target_air_kerma_rate
+            )
+        )
+
+    if response_quantity != "photon_fluence_rate":
+        raise ValueError(
+            "Unsupported response quantity."
+        )
+
+    print("\nPhoton-response target types:")
     print("1. Transmission target")
     print("2. Reduction factor target")
-    print("3. Flux target")
+    print("3. Uncollided photon fluence-rate target")
 
-    target_mode = input("Select target type (1/2/3): ").strip()
+    target_mode = input(
+        "Select target type (1/2/3): "
+    ).strip()
 
     if target_mode == "1":
         target_transmission = float(
-            input("Enter target transmission fraction, ex: 0.01 for 1%: ")
+            input(
+                "Enter target transmission fraction, "
+                "ex: 0.01 for 1%: "
+            )
         )
 
-        return TransmissionTarget(target_transmission)
+        return TransmissionTarget(
+            target_transmission
+        )
 
     if target_mode == "2":
         reduction_factor = float(
-            input("Enter reduction factor, ex: 1000 for 1000x reduction: ")
+            input(
+                "Enter reduction factor, "
+                "ex: 1000 for 1000x reduction: "
+            )
         )
 
-        return ReductionFactorTarget(reduction_factor)
+        return ReductionFactorTarget(
+            reduction_factor
+        )
 
     if target_mode == "3":
         target_flux = float(
-            input("Enter target uncollided flux in photons/cm^2/s: ")
+            input(
+                "Enter target uncollided photon fluence "
+                "rate in photons/cm^2/s: "
+            )
         )
 
-        return FluxTarget(target_flux)
+        return FluxTarget(
+            target_flux
+        )
 
-    raise ValueError("Please enter 1, 2, or 3.")
+    raise ValueError(
+        "Please enter 1, 2, or 3."
+    )
 
 
 def get_optional_calculation_max_thickness_from_user() -> float | None:

@@ -16,9 +16,9 @@
 #   - the first entry is immediately below the edge
 #   - the second entry is immediately above the edge
 #
-# Both values are preserved in their published order. Later interpolation
-# code must avoid interpolating across a zero-width duplicate-energy interval.
-
+# Both values are preserved in their published order. The lookup logic in
+# air_response.py avoids interpolation across the zero-width duplicate-energy
+# interval.
 
 from air_response_models import AirKermaCoefficient
 

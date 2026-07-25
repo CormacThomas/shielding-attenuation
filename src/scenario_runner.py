@@ -1,17 +1,19 @@
-# V1.11 reproducible scenario execution.
+# Reproducible deterministic scenario execution.
 #
-# This module converts backend-independent scenario specifications into the
-# existing validated runtime objects used by the deterministic calculator.
+# This module converts backend-independent scenario specifications into
+# validated runtime objects and routes material-optimization scenarios
+# into the correct response-specific optimizer.
 #
 # Responsibilities:
-#   - convert source specifications into runtime source objects
-#   - resolve stable material keys through the material library
-#   - pass scenario inputs into the V1.09 optimizer
+#   - create runtime manual or isotope sources
+#   - resolve stable material keys
+#   - route AirKermaRateTarget to the V1.12 air-kerma optimizer
+#   - route legacy photon targets to the compatible photon optimizer
 #
 # This module does not:
 #   - read or write JSON
 #   - perform attenuation calculations directly
-#   - contain optimization formulas
+#   - implement optimization formulas
 #   - generate OpenMC models
 
 

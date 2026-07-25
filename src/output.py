@@ -15,7 +15,9 @@ from target_models import (
 from models import ShieldingResult
 from source_models import SourceCalculationResult
 from design_optimizer import (
+    AirKermaMaterialComparisonResult,
     MaterialComparisonResult,
+    AirKermaMaterialDesignCandidate,
 )
 from optimization_models import (
     OptimizationBaseCandidate,
@@ -30,87 +32,268 @@ from unit_conversions import (
     convert_gy_per_s_to_microgy_per_h,
 )
 
-def print_results(result: ShieldingResult) -> None:
-    if result.buildup_factor is not None and result.buildup_corrected_flux is not None:
-        print("Calculation mode: Narrow-beam uncollided flux + G-P buildup correction\n")
-    else:
-        print("Calculation mode: Narrow-beam uncollided flux\n")
 
-    print(f"Photon energy: {result.photon_energy} MeV")
-    print(f"Source strength: {result.source_strength:.3e} photons/s")
-    print(f"Detector distance: {result.detector_distance} cm")
-    print(f"Number of layers: {len(result.layers)}")
-    print(f"Total thickness: {result.total_thickness} cm")
-    print(f"Total MFP: {result.total_mfp}")
-    print(f"Total transmission: {result.total_transmission}")
-    print(f"Uncollided flux at detector: {result.uncollided_flux:.6e} photons/cm^2/s")
+def print_results(
+    result: ShieldingResult,
+) -> None:
+    # Print one low-level monoenergetic shielding result.
+    #
+    # The G-P-adjusted fields are retained for historical regression
+    # compatibility. They are labeled as response proxies rather than
+    # photon fluence rates.
 
-    if result.buildup_factor is not None and result.buildup_corrected_flux is not None:
-        print("\nG-P buildup correction:")
-        print(f"Buildup mode: Single-layer {result.layers[0].material.name} exposure buildup")
-        print(f"Buildup factor: {result.buildup_factor}")
+    has_legacy_buildup_proxy = (
+        result.buildup_factor is not None
+        and result.buildup_corrected_flux is not None
+    )
+
+    if has_legacy_buildup_proxy:
         print(
-            f"Buildup-corrected flux: "
-            f"{result.buildup_corrected_flux:.6e} photons/cm^2/s"
+            "Calculation mode: Legacy narrow-beam photon "
+            "response with G-P exposure-buildup proxy\n"
+        )
+
+    else:
+        print(
+            "Calculation mode: Narrow-beam uncollided "
+            "photon fluence rate\n"
+        )
+
+    print(
+        f"Photon energy: "
+        f"{result.photon_energy} MeV"
+    )
+
+    print(
+        f"Source strength: "
+        f"{result.source_strength:.3e} photons/s"
+    )
+
+    print(
+        f"Detector distance: "
+        f"{result.detector_distance} cm"
+    )
+
+    print(
+        f"Number of layers: "
+        f"{len(result.layers)}"
+    )
+
+    print(
+        f"Total thickness: "
+        f"{result.total_thickness} cm"
+    )
+
+    print(
+        f"Total MFP: "
+        f"{result.total_mfp}"
+    )
+
+    print(
+        f"Total transmission: "
+        f"{result.total_transmission}"
+    )
+
+    print(
+        "Uncollided photon fluence rate at detector: "
+        f"{result.uncollided_flux:.6e} "
+        "photons/cm^2/s"
+    )
+
+    if has_legacy_buildup_proxy:
+        print(
+            "\nLegacy G-P exposure-buildup response:"
+        )
+
+        print(
+            "Buildup basis: Single-layer "
+            f"{result.layers[0].material.name} "
+            "exposure buildup"
+        )
+
+        print(
+            f"G-P exposure buildup factor: "
+            f"{result.buildup_factor}"
+        )
+
+        print(
+            "Exposure-buildup-adjusted photon-response "
+            "proxy: "
+            f"{result.buildup_corrected_flux:.6e}"
+        )
+
+        print(
+            "Note: This historical scaled response is not "
+            "interpreted as photon-number fluence rate."
         )
 
     print("\nLayers:")
 
     for layer_result in result.layer_results:
-        print(f"\nMaterial: {layer_result.layer.material.name}")
-        print(f"Thickness: {layer_result.layer.thickness} cm")
-        print(f"Density: {layer_result.layer.material.density} g/cm^3")
-        print(f"mu/rho: {layer_result.mu_over_p} cm^2/g")
-        print(f"mu: {layer_result.mu} 1/cm")
-        print(f"Layer MFP: {layer_result.mfp}")
-        print(f"Layer transmission: {layer_result.transmission}")
+        print(
+            f"\nMaterial: "
+            f"{layer_result.layer.material.name}"
+        )
+
+        print(
+            f"Thickness: "
+            f"{layer_result.layer.thickness} cm"
+        )
+
+        print(
+            f"Density: "
+            f"{layer_result.layer.material.density} "
+            "g/cm^3"
+        )
+
+        print(
+            f"mu/rho: "
+            f"{layer_result.mu_over_p} cm^2/g"
+        )
+
+        print(
+            f"mu: "
+            f"{layer_result.mu} 1/cm"
+        )
+
+        print(
+            f"Layer MFP: "
+            f"{layer_result.mfp}"
+        )
+
+        print(
+            f"Layer transmission: "
+            f"{layer_result.transmission}"
+        )
 
 
-def print_source_results(result: SourceCalculationResult) -> None:
-    print("\nSource calculation results")
-    print(f"Source: {result.source_name}")
+def print_source_results(
+    result: SourceCalculationResult,
+) -> None:
+    # Print a manual or isotope photon-number result.
+    #
+    # Current public CLI calls use only the uncollided pathway.
+    # Historical buildup fields remain visible but are explicitly
+    # labeled as exposure-buildup response proxies.
+
+    print(
+        "\nUncollided photon fluence-rate result"
+    )
+
+    print(
+        f"Source: "
+        f"{result.source_name}"
+    )
 
     if result.activity_bq is not None:
-        print(f"Activity: {result.activity_bq:.6e} Bq")
-
-    print(f"Number of photon lines: {len(result.line_results)}")
-    print(f"Total uncollided flux: {result.total_uncollided_flux:.6e} photons/cm^2/s")
-
-    if result.total_buildup_corrected_flux is not None:
         print(
-            f"Total buildup-corrected flux: "
-            f"{result.total_buildup_corrected_flux:.6e} photons/cm^2/s"
+            f"Activity: "
+            f"{result.activity_bq:.6e} Bq"
+        )
+
+    print(
+        f"Number of photon lines: "
+        f"{len(result.line_results)}"
+    )
+
+    print(
+        "Total uncollided photon fluence rate: "
+        f"{result.total_uncollided_flux:.6e} "
+        "photons/cm^2/s"
+    )
+
+    if (
+        result.total_buildup_corrected_flux
+        is not None
+    ):
+        print(
+            "Total legacy G-P exposure-buildup-adjusted "
+            "photon-response proxy: "
+            f"{result.total_buildup_corrected_flux:.6e}"
         )
 
     if len(result.warnings) > 0:
         print("\nWarnings:")
+
         for warning in result.warnings:
-            print(f"- {warning}")
+            print(
+                f"- {warning}"
+            )
 
-    print("\nPhoton line results:")
+    print("\nPhoton-line results:")
 
-    for i, line_result in enumerate(result.line_results):
-        shielding_result = line_result.shielding_result
+    has_legacy_buildup_proxy = False
 
-        print(f"\nLine {i + 1}")
-        print(f"Photon energy: {line_result.photon_line.energy} MeV")
-        print(f"Emission intensity: {line_result.photon_line.intensity} photons/decay")
-        print(f"Photon emission rate: {line_result.photon_rate:.6e} photons/s")
-        print(f"Transmission: {shielding_result.total_transmission}")
-        print(f"Total MFP: {shielding_result.total_mfp}")
+    for line_index, line_result in enumerate(
+        result.line_results,
+        start=1,
+    ):
+        shielding_result = (
+            line_result.shielding_result
+        )
+
         print(
-            f"Uncollided flux: "
-            f"{shielding_result.uncollided_flux:.6e} photons/cm^2/s"
+            f"\nLine {line_index}"
+        )
+
+        print(
+            f"Photon energy: "
+            f"{line_result.photon_line.energy} MeV"
+        )
+
+        if result.activity_bq is not None:
+            print(
+                "Emission intensity: "
+                f"{line_result.photon_line.intensity} "
+                "photons/decay"
+            )
+
+        print(
+            f"Photon emission rate: "
+            f"{line_result.photon_rate:.6e} "
+            "photons/s"
+        )
+
+        print(
+            f"Transmission: "
+            f"{shielding_result.total_transmission}"
+        )
+
+        print(
+            f"Total MFP: "
+            f"{shielding_result.total_mfp}"
+        )
+
+        print(
+            "Uncollided photon fluence rate: "
+            f"{shielding_result.uncollided_flux:.6e} "
+            "photons/cm^2/s"
         )
 
         if shielding_result.buildup_factor is not None:
-            print(f"Buildup factor: {shielding_result.buildup_factor}")
-
-        if shielding_result.buildup_corrected_flux is not None:
             print(
-                f"Buildup-corrected flux: "
-                f"{shielding_result.buildup_corrected_flux:.6e} photons/cm^2/s"
+                f"G-P exposure buildup factor: "
+                f"{shielding_result.buildup_factor}"
             )
+
+        if (
+            shielding_result.buildup_corrected_flux
+            is not None
+        ):
+            has_legacy_buildup_proxy = True
+
+            print(
+                "Legacy G-P exposure-buildup-adjusted "
+                "photon-response proxy: "
+                f"{shielding_result.buildup_corrected_flux:.6e}"
+            )
+
+    if has_legacy_buildup_proxy:
+        print(
+            "\nNote: Historical G-P-adjusted photon-response "
+            "proxy values are not interpreted as "
+            "photon-number fluence rates."
+        )
 
 
 def print_source_air_kerma_result(
@@ -298,34 +481,91 @@ def print_source_air_kerma_result(
                 print(f"- {warning}")
 
 
-def print_minimum_thickness_result(result: MinimumThicknessResult) -> None:
-    print("\nMinimum shielding thickness result")
-    print(f"Calculation mode: {result.calculation_mode}")
-    print(f"Material: {result.material.name}")
-    print(f"Target: {result.target_description}")
-    print(f"Required thickness: {result.required_thickness:.6g} cm")
-    print(f"Final effective transmission: {result.final_transmission:.6e}")
+def print_minimum_thickness_result(
+    result: MinimumThicknessResult,
+) -> None:
+    # Print a legacy-compatible photon minimum-thickness design.
+    #
+    # Revised public CLI paths use uncollided photon fluence rate.
+    # Historical buildup-aware results are labeled as response
+    # proxies rather than photon-number fluence.
+
     print(
-        f"Final target-comparison flux: "
-        f"{result.final_flux:.6e} photons/cm^2/s"
+        "\nPhoton-response minimum shielding "
+        "thickness result"
     )
+
+    print(
+        f"Calculation mode: "
+        f"{result.calculation_mode}"
+    )
+
+    print(
+        f"Material: "
+        f"{result.material.name}"
+    )
+
+    print(
+        f"Target: "
+        f"{result.target_description}"
+    )
+
+    print(
+        f"Required thickness: "
+        f"{result.required_thickness:.6g} cm"
+    )
+
+    print(
+        "Final selected-response ratio: "
+        f"{result.final_transmission:.6e}"
+    )
+
+    if result.buildup_used:
+        print(
+            "Final target-comparison legacy G-P "
+            "exposure-buildup-adjusted photon-response "
+            "proxy: "
+            f"{result.final_flux:.6e}"
+        )
+
+    else:
+        print(
+            "Final target-comparison uncollided "
+            "photon fluence rate: "
+            f"{result.final_flux:.6e} "
+            "photons/cm^2/s"
+        )
 
     if result.final_uncollided_flux is not None:
         print(
-            f"Final narrow-beam uncollided flux: "
-            f"{result.final_uncollided_flux:.6e} photons/cm^2/s"
+            "Final uncollided photon fluence rate: "
+            f"{result.final_uncollided_flux:.6e} "
+            "photons/cm^2/s"
         )
 
-    if result.final_buildup_corrected_flux is not None:
+    if (
+        result.final_buildup_corrected_flux
+        is not None
+    ):
         print(
-            f"Final buildup-corrected flux: "
-            f"{result.final_buildup_corrected_flux:.6e} photons/cm^2/s"
+            "Final legacy G-P exposure-buildup-adjusted "
+            "photon-response proxy: "
+            f"{result.final_buildup_corrected_flux:.6e}"
+        )
+
+        print(
+            "Note: The historical G-P-adjusted response "
+            "proxy is not interpreted as photon-number "
+            "fluence rate."
         )
 
     if len(result.warnings) > 0:
         print("\nWarnings:")
+
         for warning in result.warnings:
-            print(f"- {warning}")      
+            print(
+                f"- {warning}"
+            )     
 
 
 def print_air_kerma_minimum_thickness_result(
@@ -427,12 +667,37 @@ def print_air_kerma_minimum_thickness_result(
 def get_buildup_display_for_candidate(
     candidate: OptimizationBaseCandidate,
 ) -> str:
-    # Convert internal buildup/fallback state into a short table label.
+    # Air-kerma candidates use strict, response-specific buildup
+    # semantics.
     #
-    # "Yes" means buildup was successfully used.
-    # "Fallback" means buildup was requested, but the candidate used narrow-beam
-    # design instead and stored a warning.
-    # "No" means buildup was not requested or not used without warning.
+    # PASS air-kerma candidate:
+    #   Yes -> G-P exposure buildup was applied.
+    #   No  -> an explicitly uncollided response was requested.
+    #
+    # FAILED air-kerma candidate:
+    #   Unavailable -> the requested response could not be calculated.
+    #
+    # Legacy photon candidates retain their historical fallback
+    # display for regression compatibility.
+
+    if candidate.status == "FAILED":
+        if isinstance(
+            candidate,
+            AirKermaMaterialDesignCandidate,
+        ):
+            return "Unavailable"
+
+        return "--"
+
+    if isinstance(
+        candidate,
+        AirKermaMaterialDesignCandidate,
+    ):
+        if candidate.buildup_used:
+            return "Yes"
+
+        return "No"
+
     if candidate.buildup_used:
         return "Yes"
 
@@ -452,51 +717,109 @@ def format_optional_float(value: float | None, precision: str = ".6g") -> str:
     return format(value, precision)
 
 
-def print_material_comparison_result(result: MaterialComparisonResult) -> None:
-    # Print the V1.08 material comparison table.
+def print_material_comparison_result(
+    result: MaterialComparisonResult,
+) -> None:
+    # Print a legacy-compatible photon-response material comparison.
     #
-    # The table is intentionally compact so it can be pasted into the README,
-    # validation report, or internship/recruiter materials.
-    #
-    # Passing candidates show thickness and final flux.
-    # Failed candidates show "--" in numerical columns and explain the failure below.
-    print("\nMaterial comparison result")
-    print("Calculation mode: Single-material design comparison")
-    print(f"Target: {result.target_description}")
-    buildup_requested_text = "Yes" if result.apply_buildup else "No"
-    print(f"Buildup requested: {buildup_requested_text}")
+    # Uncollided candidates are reported as photon fluence rates.
+    # Historical buildup-adjusted candidates are identified as
+    # response proxies through the Response Basis column.
+
+    print(
+        "\nPhoton-response material comparison result"
+    )
+
+    print(
+        "Calculation mode: Single-material "
+        "photon-response design comparison"
+    )
+
+    print(
+        f"Target: "
+        f"{result.target_description}"
+    )
+
+    buildup_requested_text = (
+        "Yes"
+        if result.apply_buildup
+        else "No"
+    )
+
+    print(
+        "Legacy G-P exposure buildup requested: "
+        f"{buildup_requested_text}"
+    )
+
+    final_value_header = (
+        "Final Value"
+        if result.apply_buildup
+        else "Final Fluence Rate"
+    )
 
     print("\nCandidates:")
+
     print(
         f"{'Material':<28}"
         f"{'Thickness (cm)':<18}"
-        f"{'Final Flux':<18}"
-        f"{'Buildup':<14}"
+        f"{final_value_header:<22}"
+        f"{'Response Basis':<22}"
         f"{'Status':<10}"
     )
-    print("-" * 88)
+
+    print("-" * 100)
+
+    any_legacy_proxy = False
 
     for candidate in result.candidates:
         if candidate.status == "PASS":
             thickness_text = (
-                f"{format_optional_float(candidate.required_thickness)}"
+                format_optional_float(
+                    candidate.required_thickness
+                )
             )
-            flux_text = (
-                f"{format_optional_float(candidate.final_flux, '.6e')}"
+
+            final_value_text = (
+                format_optional_float(
+                    candidate.final_flux,
+                    ".6e",
+                )
             )
-            buildup_text = get_buildup_display_for_candidate(candidate)
+
+            if candidate.buildup_used:
+                response_basis = (
+                    "Legacy G-P proxy"
+                )
+
+                any_legacy_proxy = True
+
+            else:
+                response_basis = (
+                    "Uncollided fluence"
+                )
 
         else:
             thickness_text = "--"
-            flux_text = "--"
-            buildup_text = "--"
+            final_value_text = "--"
+            response_basis = "--"
 
         print(
             f"{candidate.material.name:<28}"
             f"{thickness_text:<18}"
-            f"{flux_text:<18}"
-            f"{buildup_text:<14}"
+            f"{final_value_text:<22}"
+            f"{response_basis:<22}"
             f"{candidate.status:<10}"
+        )
+
+    print(
+        "\nUncollided fluence units: photons/cm^2/s"
+    )
+
+    if any_legacy_proxy:
+        print(
+            "Legacy G-P proxy values are historical "
+            "exposure-buildup-scaled response values and "
+            "are not interpreted as photon fluence rates."
         )
 
     has_messages = False
@@ -504,18 +827,169 @@ def print_material_comparison_result(result: MaterialComparisonResult) -> None:
     for candidate in result.candidates:
         if candidate.status == "FAILED":
             if not has_messages:
-                print("\nFallbacks, failures, and warnings:")
+                print(
+                    "\nFallbacks, failures, and warnings:"
+                )
+
                 has_messages = True
 
-            print(f"- {candidate.material.name}: {candidate.failure_reason}")
+            print(
+                f"- {candidate.material.name}: "
+                f"{candidate.failure_reason}"
+            )
 
-        if candidate.status == "PASS" and len(candidate.warnings) > 0:
+        if (
+            candidate.status == "PASS"
+            and len(candidate.warnings) > 0
+        ):
             if not has_messages:
-                print("\nFallbacks, failures, and warnings:")
+                print(
+                    "\nFallbacks, failures, and warnings:"
+                )
+
                 has_messages = True
 
             for warning in candidate.warnings:
-                print(f"- {candidate.material.name}: {warning}")
+                print(
+                    f"- {candidate.material.name}: "
+                    f"{warning}"
+                )
+
+
+def print_air_kerma_material_comparison_result(
+    result: AirKermaMaterialComparisonResult,
+) -> None:
+    # Print a material comparison for an explicit collision-air-kerma
+    # target.
+    #
+    # This remains separate from the legacy photon comparison output:
+    #
+    #   photon comparison
+    #       -> final photon fluence-rate field
+    #
+    #   air-kerma comparison
+    #       -> final collision air-kerma rate in microGy/h
+    #
+    # Air-kerma values are never placed in fields or columns named flux.
+
+    print(
+        "\nCollision air-kerma material comparison result"
+    )
+
+    print(
+        "Calculation mode: Single-material collision "
+        "air-kerma design comparison"
+    )
+
+    print(
+        f"Target: "
+        f"{result.target_description}"
+    )
+
+    buildup_requested_text = (
+        "Yes"
+        if result.apply_buildup
+        else "No"
+    )
+
+    print(
+        "G-P exposure buildup requested: "
+        f"{buildup_requested_text}"
+    )
+
+    print("\nCandidates:")
+
+    print(
+        f"{'Material':<28}"
+        f"{'Thickness (cm)':<18}"
+        f"{'Final Air Kerma':<19}"
+        f"{'Response Ratio':<17}"
+        f"{'Buildup':<12}"
+        f"{'Status':<10}"
+    )
+
+    print("-" * 104)
+
+    for candidate in result.candidates:
+        if candidate.status == "PASS":
+            thickness_text = (
+                format_optional_float(
+                    candidate.required_thickness
+                )
+            )
+
+            air_kerma_text = (
+                format_optional_float(
+                    candidate
+                    .final_air_kerma_rate_microgy_per_h,
+                    ".6e",
+                )
+            )
+
+            response_ratio_text = (
+                format_optional_float(
+                    candidate.final_response_ratio,
+                    ".6e",
+                )
+            )
+
+            buildup_text = (
+                "Yes"
+                if candidate.buildup_used
+                else "No"
+            )
+
+        else:
+            thickness_text = "--"
+            air_kerma_text = "--"
+            response_ratio_text = "--"
+            buildup_text = "--"
+
+        print(
+            f"{candidate.material.name:<28}"
+            f"{thickness_text:<18}"
+            f"{air_kerma_text:<19}"
+            f"{response_ratio_text:<17}"
+            f"{buildup_text:<12}"
+            f"{candidate.status:<10}"
+        )
+
+    print(
+        "\nFinal Air Kerma units: µGy/h"
+    )
+
+    has_messages = False
+
+    for candidate in result.candidates:
+        if candidate.status == "FAILED":
+            if not has_messages:
+                print(
+                    "\nFailures and warnings:"
+                )
+
+                has_messages = True
+
+            print(
+                f"- {candidate.material.name}: "
+                f"{candidate.failure_reason}"
+            )
+
+        if (
+            candidate.status == "PASS"
+            and len(candidate.warnings) > 0
+        ):
+            if not has_messages:
+                print(
+                    "\nFailures and warnings:"
+                )
+
+                has_messages = True
+
+            for warning in candidate.warnings:
+                print(
+                    f"- {candidate.material.name}: "
+                    f"{warning}"
+                )
 
 
 def get_optimized_candidate_thickness(
@@ -581,12 +1055,69 @@ def print_optimized_design_result(
             "Selection result: No candidate satisfied all active constraints."
         )
     else:
-        print(
-            f"\nBest material: "
-            f"{result.best_candidate.base_candidate.material.name}"
+        best_base_candidate = (
+            result
+            .best_candidate
+            .base_candidate
         )
 
-        print(f"Selection reason: {result.selection_reason}")
+        print(
+            f"\nBest material: "
+            f"{best_base_candidate.material.name}"
+        )
+
+        print(
+            f"Selection reason: "
+            f"{result.selection_reason}"
+        )
+
+        if isinstance(
+            best_base_candidate,
+            AirKermaMaterialDesignCandidate,
+        ):
+            final_air_kerma_rate = (
+                best_base_candidate
+                .final_air_kerma_rate_microgy_per_h
+            )
+
+            final_response_ratio = (
+                best_base_candidate
+                .final_response_ratio
+            )
+
+            if final_air_kerma_rate is None:
+                raise ValueError(
+                    "Selected air-kerma candidate is "
+                    "missing its final response."
+                )
+
+            if final_response_ratio is None:
+                raise ValueError(
+                    "Selected air-kerma candidate is "
+                    "missing its final response ratio."
+                )
+
+            if result.apply_buildup:
+                response_label = (
+                    "Selected final G-P exposure-buildup-"
+                    "adjusted collision air-kerma rate"
+                )
+
+            else:
+                response_label = (
+                    "Selected final uncollided collision "
+                    "air-kerma rate"
+                )
+
+            print(
+                f"{response_label}: "
+                f"{final_air_kerma_rate:.6e} µGy/h"
+            )
+
+            print(
+                "Selected final response ratio: "
+                f"{final_response_ratio:.6e}"
+            )
 
     print("\nCandidates:")
 
@@ -622,16 +1153,17 @@ def print_optimized_design_result(
                 candidate.optimization_score
             )
 
-            buildup_display = get_buildup_display_for_candidate(
-                base_candidate
-            )
-
         else:
             thickness_text = "--"
             mass_text = "--"
             cost_text = "--"
             score_text = "--"
-            buildup_display = "--"
+
+        buildup_display = (
+            get_buildup_display_for_candidate(
+                base_candidate
+            )
+        )
 
         print(
             f"{base_candidate.material.name:<28}"

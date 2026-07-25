@@ -1,15 +1,10 @@
-# V1.12 air-response data models.
+# V1.12 collision-air-kerma response models.
 #
-# This module defines explicit, unit-labeled results for deterministic
-# collision air-kerma calculations.
+# This module defines explicit, unit-labeled coefficient,
+# photon-line, and source-level response data.
 #
-# It does not:
-#   - perform attenuation calculations
-#   - interpolate response coefficients
-#   - calculate buildup factors
-#   - solve for shielding thickness
-#
-# The calculation functions will be added later in air_response.py.
+# Attenuation, coefficient interpolation, response folding,
+# and buildup calculations are implemented in air_response.py.
 
 
 from dataclasses import dataclass, field

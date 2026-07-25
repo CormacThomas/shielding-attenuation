@@ -198,6 +198,11 @@ def get_gp_coefficients_at_energy(
 
 
 def calculate_buildup_corrected_flux(uncollided_flux: float, buildup_factor: float) -> float:
+    # Return the historical G-P-scaled photon-response proxy.
+    #
+    # The function name is retained for regression compatibility.
+    # The returned value must not be interpreted as a physical
+    # photon-number fluence rate.
     if uncollided_flux < 0:
         raise ValueError("Uncollided flux cannot be negative.")
 

@@ -1,13 +1,13 @@
 # Target and minimum-thickness result models.
 #
-# Target classes describe what the shielding design must achieve.
-# They are intentionally separate from the calculator logic so future versions
-# can add new target types without rewriting the physics engine.
+# Target classes define the response requirement for a shielding
+# design without performing any transport calculations.
 #
-# MinimumThicknessResult stores the output of a target-driven design calculation.
-# The final_flux field is the value used to check the target:
-#   - narrow-beam mode: final_flux is uncollided flux
-#   - buildup-aware mode: final_flux is buildup-corrected flux
+# AirKermaRateTarget and AirKermaMinimumThicknessResult use explicit,
+# unit-labeled V1.12 collision-air-kerma quantities.
+#
+# MinimumThicknessResult retains historical field names such as
+# final_flux for compatibility with V1.07 through V1.11.
 
 from dataclasses import dataclass
 
@@ -37,8 +37,12 @@ class TransmissionTarget:
 
 @dataclass
 class ReductionFactorTarget:
-    # Target reduction factor.
-    # Example: 1000 means final flux should be 1000 times lower than unshielded flux.
+    # Target reduction factor for the selected photon response.
+    #
+    # Example:
+    #   1000 means the final response must be no more than
+    #   one-thousandth of the unshielded response.
+
     reduction_factor: float
 
     def __post_init__(self):
@@ -48,7 +52,9 @@ class ReductionFactorTarget:
 
 @dataclass
 class FluxTarget:
-    # Target detector flux in photons/cm^2/s.
+    # Target uncollided photon fluence rate in photons/cm^2/s.
+    #
+    # The class name is retained for backward compatibility.
     target_flux: float
 
     def __post_init__(self):
@@ -83,11 +89,21 @@ class AirKermaRateTarget:
 
 @dataclass
 class MinimumThicknessResult:
-    # Result from a minimum shielding thickness calculation.
-    # final_flux is the flux used to check the target.
-    # In narrow-beam mode, final_flux is the uncollided flux.
-    # In buildup-aware mode, final_flux is the buildup-corrected flux.
-    # final_transmission is the final_flux divided by the unshielded flux.
+    # Legacy-compatible photon-response minimum-thickness result.
+    #
+    # final_flux:
+    #   Historical compatibility field containing the response value
+    #   used to test the target.
+    #
+    #   Uncollided mode:
+    #       uncollided photon fluence rate
+    #
+    #   Historical buildup mode:
+    #       G-P exposure-buildup-scaled response proxy
+    #
+    # final_transmission:
+    #   Ratio of the selected final response to the corresponding
+    #   unshielded response.
     material: Material
     required_thickness: float
     final_flux: float
