@@ -2,6 +2,244 @@
 
 All major development milestones for the Shielding Attenuation Simulator are documented here.
 
+## v1.12 - Radiation-Response Quantity Foundation
+
+Added an explicit radiation-response quantity layer so deterministic shielding results can be compared scientifically with future OpenMC calculations. Version 1.12 separates photon-number fluence from photon energy fluence, uncollided collision air kerma, and G-P exposure-buildup-adjusted collision air kerma.
+
+Changes:
+- Added `air_response_library.py`.
+- Added a 38-entry NIST dry-air mass energy-absorption coefficient library covering 0.001 to 20 MeV.
+- Stored dry-air response coefficients in cm²/g with the source description preserved alongside every entry.
+- Preserved the duplicate published values at the 0.00320290 MeV argon K absorption edge.
+- Added absorption-edge-aware coefficient lookup.
+- Added exact coefficient lookup.
+- Added log-log coefficient interpolation.
+- Prevented interpolation across the zero-width interval between duplicate absorption-edge entries.
+- Added explicit rejection of photon energies outside the supported response-coefficient range.
+- Added `unit_conversions.py` for:
+  - MeV to joule conversion;
+  - energy-fluence area conversion from cm² to m²;
+  - cm²/g to m²/kg conversion;
+  - Gy/s to µGy/h conversion;
+  - µGy/h to Gy/s conversion.
+- Added `air_response_models.py`.
+- Added `AirKermaCoefficient`.
+- Added `PhotonLineAirKermaResult`.
+- Added `SourceAirKermaResult`.
+- Added explicit buildup statuses:
+  - `not_requested`;
+  - `applied`;
+  - `unavailable`;
+  - `fallback`.
+- Added line-level storage of:
+  - photon energy;
+  - emission intensity;
+  - photon emission rate;
+  - uncollided photon fluence rate;
+  - photon energy fluence rate;
+  - dry-air mass energy-absorption coefficient;
+  - uncollided collision air-kerma rate;
+  - calculation method;
+  - coefficient source;
+  - buildup status;
+  - buildup factor;
+  - buildup-adjusted collision air-kerma rate;
+  - warnings.
+- Added source-level storage of:
+  - total uncollided photon fluence rate;
+  - total uncollided collision air-kerma rate;
+  - source buildup status;
+  - total buildup-adjusted collision air-kerma rate;
+  - combined warnings.
+- Added validation preventing adjusted source totals from combining applied and unapplied line responses.
+- Added validation preventing buildup-adjusted air-kerma rates from being less than the corresponding uncollided rates.
+- Added `air_response.py`.
+- Added photon energy-fluence-rate calculation.
+- Added collision-air-kerma-rate calculation using NIST dry-air μen/ρ data.
+- Added canonical internal air-kerma-rate storage in Gy/s.
+- Added primary engineering output in µGy/h.
+- Added line-by-line response folding for manual and isotope photon sources.
+- Added source-level air-kerma aggregation.
+- Added G-P exposure buildup application to compatible collision-air-kerma responses.
+- Separated G-P factor calculation from the historical `buildup_corrected_flux` pathway.
+- Prevented exposure buildup factors from being applied to public photon-number-fluence results.
+- Retained historical buildup-named fields and functions only for V1.10 and earlier regression compatibility.
+- Updated legacy comments and output terminology to identify historical G-P-scaled photon results as response proxies rather than physical total photon flux.
+- Added `AirKermaRateTarget`.
+- Added `AirKermaMinimumThicknessResult`.
+- Added separate air-kerma design candidates and material-comparison results.
+- Prevented air-kerma values from being stored in legacy fields named `final_flux` or `final_transmission`.
+- Added fixed-thickness collision-air-kerma calculations.
+- Added air-kerma minimum-thickness calculations.
+- Added air-kerma material comparison.
+- Added air-kerma constrained material optimization.
+- Added explicit selected-response ratios.
+- Added strict buildup-aware design behavior.
+- Required valid G-P exposure buildup for every contributing photon line when buildup is requested.
+- Preserved valid uncollided diagnostic results when buildup is unavailable.
+- Prevented unavailable buildup-aware candidates from silently becoming uncollided fallback designs.
+- Preserved historical fallback behavior only for legacy V1.10 photon-response pathways.
+- Added numerical handling for the physical zero-thickness boundary:
+  - `B(E, 0) = 1`.
+- Added floating-point tolerance at the exact 40-MFP G-P boundary.
+- Continued to reject meaningful extrapolation above 40 MFP.
+- Added bracket scanning before bisection for buildup-adjusted minimum-thickness calculations.
+- Added support for responses that initially rise because buildup increases faster than Beer-Lambert attenuation decreases.
+- Added first-failed-to-passed target-crossing detection.
+- Added response-aware CLI input.
+- Added response selection between:
+  - uncollided photon fluence rate;
+  - collision air-kerma rate.
+- Updated fixed-thickness CLI routing.
+- Updated minimum-thickness CLI routing.
+- Updated material-comparison CLI routing.
+- Updated material-optimization CLI routing.
+- Restricted the G-P exposure-buildup prompt to compatible collision-air-kerma calculations.
+- Updated source output terminology to use:
+  - uncollided photon fluence rate;
+  - collision air-kerma rate;
+  - G-P exposure-buildup-adjusted collision air-kerma rate.
+- Removed generic `Final Flux` terminology from current material-comparison output.
+- Added explicit response-basis and unit labels to minimum-thickness, comparison, optimization, and scenario output.
+- Added strict failure output showing:
+  - `Unavailable`;
+  - `FAILED`;
+  - the specific G-P applicability or data limitation.
+- Added air-kerma target serialization to the shared scenario format.
+- Updated scenario execution to route air-kerma targets through the V1.12 optimizer.
+- Added the official V1.12 scenario:
+  - `scenarios/cs137_air_kerma_reference.json`.
+- Updated `examples/run_scenario.py`.
+- Made the scenario runner default to the V1.12 air-kerma reference case.
+- Added response-aware scenario output.
+- Added selected final air-kerma rate, response ratio, and buildup status to scenario summaries.
+- Added explicit reporting of eligible, rejected, and failed candidate counts.
+- Preserved execution of the historical V1.10 JSON scenario.
+- Added `air_response_plots.py`.
+- Added a reusable isotope photon-line air-kerma contribution plot.
+- Added validation requiring successful buildup for every line included in the adjusted-response figure.
+- Added `examples/generate_v112_line_contribution_figure.py`.
+- Added a reproducible Co-60 portfolio case using:
+  - 1.00 Ci Co-60;
+  - 5.00 cm Lead;
+  - 100 cm evaluation distance.
+- Added PNG and SVG export under:
+  - `docs/figures/v1.12/`.
+- Added line annotations showing:
+  - line energy;
+  - emission intensity;
+  - G-P buildup factor;
+  - air-kerma contribution;
+  - percentage of the corresponding source total.
+- Added V1.12 validation coverage for:
+  - dry-air coefficient-library size and ordering;
+  - exact coefficient lookup;
+  - log-log interpolation;
+  - absorption-edge handling;
+  - coefficient-range rejection;
+  - unit conversions;
+  - monoenergetic collision-air-kerma calculations;
+  - photon-line metadata;
+  - source-level summation;
+  - Cs-137 line response;
+  - Co-60 two-line response;
+  - Am-241 low-energy applicability;
+  - zero-thickness response;
+  - G-P applicability and strict failure behavior;
+  - air-kerma targets and result models;
+  - minimum-thickness calculations;
+  - nonmonotonic response bracketing;
+  - air-kerma material comparison;
+  - constrained air-kerma optimization;
+  - scenario serialization and execution;
+  - CLI response routing;
+  - output terminology;
+  - legacy V1.10 compatibility.
+- Added the V1.12 validation report.
+
+Validated behavior:
+- The dry-air response library contains 38 ordered entries from 0.001 to 20 MeV.
+- Exact lookup at 0.060 MeV returns 0.03041 cm²/g.
+- Interpolation at the 0.661657 MeV Cs-137 line returns approximately 0.0292866445539 cm²/g.
+- The argon K-edge below value returns 133.0 cm²/g.
+- The argon K-edge above value returns 146.0 cm²/g.
+- An ambiguous exact absorption-edge request is rejected unless the requested side is specified.
+- A 25 MeV coefficient request is rejected as outside the supported range.
+- A 0.661657 MeV fluence rate of 100 photons/cm²/s produces:
+  - 66.1657 MeV/(cm²·s) energy fluence rate;
+  - approximately 3.10465195908 × 10⁻¹⁰ Gy/s collision air-kerma rate;
+  - approximately 1.11767470527 µGy/h.
+- Source-level photon fluence and air-kerma totals equal the sums of their line contributions.
+- A buildup-adjusted source total is produced only when buildup is applied successfully to every line.
+- Mixed `not_requested` and `applied` line states are rejected.
+- The Co-60 portfolio case produces approximately:
+  - 402.828646 µGy/h uncollided collision air kerma;
+  - 1086.362490 µGy/h G-P-adjusted collision air kerma.
+- The 1.332492 MeV Co-60 line contributes approximately:
+  - 60.3% of the uncollided total;
+  - 59.8% of the buildup-adjusted total.
+- The Am-241 59.541 keV line through 5 cm of Lead produces approximately 290.34 MFP.
+- The Am-241 case retains the valid uncollided response, marks buildup unavailable, omits the adjusted total, and preserves the applicability warning.
+- G-P buildup returns exactly one at zero shielding thickness.
+- The adjusted zero-thickness response equals the uncollided response.
+- A 0.100 MeV Water case demonstrates an initial rise in buildup-adjusted response.
+- The bracket-first solver identifies and refines the first valid target crossing rather than assuming endpoint monotonicity.
+- The 1 Ci Cs-137, 100 cm, 1 µGy/h Lead design requires approximately:
+  - 6.299137035 cm without buildup;
+  - 7.180648660 cm with G-P exposure buildup.
+- The official V1.12 scenario evaluates nine materials.
+- Lead is selected at approximately 7.180648660 cm.
+- Lead mass per area is approximately 81.428555808 g/cm².
+- The selected adjusted collision air-kerma rate is approximately 1.000000 µGy/h.
+- The selected response ratio is approximately 3.570781 × 10⁻⁴.
+- Lead and Tungsten are eligible.
+- Aluminum, Ordinary Concrete, Copper, and Tin are rejected by engineering constraints.
+- Barite Concrete and Polyethylene fail because validated G-P exposure buildup data are unavailable.
+- Water fails because it cannot reach the target within the 100 cm calculation range.
+- Strict failed candidates are displayed as unavailable and failed rather than as fallback designs.
+- Public photon-response output identifies uncollided photon fluence rate in photons/cm²/s.
+- Public photon material-comparison output no longer uses the generic `Final Flux` column.
+- Historical G-P-scaled photon results are identified as legacy response proxies.
+- The historical V1.10 scenario remains reproducible.
+- The complete validation runner produces 684 PASS assertions.
+- V1.12 adds 365 focused assertions while preserving all 319 assertions documented through V1.11.
+
+Validated example:
+- Source: 1.00 Ci Cs-137
+- Activity: 3.70 × 10¹⁰ Bq
+- Photon line: 0.661657 MeV
+- Emission intensity: 0.851 photons/decay
+- Evaluation radius: 100 cm
+- Target: G-P exposure-buildup-adjusted collision air-kerma rate ≤ 1 µGy/h
+- Calculation search limit: 100 cm
+- Maximum design thickness: 20 cm
+- Maximum mass per area: 120 g/cm²
+- Optimization objective: minimum mass per area
+- G-P exposure buildup required
+- Nine candidate materials evaluated
+- Two materials eligible
+- Four materials rejected
+- Three materials failed
+- Lead selected at approximately 7.180649 cm
+- Lead mass per area approximately 81.428556 g/cm²
+- Final adjusted response approximately 1.000000 µGy/h
+
+Notes:
+- V1.12 defines a matched radiation-response quantity but does not yet claim deterministic-versus-OpenMC agreement.
+- Dry-air μen/ρ folding produces a collision air-kerma-rate estimate.
+- Collision air kerma is not effective dose, organ dose, ambient dose equivalent, or a regulatory dose quantity.
+- Published exposure buildup factors are used as dimensionless response-ratio approximations for compatible collision-air-kerma calculations.
+- G-P exposure buildup is not interpreted as a photon-number-fluence correction.
+- G-P exposure buildup remains limited to supported homogeneous single-material shields.
+- Deterministic multilayer buildup is intentionally not claimed.
+- G-P calculations remain limited to 40 MFP.
+- Strict buildup-aware air-kerma designs do not silently fall back to uncollided results.
+- Legacy fields such as `final_flux`, `uncollided_flux`, and `buildup_corrected_flux` remain only for backward compatibility.
+- `FluxTarget` remains the internal compatibility name for an uncollided photon-fluence-rate target.
+- The isotope library contains selected useful photon lines rather than complete decay spectra.
+- The Co-60 line-contribution figure is a deterministic engineering visualization rather than a Monte Carlo result.
+- V1.13 will construct the first quantity-matched OpenMC photon benchmark using energy-resolved photon fluence folded with the same NIST dry-air response coefficients.
+
 ## v1.11 - Reproducible Scenarios and Spherical Geometry
 
 Added a reproducible scenario layer and concentric spherical geometry foundation above the validated V1.10 deterministic shielding and optimization workflow.

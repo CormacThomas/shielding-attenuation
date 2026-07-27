@@ -1,60 +1,117 @@
 # Shielding Attenuation Simulator
 
-A Python photon-shielding analysis and engineering design tool using NIST XCOM attenuation data, isotope photon-source models, G-P exposure buildup factors, engineering constraints, Pareto analysis, reproducible scenarios, and OpenMC-ready spherical geometry.
+A validated Python photon-shielding analysis and engineering design tool using NIST XCOM attenuation data, isotope photon-source models, dry-air collision-air-kerma response coefficients, G-P exposure buildup factors, engineering constraints, Pareto analysis, reproducible JSON scenarios, and OpenMC-ready spherical geometry.
 
 ## Overview
 
-The Shielding Attenuation Simulator models photon attenuation from an isotropic point source through shielding materials.
+The Shielding Attenuation Simulator models photon attenuation and radiation-response quantities from an isotropic point source through shielding materials.
 
-The project began as a basic Java attenuation calculator and has developed into a validated Python shielding-design workflow capable of:
+The project began as a Java Beer-Lambert attenuation calculator and has developed into a modular Python shielding-design workflow capable of:
 
 - calculating narrow-beam photon attenuation;
-- modeling selected isotope photon spectra;
+- modeling selected isotope photon lines;
+- reporting explicit photon fluence and collision-air-kerma quantities;
 - estimating single-layer exposure buildup;
 - solving for minimum shielding thickness;
 - comparing candidate materials;
 - applying thickness, mass, and relative-cost constraints;
 - ranking feasible designs under multiple objectives;
-- visualizing engineering tradeoffs;
+- visualizing engineering tradeoffs and photon-line contributions;
 - loading complete design scenarios from JSON;
 - defining concentric spherical shielding geometry;
-- preparing shared inputs for future OpenMC benchmarking.
+- preparing quantity-matched inputs for future OpenMC benchmarking.
 
-The current release is **V1.11**.
+The current release is **V1.12**.
 
 ## Current Capabilities
 
-### Photon Transport Models
+### Deterministic Photon Transport
 
 - Beer-Lambert narrow-beam attenuation
-- Multilayer transmission
+- Single-layer and multilayer transmission
 - NIST XCOM mass attenuation data
 - Log-log attenuation-coefficient interpolation
-- Linear attenuation and mean-free-path calculations
+- Linear attenuation coefficients
+- Mean-free-path calculations
 - Inverse-square point-source spreading
 - Manual monoenergetic photon sources
 - Selected isotope photon spectra
-- Line-by-line isotope response summation
+- Line-by-line isotope calculations
 - G-P exposure buildup for supported homogeneous shields
+
+### Radiation-Response Quantities
+
+V1.12 separates quantities that were previously represented through legacy flux-named fields.
+
+The simulator now reports:
+
+- uncollided photon fluence rate in photons/cm²/s;
+- photon energy fluence rate in MeV/(cm²·s);
+- uncollided collision air-kerma rate in Gy/s and µGy/h;
+- G-P exposure-buildup-adjusted collision air-kerma rate in Gy/s and µGy/h.
+
+The response calculation follows the line-by-line sequence:
+
+```text
+Activity and emission intensity
+            ↓
+Photon emission rate
+            ↓
+Beer-Lambert transmission
+            ↓
+Uncollided photon fluence rate
+            ↓
+Photon energy fluence rate
+            ↓
+Dry-air μen/ρ response folding
+            ↓
+Uncollided collision air-kerma rate
+            ↓
+Optional G-P exposure-buildup adjustment
+```
+
+The canonical internal air-kerma-rate unit is:
+
+```text
+Gy/s
+```
+
+The primary engineering display unit is:
+
+```text
+µGy/h
+```
+
+The dry-air response calculation uses a 38-entry NIST mass energy-absorption coefficient table from 0.001 to 20 MeV. The implementation preserves the duplicate argon K-edge entries and prevents interpolation across the zero-width absorption-edge interval.
 
 ### Shielding Design
 
-- Transmission targets
-- Reduction-factor targets
-- Detector-response targets
-- Analytical and numerical minimum-thickness solutions
-- Single-material comparison
-- Engineering constraint filtering
-- Minimum-thickness optimization
-- Minimum-mass optimization
-- Minimum-relative-cost optimization
-- Weighted balanced optimization
-- Explicit `ELIGIBLE`, `REJECTED`, and `FAILED` design states
-- Thickness-mass Pareto classification
+Supported design targets include:
+
+- transmission targets;
+- reduction-factor targets;
+- uncollided photon-fluence-rate targets;
+- collision-air-kerma-rate targets.
+
+Design capabilities include:
+
+- analytical and numerical minimum-thickness solutions;
+- bracket scanning and bisection;
+- support for initially nonmonotonic buildup-adjusted responses;
+- single-material comparison;
+- engineering constraint filtering;
+- minimum-thickness optimization;
+- minimum-mass optimization;
+- minimum-relative-cost optimization;
+- weighted balanced optimization;
+- explicit `ELIGIBLE`, `REJECTED`, and `FAILED` design states;
+- thickness-mass Pareto classification.
+
+Air-kerma target calculations use strict buildup behavior. When G-P exposure buildup is required, every contributing photon line must have a valid buildup result. Unsupported materials or out-of-domain optical thicknesses are reported as `FAILED` rather than silently substituted with an uncollided design.
 
 ### Reproducible Scenarios
 
-V1.11 introduces a shared scenario layer:
+The shared scenario layer allows complete shielding problems to be stored as human-readable JSON:
 
 ```text
 Scenario JSON
@@ -63,7 +120,7 @@ Validated ShieldingScenario
       ↓
 scenario_runner.py
       ↓
-Deterministic shielding optimizer
+Response-specific deterministic optimizer
 ```
 
 A scenario can define:
@@ -73,67 +130,115 @@ A scenario can define:
 - source-cavity radius;
 - evaluation radius;
 - candidate materials;
-- target;
+- response target;
 - engineering constraints;
 - optimization objective;
+- optional balanced weights;
 - deterministic calculation settings.
+
+The scenario runner routes air-kerma targets through the V1.12 air-response optimizer and retains the earlier photon-response pathway for backward compatibility.
 
 The same scenario foundation is planned to support the OpenMC backend beginning in V1.13.
 
-**[View the V1.11 architecture diagram](docs/architecture/v1.11_scenario_architecture.md)**
+## Official V1.12 Engineering Case
 
-## Reference Engineering Case
-
-The official reference scenario models:
+The official V1.12 reference scenario models:
 
 - Source: Cs-137
 - Activity: 1.00 Ci, or 3.70 × 10¹⁰ Bq
+- Selected photon line: 0.661657 MeV
+- Emission intensity: 0.851 photons/decay
+- Source-cavity radius: 0 cm
 - Evaluation radius: 100 cm
-- Target-comparison response: 100 photons/cm²/s
+- Target: G-P exposure-buildup-adjusted collision air-kerma rate ≤ 1 µGy/h
 - Maximum shielding thickness: 20 cm
 - Maximum mass per area: 120 g/cm²
 - Objective: minimum mass per area
 - Candidate materials: nine
-- G-P exposure buildup requested
+- G-P exposure buildup: required
+- Numerical search limit: 100 cm
 
 The optimizer selects **Lead**:
 
 ```text
-Required thickness: 7.08821 cm
-Mass per area:      80.3803 g/cm²
+Required thickness: 7.180648660 cm
+Mass per area:      81.428555808 g/cm²
+Final adjusted K:   0.999999991 µGy/h
+Response ratio:     3.570781 × 10⁻⁴
 Eligible designs:   Lead and Tungsten
 Selected objective: Minimum mass per area
 ```
 
-Tungsten is thinner, but Lead has the lower mass per area.
+The complete candidate accounting is:
 
-![Material design comparison](docs/figures/v1.10/cs137_material_design_comparison.png)
+```text
+2 eligible + 4 rejected + 3 failed = 9 materials
+```
 
-![Thickness-mass Pareto tradeoff](docs/figures/v1.10/cs137_thickness_mass_tradeoff.png)
+- Lead and Tungsten are eligible.
+- Aluminum and Ordinary Concrete exceed both active engineering limits.
+- Copper and Tin exceed the mass-per-area limit.
+- Barite Concrete and Polyethylene lack validated G-P exposure buildup data.
+- Water cannot reach the required response within the 100 cm calculation range.
 
-The plotted buildup-aware response uses G-P exposure-buildup coefficients. It is a target-comparison response proxy and should not be interpreted as generic total photon-number flux.
+The official scenario file is:
+
+```text
+scenarios/cs137_air_kerma_reference.json
+```
+
+The earlier V1.10 photon-response reference scenario remains available for regression testing:
+
+```text
+scenarios/cs137_v110_reference.json
+```
+
+## Co-60 Photon-Line Contribution Figure
+
+V1.12 includes a reproducible line-contribution figure for:
+
+- 1.00 Ci Co-60;
+- 5.00 cm Lead;
+- 100 cm evaluation distance;
+- two modeled photon lines;
+- uncollided and G-P-adjusted collision-air-kerma contributions.
+
+The validated source totals are approximately:
+
+```text
+Uncollided collision air-kerma rate: 402.829 µGy/h
+G-P-adjusted collision air-kerma rate: 1086.362 µGy/h
+```
+
+![Co-60 photon-line contributions](docs/figures/v1.12/co60_photon_line_air_kerma_contributions.png)
+
+The figure demonstrates that photon-line contributions depend on energy, attenuation, dry-air response coefficient, emission intensity, and buildup factor. Contribution cannot be inferred from emission intensity alone.
 
 ## Installation
 
 Python 3.10 or newer is recommended.
 
-Create and activate a virtual environment:
+Create a virtual environment:
 
 ```bash
 python -m venv .venv
 ```
 
-Windows PowerShell:
+Activate it on Windows PowerShell:
 
 ```powershell
 .\.venv\Scripts\Activate.ps1
-python -m pip install -r requirements.txt
 ```
 
-macOS or Linux:
+Activate it on macOS or Linux:
 
 ```bash
 source .venv/bin/activate
+```
+
+Install project dependencies:
+
+```bash
 python -m pip install -r requirements.txt
 ```
 
@@ -149,37 +254,58 @@ python main.py
 The command-line interface supports:
 
 1. fixed-thickness shielding calculations;
-2. minimum-thickness design;
+2. minimum-thickness shielding design;
 3. material comparison;
 4. constraint-based material optimization.
 
-## Running a Reproducible Scenario
+Each mode allows the user to select the intended response quantity:
 
-Run the official JSON scenario:
+- uncollided photon fluence rate;
+- collision air-kerma rate.
+
+Exposure buildup is not applied to photon-number fluence. The G-P prompt is shown only for compatible collision-air-kerma calculations.
+
+## Running Reproducible Scenarios
+
+Run the official V1.12 air-kerma scenario:
 
 ```bash
 python examples/run_scenario.py
 ```
 
-Run a different scenario:
+Run a specific scenario:
 
 ```bash
-python examples/run_scenario.py scenarios/example.json
+python examples/run_scenario.py scenarios/cs137_air_kerma_reference.json
 ```
 
-The official scenario file is:
+Run the historical V1.10 regression scenario:
 
-```text
-scenarios/cs137_v110_reference.json
+```bash
+python examples/run_scenario.py scenarios/cs137_v110_reference.json
 ```
+
+The scenario output reports:
+
+- scenario metadata;
+- target quantity and units;
+- buildup treatment;
+- candidate counts;
+- selected material;
+- required thickness;
+- mass per area;
+- final response;
+- response ratio;
+- selection reason;
+- failed-candidate explanations;
+- warnings.
 
 ## Running Validation
 
 From the repository root:
 
 ```bash
-cd src
-python validation_runner.py
+python src/validation_runner.py
 ```
 
 Expected final message:
@@ -188,24 +314,50 @@ Expected final message:
 All validation tests passed.
 ```
 
-The current suite contains:
+The complete V1.12 suite contains:
 
 ```text
-319 total PASS assertions
-46 assertions specific to V1.11
+684 total PASS assertions
+365 assertions focused on V1.12
+319 retained V1.11 and earlier regression assertions
 ```
 
-Coverage includes attenuation, interpolation, source handling, buildup, minimum-thickness design, material comparison, engineering optimization, Pareto analysis, plotting data, spherical geometry, scenario validation, JSON round trips, error handling, and reference-result reproduction.
+V1.12 coverage includes:
+
+- dry-air coefficient-library structure;
+- exact coefficient lookup;
+- log-log interpolation;
+- absorption-edge behavior;
+- coefficient range rejection;
+- MeV, joule, area, coefficient, and air-kerma unit conversions;
+- monoenergetic collision-air-kerma hand calculations;
+- photon-line metadata;
+- source-level response aggregation;
+- Cs-137 line behavior;
+- Co-60 two-line summation;
+- Am-241 low-energy applicability handling;
+- zero-thickness buildup behavior;
+- the 40-MFP G-P boundary;
+- strict unavailable-buildup handling;
+- air-kerma targets and result models;
+- minimum-thickness calculations;
+- nonmonotonic bracket scanning;
+- material comparison;
+- constrained optimization;
+- scenario serialization and execution;
+- CLI response routing;
+- public output terminology;
+- V1.10 and V1.11 backward compatibility.
 
 ## Generating Engineering Figures
 
-From the repository root:
+Generate the V1.10 engineering-design figure set:
 
 ```bash
 python examples/generate_v110_figures.py
 ```
 
-The script generates four figures in PNG and SVG formats under:
+This creates four PNG and four SVG files under:
 
 ```text
 docs/figures/v1.10/
@@ -218,9 +370,21 @@ The figures cover:
 - thickness-mass Pareto tradeoffs;
 - detector response versus Lead thickness.
 
+Generate the V1.12 Co-60 line-contribution figure:
+
+```bash
+python examples/generate_v112_line_contribution_figure.py
+```
+
+This creates PNG and SVG files under:
+
+```text
+docs/figures/v1.12/
+```
+
 ## OpenMC Environment Test
 
-V1.11 includes a Docker-based OpenMC photon-transport smoke test.
+The repository includes a Docker-based OpenMC photon-transport smoke test.
 
 Launch the official OpenMC image with the repository mounted:
 
@@ -241,11 +405,11 @@ The verified test used OpenMC 0.15.3 and confirmed:
 
 - access to continuous-energy photon data;
 - fixed-source photon transport;
-- spherical Lead-shell geometry;
+- concentric spherical Lead-shell geometry;
 - statepoint generation;
-- tally extraction through Python.
+- named tally extraction through Python.
 
-This smoke test verifies environment readiness only. It is not yet a matched deterministic-versus-OpenMC benchmark.
+This smoke test verifies environment readiness only. Its raw cell-flux tally is not an air-kerma result and is not a matched deterministic-versus-OpenMC benchmark.
 
 ## Project Structure
 
@@ -254,22 +418,33 @@ shielding-attenuation/
 ├── docs/
 │   ├── architecture/
 │   ├── figures/
+│   │   ├── v1.10/
+│   │   └── v1.12/
 │   └── validation reports/
 ├── examples/
 │   ├── generate_v110_figures.py
+│   ├── generate_v112_line_contribution_figure.py
 │   ├── openmc_smoke_test.py
 │   └── run_scenario.py
 ├── scenarios/
+│   ├── cs137_air_kerma_reference.json
 │   └── cs137_v110_reference.json
 ├── src/
-│   ├── attenuation and source modules
+│   ├── air_response.py
+│   ├── air_response_library.py
+│   ├── air_response_models.py
+│   ├── air_response_plots.py
 │   ├── buildup modules
+│   ├── attenuation and source modules
 │   ├── optimization modules
 │   ├── plotting modules
 │   ├── geometry_models.py
 │   ├── scenario_models.py
 │   ├── scenario_io.py
 │   ├── scenario_runner.py
+│   ├── target_models.py
+│   ├── thickness_calculator.py
+│   ├── unit_conversions.py
 │   └── validation_runner.py
 ├── CHANGELOG.md
 ├── LICENSE
@@ -279,18 +454,22 @@ shielding-attenuation/
 
 ## Current Limitations
 
-- The deterministic optimizer currently evaluates homogeneous single-material designs.
-- Multilayer attenuation is supported, but multilayer optimization is planned for a later release.
-- The spherical geometry model currently defines physical inputs and shell radii; the deterministic backend still uses the evaluation radius as the center-to-detector distance.
-- Total spherical shield mass is not yet calculated.
-- G-P buildup is limited to supported homogeneous materials and a maximum of 40 mean free paths.
-- Implemented G-P coefficients represent exposure buildup rather than generic photon-flux buildup.
-- Air kerma, exposure response, energy fluence, and photon-number flux are not yet fully separated.
+- Photon emission is modeled as an isotropic point source.
+- Extended-source geometry and source self-attenuation are not modeled.
+- Beer-Lambert attenuation represents the narrow-beam uncollided component.
+- G-P exposure buildup is an engineering response approximation rather than explicit scattered-particle transport.
+- G-P exposure buildup currently supports one homogeneous shielding material at a time.
+- Deterministic multilayer attenuation is supported, but deterministic multilayer buildup is not claimed.
+- G-P calculations are limited to supported materials and optical thicknesses no greater than 40 MFP.
+- Barite Concrete and Polyethylene do not currently have validated G-P coefficient tables.
+- Dry-air μen/ρ folding produces a collision air-kerma-rate estimate, not effective dose, organ dose, ambient dose equivalent, or a regulatory dose quantity.
+- The isotope library contains selected useful photon lines rather than complete decay spectra.
+- Source encapsulation, air attenuation, and detector response are not modeled.
+- The current deterministic optimizer evaluates homogeneous single-material designs.
+- The spherical geometry layer defines physical shell radii, but total spherical shield mass is not yet used by the current optimizer.
 - Relative-cost indices are simplified comparative assumptions rather than market prices.
-- The isotope library contains selected major photon lines rather than complete decay spectra.
-- Source self-attenuation, encapsulation, air attenuation, and detector response are not modeled.
-- OpenMC has been environment-tested but is not yet integrated with `ShieldingScenario`.
-- The software is intended for conceptual engineering analysis and education, not regulatory certification.
+- OpenMC has been environment-tested but has not yet been compared against the deterministic model using a matched response quantity.
+- The software is intended for conceptual engineering analysis and education, not regulatory certification or safety-critical design approval.
 
 ## Documentation
 
@@ -301,6 +480,7 @@ Recent reports include:
 - **V1.09:** Constraint-based material selection
 - **V1.10:** Engineering visualization and Pareto analysis
 - **V1.11:** Reproducible scenarios, spherical geometry, JSON validation, and OpenMC environment verification
+- **V1.12:** Radiation-response quantities, dry-air collision-air-kerma calculations, strict buildup semantics, and OpenMC benchmark readiness
 
 The complete development history is recorded in [`CHANGELOG.md`](CHANGELOG.md).
 
@@ -309,9 +489,8 @@ The complete development history is recorded in [`CHANGELOG.md`](CHANGELOG.md).
 Planned major milestones:
 
 ```text
-V1.12  Radiation-response quantity clarification
 V1.13  Matched OpenMC photon benchmark
-V1.14  Compact OpenMC benchmark study
+V1.14  Compact single-layer OpenMC benchmark study
 V1.15  Two-layer spherical optimization
 V1.16  Multilayer OpenMC verification
 V1.17  Final Cs-137 shield-container design study
@@ -327,6 +506,7 @@ Primary interests include radiation effects, radiation-hardened electronics, shi
 ## Primary Technical References
 
 - NIST XCOM Photon Cross Sections Database
+- NIST X-Ray Mass Attenuation Coefficients for Dry Air
 - ANS-6.4.3 gamma-ray exposure-buildup reference data
 - OpenMC photon-transport documentation
 - NuDat and IAEA nuclear-decay data resources
