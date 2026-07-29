@@ -7,7 +7,68 @@
 #
 # It is intentionally separate from main.py so validation can run without
 # interactive user input.
-
+from typing import cast
+from openmc_statepoint_processor import (
+    calculate_scenario_physical_source_rate_per_s,
+    validate_statepoint_metadata,
+)
+from openmc_result_io import (
+    deterministic_openmc_comparison_to_dict,
+    openmc_response_result_to_dict,
+    openmc_run_manifest_to_dict,
+    save_openmc_benchmark_outputs,
+    save_openmc_run_manifest,
+)
+from openmc_response_coefficients import (
+    OpenMCAirKermaResponseFunction,
+    OpenMCAirKermaResponsePoint,
+    calculate_air_kerma_response_coefficient_gy_cm2_per_photon,
+    calculate_energy_bin_representative_energy_ev,
+    calculate_energy_bin_response_coefficient_gy_cm2_per_photon,
+    create_openmc_dry_air_response_function,
+    evaluate_openmc_response_function_at_energy_ev,
+    fold_photon_fluence_rate_to_air_kerma_rate_gy_per_s,
+    get_dry_air_response_point_at_energy,
+    validate_response_function_covers_openmc_settings,
+)
+from fixed_shield_models import (
+    FixedShieldDeterministicResult,
+)
+from fixed_shield_response import (
+    calculate_fixed_shield_response,
+)
+from openmc_settings_io import (
+    load_openmc_settings,
+    openmc_settings_from_dict,
+    openmc_settings_to_dict,
+    save_openmc_settings,
+)
+from openmc_models import (
+    DeterministicOpenMCComparison,
+    ElectronTreatment,
+    OpenMCEnergyBinResult,
+    OpenMCResponseResult,
+    OpenMCRunManifest,
+    OpenMCSettings,
+)
+from openmc_response import (
+    calculate_deterministic_shell_averaged_fluence_rate,
+    calculate_observed_monte_carlo_buildup_ratio,
+    calculate_photon_line_emission_rate_per_s,
+    calculate_relative_difference,
+    calculate_relative_uncertainty,
+    calculate_shell_average_geometric_factor_per_cm2,
+    calculate_spherical_shell_volume_cm3,
+    normalize_openmc_track_length_flux_tally,
+    scale_per_source_estimate_to_physical_rate,
+    calculate_point_source_geometric_factor_per_cm2,
+    calculate_shell_average_to_point_scale_factor,
+    create_deterministic_shell_average_result,
+)
+from benchmark_models import (
+    DeterministicShellAverageResult,
+    SphericalEvaluationShell,
+)
 from target_models import (
     AirKermaMinimumThicknessResult,
     AirKermaRateTarget,
@@ -1944,6 +2005,7 @@ def run_validation_tests() -> None:
 
     run_v111_validation_tests()
     run_v112_validation_tests()
+    run_v113_validation_tests()
     print("\nAll validation tests passed.")
 
 
@@ -7612,6 +7674,3294 @@ def run_v112_validation_tests() -> None:
         ),
         False,
     )
+
+
+def run_v113_validation_tests() -> None:
+    # Validate the V1.13 fixed-shield scenario foundation.
+    #
+    # These tests currently cover:
+    #   - schema 1.0 backward compatibility
+    #   - schema 1.1 optimization compatibility
+    #   - official development and production scenarios
+    #   - fixed-shield JSON serialization
+    #   - fixed-shield JSON round-trip equivalence
+    #   - optional fixed-shield targets
+    #   - rejection of contradictory mode-specific fields
+    #
+    # OpenMC-independent response mathematics and result models will be
+    # added to this function later in V1.13.
+
+    print()
+    print("=" * 72)
+    print("V1.13 FIXED-SHIELD SCENARIO VALIDATION")
+    print("=" * 72)
+
+    repository_root = (
+        Path(__file__).resolve().parents[1]
+    )
+
+    development_scenario_path = (
+        repository_root
+        / "scenarios"
+        / "cs137_v113_development.json"
+    )
+
+    production_scenario_path = (
+        repository_root
+        / "scenarios"
+        / "cs137_v113_production.json"
+    )
+
+    # ------------------------------------------------------------
+    # Official scenario files
+    # ------------------------------------------------------------
+
+    assert_equal(
+        "V1.13 development scenario file exists",
+        development_scenario_path.is_file(),
+        True,
+    )
+
+    assert_equal(
+        "V1.13 production scenario file exists",
+        production_scenario_path.is_file(),
+        True,
+    )
+
+    development_scenario = load_scenario(
+        development_scenario_path
+    )
+
+    production_scenario = load_scenario(
+        production_scenario_path
+    )
+
+    assert_equal(
+        "V1.13 development scenario preserves ID",
+        development_scenario.scenario_id,
+        "cs137_v113_development",
+    )
+
+    assert_equal(
+        "V1.13 production scenario preserves ID",
+        production_scenario.scenario_id,
+        "cs137_v113_production",
+    )
+
+    assert_equal(
+        "V1.13 development scenario uses schema 1.1",
+        development_scenario.schema_version,
+        "1.1",
+    )
+
+    assert_equal(
+        "V1.13 production scenario uses schema 1.1",
+        production_scenario.schema_version,
+        "1.1",
+    )
+
+    assert_equal(
+        "V1.13 development scenario uses fixed-shield mode",
+        development_scenario.calculation_mode,
+        "fixed_shield_response",
+    )
+
+    assert_equal(
+        "V1.13 production scenario uses fixed-shield mode",
+        production_scenario.calculation_mode,
+        "fixed_shield_response",
+    )
+
+    assert_close(
+        "V1.13 development source cavity radius",
+        (
+            development_scenario
+            .geometry
+            .source_cavity_radius_cm
+        ),
+        1.0,
+        1.0e-12,
+    )
+
+    assert_close(
+        "V1.13 production source cavity radius",
+        (
+            production_scenario
+            .geometry
+            .source_cavity_radius_cm
+        ),
+        1.0,
+        1.0e-12,
+    )
+
+    assert_close(
+        "V1.13 development evaluation radius",
+        (
+            development_scenario
+            .geometry
+            .evaluation_radius_cm
+        ),
+        100.0,
+        1.0e-12,
+    )
+
+    assert_close(
+        "V1.13 production evaluation radius",
+        (
+            production_scenario
+            .geometry
+            .evaluation_radius_cm
+        ),
+        100.0,
+        1.0e-12,
+    )
+
+    assert_equal(
+        "V1.13 development scenario contains one layer",
+        len(
+            development_scenario
+            .geometry
+            .layers
+        ),
+        1,
+    )
+
+    assert_equal(
+        "V1.13 production scenario contains one layer",
+        len(
+            production_scenario
+            .geometry
+            .layers
+        ),
+        1,
+    )
+
+    assert_equal(
+        "V1.13 development layer uses Lead",
+        (
+            development_scenario
+            .geometry
+            .layers[0]
+            .material_key
+        ),
+        "lead",
+    )
+
+    assert_equal(
+        "V1.13 production layer uses Lead",
+        (
+            production_scenario
+            .geometry
+            .layers[0]
+            .material_key
+        ),
+        "lead",
+    )
+
+    assert_close(
+        "V1.13 development Lead thickness",
+        (
+            development_scenario
+            .geometry
+            .layers[0]
+            .thickness_cm
+        ),
+        1.0,
+        1.0e-12,
+    )
+
+    assert_close(
+        "V1.13 production Lead thickness",
+        (
+            production_scenario
+            .geometry
+            .layers[0]
+            .thickness_cm
+        ),
+        5.0,
+        1.0e-12,
+    )
+
+    development_shells = (
+        development_scenario
+        .geometry
+        .create_shells()
+    )
+
+    production_shells = (
+        production_scenario
+        .geometry
+        .create_shells()
+    )
+
+    assert_close(
+        "V1.13 development Lead inner radius",
+        development_shells[0].inner_radius_cm,
+        1.0,
+        1.0e-12,
+    )
+
+    assert_close(
+        "V1.13 development Lead outer radius",
+        development_shells[0].outer_radius_cm,
+        2.0,
+        1.0e-12,
+    )
+
+    assert_close(
+        "V1.13 production Lead inner radius",
+        production_shells[0].inner_radius_cm,
+        1.0,
+        1.0e-12,
+    )
+
+    assert_close(
+        "V1.13 production Lead outer radius",
+        production_shells[0].outer_radius_cm,
+        6.0,
+        1.0e-12,
+    )
+
+    assert_equal(
+        "V1.13 development scenario has no target",
+        development_scenario.target,
+        None,
+    )
+
+    assert_equal(
+        "V1.13 production scenario has no target",
+        production_scenario.target,
+        None,
+    )
+
+    assert_equal(
+        "V1.13 development scenario requests buildup",
+        (
+            development_scenario
+            .deterministic_settings
+            .apply_buildup
+        ),
+        True,
+    )
+
+    assert_equal(
+        "V1.13 production scenario requests buildup",
+        (
+            production_scenario
+            .deterministic_settings
+            .apply_buildup
+        ),
+        True,
+    )
+
+    # ------------------------------------------------------------
+    # Fixed-shield serialization
+    # ------------------------------------------------------------
+
+    development_data = scenario_to_dict(
+        development_scenario
+    )
+
+    assert_equal(
+        "V1.13 fixed-shield serialization preserves mode",
+        development_data[
+            "calculation_mode"
+        ],
+        "fixed_shield_response",
+    )
+
+    assert_equal(
+        "V1.13 fixed-shield serialization preserves null target",
+        development_data[
+            "target"
+        ],
+        None,
+    )
+
+    assert_equal(
+        "V1.13 fixed-shield serialization omits candidate materials",
+        (
+            "candidate_material_keys"
+            in development_data
+        ),
+        False,
+    )
+
+    assert_equal(
+        "V1.13 fixed-shield serialization omits constraints",
+        (
+            "constraints"
+            in development_data
+        ),
+        False,
+    )
+
+    assert_equal(
+        "V1.13 fixed-shield serialization omits optimization",
+        (
+            "optimization"
+            in development_data
+        ),
+        False,
+    )
+
+    reconstructed_development_scenario = (
+        scenario_from_dict(
+            development_data
+        )
+    )
+
+    assert_equal(
+        "V1.13 dictionary reconstruction preserves fixed scenario",
+        reconstructed_development_scenario,
+        development_scenario,
+    )
+
+    # ------------------------------------------------------------
+    # Fixed-shield file round trip
+    # ------------------------------------------------------------
+
+    with TemporaryDirectory() as temporary_directory:
+        temporary_path = Path(
+            temporary_directory
+        )
+
+        roundtrip_path = (
+            temporary_path
+            / "v113_fixed_roundtrip.json"
+        )
+
+        saved_path = save_scenario(
+            production_scenario,
+            roundtrip_path,
+        )
+
+        assert_equal(
+            "V1.13 fixed-shield save creates JSON file",
+            saved_path.is_file(),
+            True,
+        )
+
+        roundtrip_scenario = load_scenario(
+            roundtrip_path
+        )
+
+        assert_equal(
+            "V1.13 fixed-shield JSON round trip preserves object",
+            roundtrip_scenario,
+            production_scenario,
+        )
+
+    # ------------------------------------------------------------
+    # Schema backward and forward compatibility
+    # ------------------------------------------------------------
+
+    v110_reference_path = (
+        repository_root
+        / "scenarios"
+        / "cs137_v110_reference.json"
+    )
+
+    schema_10_scenario = load_scenario(
+        v110_reference_path
+    )
+
+    assert_equal(
+        "V1.13 schema 1.0 scenario remains supported",
+        schema_10_scenario.schema_version,
+        "1.0",
+    )
+
+    schema_11_optimization_data = (
+        scenario_to_dict(
+            schema_10_scenario
+        )
+    )
+
+    schema_11_optimization_data[
+        "schema_version"
+    ] = "1.1"
+
+    schema_11_optimization_scenario = (
+        scenario_from_dict(
+            schema_11_optimization_data
+        )
+    )
+
+    assert_equal(
+        "V1.13 schema 1.1 supports optimization scenarios",
+        (
+            schema_11_optimization_scenario
+            .calculation_mode
+        ),
+        "material_optimization",
+    )
+
+    assert_equal(
+        "V1.13 schema 1.1 optimization preserves candidate count",
+        len(
+            schema_11_optimization_scenario
+            .candidate_material_keys
+        ),
+        9,
+    )
+
+    # ------------------------------------------------------------
+    # Optional fixed-shield target
+    # ------------------------------------------------------------
+
+    targeted_fixed_scenario = (
+        ShieldingScenario(
+            schema_version="1.1",
+            scenario_id=(
+                "v113_targeted_fixed_test"
+            ),
+            description=(
+                "Fixed-shield scenario with an "
+                "optional response target."
+            ),
+            calculation_mode=(
+                "fixed_shield_response"
+            ),
+            source=IsotopeSourceSpec(
+                isotope_key="cs137",
+                activity_bq=3.7e10,
+            ),
+            geometry=(
+                ConcentricSphericalGeometry(
+                    source_cavity_radius_cm=1.0,
+                    evaluation_radius_cm=100.0,
+                    layers=[
+                        ShieldLayerSpec(
+                            material_key="lead",
+                            thickness_cm=5.0,
+                        )
+                    ],
+                )
+            ),
+            target=AirKermaRateTarget(
+                target_air_kerma_rate_microgy_per_h=(
+                    1.0
+                )
+            ),
+            deterministic_settings=(
+                DeterministicSettings(
+                    apply_buildup=True
+                )
+            ),
+        )
+    )
+
+    targeted_fixed_data = scenario_to_dict(
+        targeted_fixed_scenario
+    )
+
+    assert_equal(
+        "V1.13 fixed-shield optional target serializes",
+        targeted_fixed_data[
+            "target"
+        ][
+            "type"
+        ],
+        "air_kerma_rate",
+    )
+
+    reconstructed_targeted_scenario = (
+        scenario_from_dict(
+            targeted_fixed_data
+        )
+    )
+
+    assert_equal(
+        "V1.13 fixed-shield optional target round trips",
+        reconstructed_targeted_scenario,
+        targeted_fixed_scenario,
+    )
+
+    # ------------------------------------------------------------
+    # Invalid fixed-shield combinations
+    # ------------------------------------------------------------
+
+    def create_fixed_geometry() -> (
+        ConcentricSphericalGeometry
+    ):
+        return ConcentricSphericalGeometry(
+            source_cavity_radius_cm=1.0,
+            evaluation_radius_cm=100.0,
+            layers=[
+                ShieldLayerSpec(
+                    material_key="lead",
+                    thickness_cm=5.0,
+                )
+            ],
+        )
+
+    def create_fixed_source() -> (
+        IsotopeSourceSpec
+    ):
+        return IsotopeSourceSpec(
+            isotope_key="cs137",
+            activity_bq=3.7e10,
+        )
+
+    assert_raises(
+        "V1.13 schema 1.0 rejects fixed-shield mode",
+        ValueError,
+        lambda: ShieldingScenario(
+            schema_version="1.0",
+            scenario_id=(
+                "schema_10_fixed_test"
+            ),
+            description=(
+                "Invalid schema 1.0 fixed-shield test."
+            ),
+            calculation_mode=(
+                "fixed_shield_response"
+            ),
+            source=create_fixed_source(),
+            geometry=create_fixed_geometry(),
+        ),
+        "require schema version 1.1",
+    )
+
+    assert_raises(
+        "V1.13 fixed-shield mode rejects empty layers",
+        ValueError,
+        lambda: ShieldingScenario(
+            schema_version="1.1",
+            scenario_id=(
+                "empty_fixed_layers_test"
+            ),
+            description=(
+                "Invalid empty fixed-shield test."
+            ),
+            calculation_mode=(
+                "fixed_shield_response"
+            ),
+            source=create_fixed_source(),
+            geometry=(
+                ConcentricSphericalGeometry(
+                    source_cavity_radius_cm=1.0,
+                    evaluation_radius_cm=100.0,
+                    layers=[],
+                )
+            ),
+        ),
+        "require at least one fixed shield layer",
+    )
+
+    assert_raises(
+        "V1.13 fixed-shield mode rejects candidate materials",
+        ValueError,
+        lambda: ShieldingScenario(
+            schema_version="1.1",
+            scenario_id=(
+                "fixed_candidates_test"
+            ),
+            description=(
+                "Invalid fixed-shield candidate test."
+            ),
+            calculation_mode=(
+                "fixed_shield_response"
+            ),
+            source=create_fixed_source(),
+            geometry=create_fixed_geometry(),
+            candidate_material_keys=[
+                "lead",
+            ],
+        ),
+        "cannot contain candidate material keys",
+    )
+
+    assert_raises(
+        "V1.13 fixed-shield mode rejects constraints",
+        ValueError,
+        lambda: ShieldingScenario(
+            schema_version="1.1",
+            scenario_id=(
+                "fixed_constraints_test"
+            ),
+            description=(
+                "Invalid fixed-shield constraints test."
+            ),
+            calculation_mode=(
+                "fixed_shield_response"
+            ),
+            source=create_fixed_source(),
+            geometry=create_fixed_geometry(),
+            constraints=DesignConstraints(
+                max_thickness_cm=10.0
+            ),
+        ),
+        "cannot contain optimization constraints",
+    )
+
+    assert_raises(
+        "V1.13 fixed-shield mode rejects optimization mode",
+        ValueError,
+        lambda: ShieldingScenario(
+            schema_version="1.1",
+            scenario_id=(
+                "fixed_optimization_test"
+            ),
+            description=(
+                "Invalid fixed-shield optimization test."
+            ),
+            calculation_mode=(
+                "fixed_shield_response"
+            ),
+            source=create_fixed_source(),
+            geometry=create_fixed_geometry(),
+            optimization_mode="minimum_mass",
+        ),
+        "cannot contain an optimization mode",
+    )
+
+    assert_raises(
+        "V1.13 fixed-shield mode rejects optimization weights",
+        ValueError,
+        lambda: ShieldingScenario(
+            schema_version="1.1",
+            scenario_id=(
+                "fixed_weights_test"
+            ),
+            description=(
+                "Invalid fixed-shield weights test."
+            ),
+            calculation_mode=(
+                "fixed_shield_response"
+            ),
+            source=create_fixed_source(),
+            geometry=create_fixed_geometry(),
+            optimization_weights=(
+                OptimizationWeights(
+                    thickness_weight=1.0,
+                    mass_weight=1.0,
+                    cost_weight=1.0,
+                )
+            ),
+        ),
+        "cannot contain optimization weights",
+    )
+
+    assert_raises(
+        "V1.13 fixed-shield mode rejects calculation search limit",
+        ValueError,
+        lambda: ShieldingScenario(
+            schema_version="1.1",
+            scenario_id=(
+                "fixed_search_limit_test"
+            ),
+            description=(
+                "Invalid fixed-shield calculation "
+                "search-limit test."
+            ),
+            calculation_mode=(
+                "fixed_shield_response"
+            ),
+            source=create_fixed_source(),
+            geometry=create_fixed_geometry(),
+            deterministic_settings=(
+                DeterministicSettings(
+                    apply_buildup=True,
+                    calculation_max_thickness_cm=10.0,
+                )
+            ),
+        ),
+        "do not use a calculation maximum thickness",
+    )
+
+        # ------------------------------------------------------------
+    # Evaluation-shell mathematics
+    # ------------------------------------------------------------
+
+    evaluation_shell_inner_radius_cm = 99.5
+    evaluation_shell_outer_radius_cm = 100.5
+
+    evaluation_shell_volume_cm3 = (
+        calculate_spherical_shell_volume_cm3(
+            inner_radius_cm=(
+                evaluation_shell_inner_radius_cm
+            ),
+            outer_radius_cm=(
+                evaluation_shell_outer_radius_cm
+            ),
+        )
+    )
+
+    assert_close(
+        "V1.13 evaluation-shell volume",
+        evaluation_shell_volume_cm3,
+        125664.75334114292,
+        1.0e-6,
+    )
+
+    shell_average_geometric_factor = (
+        calculate_shell_average_geometric_factor_per_cm2(
+            inner_radius_cm=(
+                evaluation_shell_inner_radius_cm
+            ),
+            outer_radius_cm=(
+                evaluation_shell_outer_radius_cm
+            ),
+        )
+    )
+
+    assert_close(
+        "V1.13 shell-average geometric factor",
+        shell_average_geometric_factor,
+        7.957680840587762e-6,
+        1.0e-15,
+    )
+
+    cs137_photon_rate_per_s = (
+        calculate_photon_line_emission_rate_per_s(
+            activity_bq=3.7e10,
+            emission_intensity=0.851,
+        )
+    )
+
+    assert_close(
+        "V1.13 Cs-137 physical photon rate",
+        cs137_photon_rate_per_s,
+        3.1487e10,
+        1.0e-3,
+    )
+
+    unshielded_shell_average_fluence_rate = (
+        calculate_deterministic_shell_averaged_fluence_rate(
+            photon_emission_rate_per_s=(
+                cs137_photon_rate_per_s
+            ),
+            transmission=1.0,
+            inner_radius_cm=(
+                evaluation_shell_inner_radius_cm
+            ),
+            outer_radius_cm=(
+                evaluation_shell_outer_radius_cm
+            ),
+        )
+    )
+
+    assert_close(
+        "V1.13 unshielded shell-average fluence rate",
+        unshielded_shell_average_fluence_rate,
+        250563.49662758686,
+        1.0e-6,
+    )
+
+    quarter_transmission_fluence_rate = (
+        calculate_deterministic_shell_averaged_fluence_rate(
+            photon_emission_rate_per_s=100.0,
+            transmission=0.25,
+            inner_radius_cm=1.0,
+            outer_radius_cm=2.0,
+        )
+    )
+
+    assert_close(
+        "V1.13 shell-average fluence includes transmission",
+        quarter_transmission_fluence_rate,
+        0.8526157665637252,
+        1.0e-12,
+    )
+
+    # ------------------------------------------------------------
+    # OpenMC tally normalization
+    # ------------------------------------------------------------
+
+    (
+        normalized_flux_mean,
+        normalized_flux_standard_deviation,
+    ) = normalize_openmc_track_length_flux_tally(
+        raw_mean_cm_per_source=25.0,
+        raw_standard_deviation_cm_per_source=2.5,
+        tally_volume_cm3=100.0,
+    )
+
+    assert_close(
+        "V1.13 flux tally volume-normalized mean",
+        normalized_flux_mean,
+        0.25,
+        1.0e-12,
+    )
+
+    assert_close(
+        "V1.13 flux tally volume-normalized standard deviation",
+        normalized_flux_standard_deviation,
+        0.025,
+        1.0e-12,
+    )
+
+    (
+        physical_flux_rate,
+        physical_flux_rate_standard_deviation,
+    ) = scale_per_source_estimate_to_physical_rate(
+        mean_per_source=normalized_flux_mean,
+        standard_deviation_per_source=(
+            normalized_flux_standard_deviation
+        ),
+        physical_source_rate_per_s=4.0,
+    )
+
+    assert_close(
+        "V1.13 physical source scaling applies to mean",
+        physical_flux_rate,
+        1.0,
+        1.0e-12,
+    )
+
+    assert_close(
+        "V1.13 physical source scaling applies to standard deviation",
+        physical_flux_rate_standard_deviation,
+        0.1,
+        1.0e-12,
+    )
+
+    relative_uncertainty_before_scaling = (
+        calculate_relative_uncertainty(
+            mean=normalized_flux_mean,
+            standard_deviation=(
+                normalized_flux_standard_deviation
+            ),
+        )
+    )
+
+    relative_uncertainty_after_scaling = (
+        calculate_relative_uncertainty(
+            mean=physical_flux_rate,
+            standard_deviation=(
+                physical_flux_rate_standard_deviation
+            ),
+        )
+    )
+
+    assert_close(
+        "V1.13 tally relative uncertainty",
+        relative_uncertainty_before_scaling,
+        0.1,
+        1.0e-12,
+    )
+
+    assert_close(
+        "V1.13 multiplicative scaling preserves relative uncertainty",
+        relative_uncertainty_after_scaling,
+        relative_uncertainty_before_scaling,
+        1.0e-12,
+    )
+
+    # ------------------------------------------------------------
+    # Comparison metrics
+    # ------------------------------------------------------------
+
+    assert_close(
+        "V1.13 positive relative difference",
+        calculate_relative_difference(
+            comparison_value=12.0,
+            reference_value=10.0,
+        ),
+        0.2,
+        1.0e-12,
+    )
+
+    assert_close(
+        "V1.13 negative relative difference",
+        calculate_relative_difference(
+            comparison_value=8.0,
+            reference_value=10.0,
+        ),
+        -0.2,
+        1.0e-12,
+    )
+
+    assert_close(
+        "V1.13 observed Monte Carlo buildup ratio",
+        calculate_observed_monte_carlo_buildup_ratio(
+            openmc_response=15.0,
+            deterministic_uncollided_response=10.0,
+        ),
+        1.5,
+        1.0e-12,
+    )
+
+    # ------------------------------------------------------------
+    # Invalid mathematical inputs
+    # ------------------------------------------------------------
+
+    assert_raises(
+        "V1.13 shell volume rejects negative inner radius",
+        ValueError,
+        lambda: calculate_spherical_shell_volume_cm3(
+            inner_radius_cm=-1.0,
+            outer_radius_cm=2.0,
+        ),
+        "inner radius cannot be negative",
+    )
+
+    assert_raises(
+        "V1.13 shell volume rejects reversed radii",
+        ValueError,
+        lambda: calculate_spherical_shell_volume_cm3(
+            inner_radius_cm=2.0,
+            outer_radius_cm=1.0,
+        ),
+        "outer radius must be greater",
+    )
+
+    assert_raises(
+        "V1.13 shell-average fluence rejects transmission above one",
+        ValueError,
+        lambda: calculate_deterministic_shell_averaged_fluence_rate(
+            photon_emission_rate_per_s=100.0,
+            transmission=1.1,
+            inner_radius_cm=1.0,
+            outer_radius_cm=2.0,
+        ),
+        "between zero and one",
+    )
+
+    assert_raises(
+        "V1.13 photon rate rejects negative activity",
+        ValueError,
+        lambda: calculate_photon_line_emission_rate_per_s(
+            activity_bq=-1.0,
+            emission_intensity=0.851,
+        ),
+        "activity cannot be negative",
+    )
+
+    assert_raises(
+        "V1.13 tally normalization rejects zero volume",
+        ValueError,
+        lambda: normalize_openmc_track_length_flux_tally(
+            raw_mean_cm_per_source=1.0,
+            raw_standard_deviation_cm_per_source=0.1,
+            tally_volume_cm3=0.0,
+        ),
+        "volume must be greater than zero",
+    )
+
+    assert_raises(
+        "V1.13 tally normalization rejects negative uncertainty",
+        ValueError,
+        lambda: normalize_openmc_track_length_flux_tally(
+            raw_mean_cm_per_source=1.0,
+            raw_standard_deviation_cm_per_source=-0.1,
+            tally_volume_cm3=100.0,
+        ),
+        "standard deviation cannot be negative",
+    )
+
+    assert_raises(
+        "V1.13 relative uncertainty rejects zero mean",
+        ValueError,
+        lambda: calculate_relative_uncertainty(
+            mean=0.0,
+            standard_deviation=0.0,
+        ),
+        "requires a positive mean",
+    )
+
+    assert_raises(
+        "V1.13 relative difference rejects zero reference",
+        ValueError,
+        lambda: calculate_relative_difference(
+            comparison_value=1.0,
+            reference_value=0.0,
+        ),
+        "requires a positive reference value",
+    )
+
+    assert_raises(
+        "V1.13 buildup ratio rejects zero uncollided response",
+        ValueError,
+        lambda: calculate_observed_monte_carlo_buildup_ratio(
+            openmc_response=1.0,
+            deterministic_uncollided_response=0.0,
+        ),
+        "requires a positive deterministic",
+    )
+
+        # ------------------------------------------------------------
+    # Fixed-shield deterministic calculation
+    # ------------------------------------------------------------
+
+    development_fixed_result = (
+        calculate_fixed_shield_response(
+            development_scenario
+        )
+    )
+
+    production_fixed_result = (
+        calculate_fixed_shield_response(
+            production_scenario
+        )
+    )
+
+    assert_equal(
+        "V1.13 development calculation returns fixed-shield result",
+        isinstance(
+            development_fixed_result,
+            FixedShieldDeterministicResult,
+        ),
+        True,
+    )
+
+    assert_equal(
+        "V1.13 production calculation returns fixed-shield result",
+        isinstance(
+            production_fixed_result,
+            FixedShieldDeterministicResult,
+        ),
+        True,
+    )
+
+    assert_equal(
+        "V1.13 development result preserves scenario ID",
+        development_fixed_result.scenario_id,
+        "cs137_v113_development",
+    )
+
+    assert_equal(
+        "V1.13 production result preserves scenario ID",
+        production_fixed_result.scenario_id,
+        "cs137_v113_production",
+    )
+
+    assert_equal(
+        "V1.13 fixed-shield result preserves source name",
+        production_fixed_result.source_name,
+        "Cs-137",
+    )
+
+    assert_close(
+        "V1.13 fixed-shield result preserves activity",
+        assert_not_none(
+            "V1.13 fixed-shield activity exists",
+            production_fixed_result.activity_bq,
+        ),
+        3.7e10,
+        1.0e-3,
+    )
+
+    assert_equal(
+        "V1.13 development result contains one photon line",
+        len(
+            development_fixed_result
+            .line_results
+        ),
+        1,
+    )
+
+    assert_equal(
+        "V1.13 production result contains one photon line",
+        len(
+            production_fixed_result
+            .line_results
+        ),
+        1,
+    )
+
+    development_fixed_line = (
+        development_fixed_result
+        .line_results[0]
+    )
+
+    production_fixed_line = (
+        production_fixed_result
+        .line_results[0]
+    )
+
+    assert_close(
+        "V1.13 development photon-line energy",
+        (
+            development_fixed_line
+            .photon_line
+            .energy
+        ),
+        0.661657,
+        1.0e-12,
+    )
+
+    assert_close(
+        "V1.13 production photon emission rate",
+        (
+            production_fixed_line
+            .photon_rate_per_s
+        ),
+        3.1487e10,
+        1.0e-3,
+    )
+
+    assert_equal(
+        "V1.13 fixed-shield runtime material is Lead",
+        (
+            production_fixed_result
+            .layers[0]
+            .material
+            .key
+        ),
+        "lead",
+    )
+
+    assert_close(
+        "V1.13 development total shield thickness",
+        (
+            development_fixed_result
+            .total_shield_thickness_cm
+        ),
+        1.0,
+        1.0e-12,
+    )
+
+    assert_close(
+        "V1.13 production total shield thickness",
+        (
+            production_fixed_result
+            .total_shield_thickness_cm
+        ),
+        5.0,
+        1.0e-12,
+    )
+
+    assert_close(
+        "V1.13 development Lead optical thickness",
+        (
+            development_fixed_line
+            .shielding_result
+            .total_mfp
+        ),
+        1.260102158391917,
+        1.0e-12,
+    )
+
+    assert_close(
+        "V1.13 production Lead optical thickness",
+        (
+            production_fixed_line
+            .shielding_result
+            .total_mfp
+        ),
+        6.300510791959585,
+        1.0e-12,
+    )
+
+    assert_close(
+        "V1.13 development Lead transmission",
+        (
+            development_fixed_line
+            .shielding_result
+            .total_transmission
+        ),
+        0.2836250503406665,
+        1.0e-15,
+    )
+
+    assert_close(
+        "V1.13 production Lead transmission",
+        (
+            production_fixed_line
+            .shielding_result
+            .total_transmission
+        ),
+        0.0018353670468263651,
+        1.0e-15,
+    )
+
+    assert_close(
+        "V1.13 development point uncollided fluence",
+        (
+            development_fixed_result
+            .total_uncollided_photon_fluence_rate_per_cm2_s
+        ),
+        71066.67656190228,
+        1.0e-8,
+    )
+
+    assert_close(
+        "V1.13 production point uncollided fluence",
+        (
+            production_fixed_result
+            .total_uncollided_photon_fluence_rate_per_cm2_s
+        ),
+        459.8798171477357,
+        1.0e-10,
+    )
+
+    assert_close(
+        "V1.13 development point uncollided air kerma",
+        (
+            development_fixed_result
+            .total_uncollided_collision_air_kerma_rate_gy_per_s
+        ),
+        2.206372966129021e-7,
+        1.0e-18,
+    )
+
+    assert_close(
+        "V1.13 production point uncollided air kerma",
+        (
+            production_fixed_result
+            .total_uncollided_collision_air_kerma_rate_gy_per_s
+        ),
+        1.4277667752470475e-9,
+        1.0e-20,
+    )
+
+    assert_equal(
+        "V1.13 development buildup status is applied",
+        development_fixed_result.buildup_status,
+        "applied",
+    )
+
+    assert_equal(
+        "V1.13 production buildup status is applied",
+        production_fixed_result.buildup_status,
+        "applied",
+    )
+
+    assert_close(
+        "V1.13 development G-P buildup factor",
+        assert_not_none(
+            "V1.13 development buildup factor exists",
+            (
+                development_fixed_line
+                .air_kerma_result
+                .buildup_factor
+            ),
+        ),
+        1.5482056569655493,
+        1.0e-12,
+    )
+
+    assert_close(
+        "V1.13 production G-P buildup factor",
+        assert_not_none(
+            "V1.13 production buildup factor exists",
+            (
+                production_fixed_line
+                .air_kerma_result
+                .buildup_factor
+            ),
+        ),
+        2.6376806705294165,
+        1.0e-12,
+    )
+
+    assert_close(
+        "V1.13 development point G-P-adjusted air kerma",
+        assert_not_none(
+            "V1.13 development adjusted response exists",
+            (
+                development_fixed_result
+                .total_buildup_adjusted_collision_air_kerma_rate_gy_per_s
+            ),
+        ),
+        3.4159191075368083e-7,
+        1.0e-18,
+    )
+
+    assert_close(
+        "V1.13 production point G-P-adjusted air kerma",
+        assert_not_none(
+            "V1.13 production adjusted response exists",
+            (
+                production_fixed_result
+                .total_buildup_adjusted_collision_air_kerma_rate_gy_per_s
+            ),
+        ),
+        3.765992825093255e-9,
+        1.0e-20,
+    )
+
+    assert_equal(
+        "V1.13 fixed-shield source and line response match",
+        (
+            production_fixed_line
+            .air_kerma_result
+            == production_fixed_result
+            .source_air_kerma_result
+            .line_results[0]
+        ),
+        True,
+    )
+
+    assert_equal(
+        "V1.13 fixed-shield calculation has no warnings",
+        production_fixed_result.warnings,
+        [],
+    )
+
+    # ------------------------------------------------------------
+    # Fixed-shield calculation failures
+    # ------------------------------------------------------------
+
+    assert_raises(
+        "V1.13 fixed-shield calculator rejects optimization scenario",
+        ValueError,
+        lambda: calculate_fixed_shield_response(
+            schema_10_scenario
+        ),
+        "requires fixed_shield_response mode",
+    )
+
+    unknown_material_scenario = (
+        ShieldingScenario(
+            schema_version="1.1",
+            scenario_id=(
+                "v113_unknown_fixed_material"
+            ),
+            description=(
+                "Fixed-shield scenario with an unknown "
+                "material key."
+            ),
+            calculation_mode=(
+                "fixed_shield_response"
+            ),
+            source=IsotopeSourceSpec(
+                isotope_key="cs137",
+                activity_bq=3.7e10,
+            ),
+            geometry=(
+                ConcentricSphericalGeometry(
+                    source_cavity_radius_cm=1.0,
+                    evaluation_radius_cm=100.0,
+                    layers=[
+                        ShieldLayerSpec(
+                            material_key=(
+                                "not_a_material"
+                            ),
+                            thickness_cm=1.0,
+                        )
+                    ],
+                )
+            ),
+            deterministic_settings=(
+                DeterministicSettings(
+                    apply_buildup=False
+                )
+            ),
+        )
+    )
+
+    assert_raises(
+        "V1.13 fixed-shield calculator rejects unknown material",
+        ValueError,
+        lambda: calculate_fixed_shield_response(
+            unknown_material_scenario
+        ),
+        "unknown material keys",
+    )
+
+        # ------------------------------------------------------------
+    # General scenario-runner routing
+    # ------------------------------------------------------------
+
+    routed_development_result = (
+        run_scenario(
+            development_scenario
+        )
+    )
+
+    assert_equal(
+        "V1.13 scenario runner returns fixed-shield result",
+        isinstance(
+            routed_development_result,
+            FixedShieldDeterministicResult,
+        ),
+        True,
+    )
+
+    if not isinstance(
+        routed_development_result,
+        FixedShieldDeterministicResult,
+    ):
+        raise AssertionError(
+            "V1.13 scenario runner did not return a "
+            "FixedShieldDeterministicResult."
+        )
+
+    assert_equal(
+        "V1.13 scenario runner matches direct fixed-shield calculation",
+        routed_development_result,
+        development_fixed_result,
+    )
+
+    routed_production_result = (
+        run_scenario(
+            production_scenario
+        )
+    )
+
+    assert_equal(
+        "V1.13 production scenario routes through general runner",
+        isinstance(
+            routed_production_result,
+            FixedShieldDeterministicResult,
+        ),
+        True,
+    )
+
+    if not isinstance(
+        routed_production_result,
+        FixedShieldDeterministicResult,
+    ):
+        raise AssertionError(
+            "V1.13 production scenario did not return a "
+            "FixedShieldDeterministicResult."
+        )
+
+    assert_equal(
+        "V1.13 production runner preserves point response",
+        (
+            routed_production_result
+            .total_uncollided_collision_air_kerma_rate_gy_per_s
+        ),
+        (
+            production_fixed_result
+            .total_uncollided_collision_air_kerma_rate_gy_per_s
+        ),
+    )
+
+        # ------------------------------------------------------------
+    # Matched deterministic shell-average result
+    # ------------------------------------------------------------
+
+    official_evaluation_shell = (
+        SphericalEvaluationShell(
+            center_radius_cm=100.0,
+            thickness_cm=1.0,
+        )
+    )
+
+    assert_close(
+        "V1.13 official evaluation-shell inner radius",
+        official_evaluation_shell.inner_radius_cm,
+        99.5,
+        1.0e-12,
+    )
+
+    assert_close(
+        "V1.13 official evaluation-shell outer radius",
+        official_evaluation_shell.outer_radius_cm,
+        100.5,
+        1.0e-12,
+    )
+
+    point_geometric_factor = (
+        calculate_point_source_geometric_factor_per_cm2(
+            radius_cm=100.0
+        )
+    )
+
+    assert_close(
+        "V1.13 point geometric factor at 100 cm",
+        point_geometric_factor,
+        7.957747154594767e-6,
+        1.0e-15,
+    )
+
+    shell_average_scale_factor = (
+        calculate_shell_average_to_point_scale_factor(
+            point_radius_cm=100.0,
+            shell_inner_radius_cm=99.5,
+            shell_outer_radius_cm=100.5,
+        )
+    )
+
+    assert_close(
+        "V1.13 point-to-shell-average scale factor",
+        shell_average_scale_factor,
+        0.9999916667361105,
+        1.0e-15,
+    )
+
+    development_shell_result = (
+        create_deterministic_shell_average_result(
+            fixed_shield_result=(
+                development_fixed_result
+            ),
+            evaluation_shell_thickness_cm=1.0,
+        )
+    )
+
+    production_shell_result = (
+        create_deterministic_shell_average_result(
+            fixed_shield_result=(
+                production_fixed_result
+            ),
+            evaluation_shell_thickness_cm=1.0,
+        )
+    )
+
+    assert_equal(
+        "V1.13 development returns shell-average result",
+        isinstance(
+            development_shell_result,
+            DeterministicShellAverageResult,
+        ),
+        True,
+    )
+
+    assert_equal(
+        "V1.13 production shell result preserves scenario ID",
+        production_shell_result.scenario_id,
+        "cs137_v113_production",
+    )
+
+    assert_equal(
+        "V1.13 production shell result preserves source name",
+        production_shell_result.source_name,
+        "Cs-137",
+    )
+
+    assert_close(
+        "V1.13 development shell-average fluence",
+        (
+            development_shell_result
+            .total_shell_average_uncollided_photon_fluence_rate_per_cm2_s
+        ),
+        71066.08434453273,
+        1.0e-8,
+    )
+
+    assert_close(
+        "V1.13 production shell-average fluence",
+        (
+            production_shell_result
+            .total_shell_average_uncollided_photon_fluence_rate_per_cm2_s
+        ),
+        459.87598484786196,
+        1.0e-10,
+    )
+
+    assert_close(
+        "V1.13 development shell-average uncollided air kerma",
+        (
+            development_shell_result
+            .total_shell_average_uncollided_collision_air_kerma_rate_gy_per_s
+        ),
+        2.2063545798408556e-7,
+        1.0e-18,
+    )
+
+    assert_close(
+        "V1.13 production shell-average uncollided air kerma",
+        (
+            production_shell_result
+            .total_shell_average_uncollided_collision_air_kerma_rate_gy_per_s
+        ),
+        1.4277548772897367e-9,
+        1.0e-20,
+    )
+
+    assert_close(
+        "V1.13 development shell-average G-P response",
+        assert_not_none(
+            "V1.13 development shell G-P response exists",
+            (
+                development_shell_result
+                .total_shell_average_buildup_adjusted_collision_air_kerma_rate_gy_per_s
+            ),
+        ),
+        3.4158906417814603e-7,
+        1.0e-18,
+    )
+
+    assert_close(
+        "V1.13 production shell-average G-P response",
+        assert_not_none(
+            "V1.13 production shell G-P response exists",
+            (
+                production_shell_result
+                .total_shell_average_buildup_adjusted_collision_air_kerma_rate_gy_per_s
+            ),
+        ),
+        3.765961442081238e-9,
+        1.0e-20,
+    )
+
+    assert_close(
+        "V1.13 production shell-average air kerma in microGy per hour",
+        convert_gy_per_s_to_microgy_per_h(
+            production_shell_result
+            .total_shell_average_uncollided_collision_air_kerma_rate_gy_per_s
+        ),
+        5.139917558243052,
+        1.0e-12,
+    )
+
+    assert_close(
+        "V1.13 production shell-average G-P response in microGy per hour",
+        convert_gy_per_s_to_microgy_per_h(
+            assert_not_none(
+                "V1.13 production shell adjusted total exists",
+                (
+                    production_shell_result
+                    .total_shell_average_buildup_adjusted_collision_air_kerma_rate_gy_per_s
+                ),
+            )
+        ),
+        13.557461191492456,
+        1.0e-12,
+    )
+
+    assert_equal(
+        "V1.13 shell result preserves point result",
+        (
+            production_shell_result
+            .fixed_shield_result
+        ),
+        production_fixed_result,
+    )
+
+    assert_equal(
+        "V1.13 shell result contains one photon line",
+        len(
+            production_shell_result
+            .line_results
+        ),
+        1,
+    )
+
+    assert_close(
+        "V1.13 shell line uses common scale factor",
+        (
+            production_shell_result
+            .line_results[0]
+            .point_to_shell_average_scale_factor
+        ),
+        shell_average_scale_factor,
+        1.0e-15,
+    )
+
+    # ------------------------------------------------------------
+    # Invalid evaluation-shell inputs
+    # ------------------------------------------------------------
+
+    assert_raises(
+        "V1.13 evaluation shell rejects zero thickness",
+        ValueError,
+        lambda: SphericalEvaluationShell(
+            center_radius_cm=100.0,
+            thickness_cm=0.0,
+        ),
+        "thickness must be greater than zero",
+    )
+
+    assert_raises(
+        "V1.13 evaluation shell rejects nonpositive inner radius",
+        ValueError,
+        lambda: SphericalEvaluationShell(
+            center_radius_cm=1.0,
+            thickness_cm=2.0,
+        ),
+        "inner radius must be greater than zero",
+    )
+
+    assert_raises(
+        "V1.13 point geometric factor rejects zero radius",
+        ValueError,
+        lambda: calculate_point_source_geometric_factor_per_cm2(
+            radius_cm=0.0
+        ),
+        "radius must be greater than zero",
+    )
+
+    assert_raises(
+        "V1.13 matched shell rejects shield intersection",
+        ValueError,
+        lambda: create_deterministic_shell_average_result(
+            fixed_shield_result=(
+                production_fixed_result
+            ),
+            evaluation_shell_thickness_cm=190.0,
+        ),
+        "entirely beyond the outer shield radius",
+    )
+
+        # ------------------------------------------------------------
+    # OpenMC-independent settings model
+    # ------------------------------------------------------------
+
+    test_openmc_settings = OpenMCSettings(
+        profile_name="V113_TEST",
+        particles_per_batch=2000,
+        batches=5,
+        random_seed=12345,
+        threads=1,
+        energy_bin_boundaries_ev=[
+            1000.0,
+            100000.0,
+            700000.0,
+        ],
+        electron_treatment="ttb",
+        atomic_relaxation=True,
+        photon_cutoff_energy_ev=1000.0,
+        outer_boundary_radius_cm=110.0,
+    )
+
+    assert_equal(
+        "V1.13 OpenMC settings normalize profile name",
+        test_openmc_settings.profile_name,
+        "v113_test",
+    )
+
+    assert_equal(
+        "V1.13 OpenMC settings calculate total particles",
+        test_openmc_settings.total_source_particles,
+        10000,
+    )
+
+    assert_equal(
+        "V1.13 OpenMC settings default statepoint to final batch",
+        test_openmc_settings.statepoint_batches,
+        [5],
+    )
+
+    assert_close(
+        "V1.13 OpenMC settings preserve minimum spectrum energy",
+        test_openmc_settings.minimum_spectrum_energy_ev,
+        1000.0,
+        1.0e-12,
+    )
+
+    assert_close(
+        "V1.13 OpenMC settings preserve maximum spectrum energy",
+        test_openmc_settings.maximum_spectrum_energy_ev,
+        700000.0,
+        1.0e-12,
+    )
+
+    assert_equal(
+        "V1.13 OpenMC settings preserve TTB treatment",
+        test_openmc_settings.electron_treatment,
+        "ttb",
+    )
+
+    assert_equal(
+        "V1.13 OpenMC settings preserve atomic relaxation",
+        test_openmc_settings.atomic_relaxation,
+        True,
+    )
+
+    # ------------------------------------------------------------
+    # Synthetic OpenMC spectrum result
+    # ------------------------------------------------------------
+
+    first_energy_bin = OpenMCEnergyBinResult(
+        lower_energy_ev=1000.0,
+        upper_energy_ev=100000.0,
+        raw_track_length_flux_mean_cm_per_source=10.0,
+        raw_track_length_flux_standard_deviation_cm_per_source=1.0,
+        volume_normalized_fluence_mean_per_cm2_per_source=0.1,
+        volume_normalized_fluence_standard_deviation_per_cm2_per_source=0.01,
+        physical_fluence_rate_mean_per_cm2_s=1.0,
+        physical_fluence_rate_standard_deviation_per_cm2_s=0.1,
+        response_coefficient_gy_cm2_per_photon=0.5,
+        air_kerma_rate_contribution_gy_per_s=0.5,
+    )
+
+    second_energy_bin = OpenMCEnergyBinResult(
+        lower_energy_ev=100000.0,
+        upper_energy_ev=700000.0,
+        raw_track_length_flux_mean_cm_per_source=20.0,
+        raw_track_length_flux_standard_deviation_cm_per_source=2.0,
+        volume_normalized_fluence_mean_per_cm2_per_source=0.2,
+        volume_normalized_fluence_standard_deviation_per_cm2_per_source=0.02,
+        physical_fluence_rate_mean_per_cm2_s=2.0,
+        physical_fluence_rate_standard_deviation_per_cm2_s=0.2,
+        response_coefficient_gy_cm2_per_photon=0.5,
+        air_kerma_rate_contribution_gy_per_s=1.0,
+    )
+
+    assert_close(
+        "V1.13 OpenMC energy-bin contribution is stored",
+        (
+            second_energy_bin
+            .air_kerma_rate_contribution_gy_per_s
+        ),
+        1.0,
+        1.0e-12,
+    )
+
+    # ------------------------------------------------------------
+    # Synthetic processed OpenMC response
+    # ------------------------------------------------------------
+
+    synthetic_evaluation_shell = (
+        SphericalEvaluationShell(
+            center_radius_cm=100.0,
+            thickness_cm=1.0,
+        )
+    )
+
+    synthetic_shell_volume = (
+        calculate_spherical_shell_volume_cm3(
+            inner_radius_cm=99.5,
+            outer_radius_cm=100.5,
+        )
+    )
+
+    synthetic_direct_response_rate = 1.5
+
+    synthetic_physical_source_rate = 10.0
+
+    synthetic_response_per_source = (
+        synthetic_direct_response_rate
+        / synthetic_physical_source_rate
+    )
+
+    synthetic_raw_response = (
+        synthetic_response_per_source
+        * synthetic_shell_volume
+    )
+
+    synthetic_response_result = (
+        OpenMCResponseResult(
+            scenario_id=(
+                "synthetic_v113_response"
+            ),
+            settings_profile_name=(
+                "v113_test"
+            ),
+            evaluation_shell=(
+                synthetic_evaluation_shell
+            ),
+            shell_volume_cm3=(
+                synthetic_shell_volume
+            ),
+            physical_source_rate_per_s=(
+                synthetic_physical_source_rate
+            ),
+            energy_bin_results=[
+                first_energy_bin,
+                second_energy_bin,
+            ],
+            raw_direct_response_mean_gy_cm3_per_source=(
+                synthetic_raw_response
+            ),
+            raw_direct_response_standard_deviation_gy_cm3_per_source=(
+                synthetic_raw_response
+                * 0.1
+            ),
+            direct_response_mean_gy_per_source=(
+                synthetic_response_per_source
+            ),
+            direct_response_standard_deviation_gy_per_source=(
+                synthetic_response_per_source
+                * 0.1
+            ),
+            direct_response_rate_gy_per_s=(
+                synthetic_direct_response_rate
+            ),
+            direct_response_rate_standard_deviation_gy_per_s=(
+                synthetic_direct_response_rate
+                * 0.1
+            ),
+            relative_uncertainty=0.1,
+            spectrum_folded_response_rate_gy_per_s=1.5,
+        )
+    )
+
+    assert_close(
+        "V1.13 OpenMC response preserves physical rate",
+        (
+            synthetic_response_result
+            .direct_response_rate_gy_per_s
+        ),
+        1.5,
+        1.0e-12,
+    )
+
+    assert_close(
+        "V1.13 OpenMC response preserves relative uncertainty",
+        (
+            synthetic_response_result
+            .relative_uncertainty
+        ),
+        0.1,
+        1.0e-12,
+    )
+
+    assert_close(
+        "V1.13 OpenMC response sums spectrum contributions",
+        (
+            synthetic_response_result
+            .spectrum_folded_response_rate_gy_per_s
+        ),
+        1.5,
+        1.0e-12,
+    )
+
+    # ------------------------------------------------------------
+    # OpenMC run-manifest model
+    # ------------------------------------------------------------
+
+    synthetic_manifest = OpenMCRunManifest(
+        scenario_id="synthetic_v113_response",
+        settings_profile_name="v113_test",
+        openmc_version="0.15.0",
+        python_version="3.13.5",
+        cross_section_library=(
+            "/example/cross_sections.xml"
+        ),
+        electron_treatment="ttb",
+        atomic_relaxation=True,
+        photon_cutoff_energy_ev=1000.0,
+        particles_per_batch=2000,
+        batches=5,
+        total_source_particles=10000,
+        random_seed=12345,
+        threads=1,
+        runtime_seconds=2.5,
+        statepoint_filename="statepoint.5.h5",
+        execution_timestamp_utc=(
+            "2026-07-28T18:00:00+00:00"
+        ),
+        git_commit="abc123",
+    )
+
+    assert_equal(
+        "V1.13 OpenMC manifest preserves total particles",
+        synthetic_manifest.total_source_particles,
+        10000,
+    )
+
+    assert_equal(
+        "V1.13 OpenMC manifest preserves statepoint name",
+        synthetic_manifest.statepoint_filename,
+        "statepoint.5.h5",
+    )
+
+    # ------------------------------------------------------------
+    # Invalid OpenMC model inputs
+    # ------------------------------------------------------------
+
+    assert_raises(
+        "V1.13 OpenMC settings reject zero particles",
+        ValueError,
+        lambda: OpenMCSettings(
+            profile_name="invalid_particles",
+            particles_per_batch=0,
+            batches=5,
+            random_seed=12345,
+            threads=1,
+            energy_bin_boundaries_ev=[
+                1000.0,
+                700000.0,
+            ],
+        ),
+        "positive integer",
+    )
+
+    assert_raises(
+        "V1.13 OpenMC settings reject unsupported electron treatment",
+        ValueError,
+        lambda: OpenMCSettings(
+            profile_name="invalid_electron_treatment",
+            particles_per_batch=2000,
+            batches=5,
+            random_seed=12345,
+            threads=1,
+            energy_bin_boundaries_ev=[
+                1000.0,
+                700000.0,
+            ],
+            electron_treatment=cast(
+                ElectronTreatment,
+                "invalid",
+            ),
+        ),
+        "Unsupported OpenMC electron treatment",
+    )
+
+    assert_raises(
+        "V1.13 OpenMC settings reject unordered energy boundaries",
+        ValueError,
+        lambda: OpenMCSettings(
+            profile_name="invalid_energy_order",
+            particles_per_batch=2000,
+            batches=5,
+            random_seed=12345,
+            threads=1,
+            energy_bin_boundaries_ev=[
+                1000.0,
+                700000.0,
+                100000.0,
+            ],
+        ),
+        "strictly increasing",
+    )
+
+    assert_raises(
+        "V1.13 OpenMC settings reject spectrum below cutoff",
+        ValueError,
+        lambda: OpenMCSettings(
+            profile_name="invalid_cutoff",
+            particles_per_batch=2000,
+            batches=5,
+            random_seed=12345,
+            threads=1,
+            energy_bin_boundaries_ev=[
+                500.0,
+                700000.0,
+            ],
+            photon_cutoff_energy_ev=1000.0,
+        ),
+        "below the photon cutoff",
+    )
+
+    assert_raises(
+        "V1.13 OpenMC settings require final statepoint",
+        ValueError,
+        lambda: OpenMCSettings(
+            profile_name="missing_final_statepoint",
+            particles_per_batch=2000,
+            batches=5,
+            random_seed=12345,
+            threads=1,
+            energy_bin_boundaries_ev=[
+                1000.0,
+                700000.0,
+            ],
+            statepoint_batches=[
+                2,
+                4,
+            ],
+        ),
+        "include the final batch",
+    )
+
+    assert_raises(
+        "V1.13 OpenMC energy bin rejects inconsistent contribution",
+        ValueError,
+        lambda: OpenMCEnergyBinResult(
+            lower_energy_ev=1000.0,
+            upper_energy_ev=700000.0,
+            raw_track_length_flux_mean_cm_per_source=1.0,
+            raw_track_length_flux_standard_deviation_cm_per_source=0.1,
+            volume_normalized_fluence_mean_per_cm2_per_source=0.01,
+            volume_normalized_fluence_standard_deviation_per_cm2_per_source=0.001,
+            physical_fluence_rate_mean_per_cm2_s=1.0,
+            physical_fluence_rate_standard_deviation_per_cm2_s=0.1,
+            response_coefficient_gy_cm2_per_photon=0.5,
+            air_kerma_rate_contribution_gy_per_s=2.0,
+        ),
+        "must equal physical fluence rate",
+    )
+
+    assert_raises(
+        "V1.13 OpenMC manifest rejects inconsistent particle total",
+        ValueError,
+        lambda: OpenMCRunManifest(
+            scenario_id="invalid_manifest",
+            settings_profile_name="v113_test",
+            openmc_version="0.15.0",
+            python_version="3.13.5",
+            cross_section_library=(
+                "/example/cross_sections.xml"
+            ),
+            electron_treatment="ttb",
+            atomic_relaxation=True,
+            photon_cutoff_energy_ev=1000.0,
+            particles_per_batch=2000,
+            batches=5,
+            total_source_particles=9999,
+            random_seed=12345,
+            threads=1,
+            runtime_seconds=2.5,
+            statepoint_filename=(
+                "statepoint.5.h5"
+            ),
+            execution_timestamp_utc=(
+                "2026-07-28T18:00:00+00:00"
+            ),
+        ),
+        "must equal particles per batch times batches",
+    )
+
+        # ------------------------------------------------------------
+    # Reproducible OpenMC settings profiles
+    # ------------------------------------------------------------
+
+    development_openmc_settings_path = (
+        repository_root
+        / "config"
+        / "openmc"
+        / "v113_development.json"
+    )
+
+    production_openmc_settings_path = (
+        repository_root
+        / "config"
+        / "openmc"
+        / "v113_production.json"
+    )
+
+    assert_equal(
+        "V1.13 development OpenMC profile exists",
+        development_openmc_settings_path.is_file(),
+        True,
+    )
+
+    assert_equal(
+        "V1.13 production OpenMC profile exists",
+        production_openmc_settings_path.is_file(),
+        True,
+    )
+
+    development_openmc_settings = (
+        load_openmc_settings(
+            development_openmc_settings_path
+        )
+    )
+
+    production_openmc_settings = (
+        load_openmc_settings(
+            production_openmc_settings_path
+        )
+    )
+
+    assert_equal(
+        "V1.13 development OpenMC profile preserves name",
+        development_openmc_settings.profile_name,
+        "v113_development",
+    )
+
+    assert_equal(
+        "V1.13 production OpenMC profile preserves name",
+        production_openmc_settings.profile_name,
+        "v113_production",
+    )
+
+    assert_equal(
+        "V1.13 development OpenMC profile uses 100000 histories",
+        (
+            development_openmc_settings
+            .total_source_particles
+        ),
+        100000,
+    )
+
+    assert_equal(
+        "V1.13 production OpenMC profile uses 5000000 histories",
+        (
+            production_openmc_settings
+            .total_source_particles
+        ),
+        5000000,
+    )
+
+    assert_equal(
+        "V1.13 development OpenMC profile uses one thread",
+        development_openmc_settings.threads,
+        1,
+    )
+
+    assert_equal(
+        "V1.13 production OpenMC profile uses four threads",
+        production_openmc_settings.threads,
+        4,
+    )
+
+    assert_equal(
+        "V1.13 OpenMC profiles share random seed",
+        development_openmc_settings.random_seed,
+        production_openmc_settings.random_seed,
+    )
+
+    assert_equal(
+        "V1.13 OpenMC profiles share electron treatment",
+        development_openmc_settings.electron_treatment,
+        production_openmc_settings.electron_treatment,
+    )
+
+    assert_equal(
+        "V1.13 OpenMC profiles use TTB electron treatment",
+        production_openmc_settings.electron_treatment,
+        "ttb",
+    )
+
+    assert_equal(
+        "V1.13 OpenMC profiles enable atomic relaxation",
+        production_openmc_settings.atomic_relaxation,
+        True,
+    )
+
+    assert_close(
+        "V1.13 OpenMC profiles use 1 keV photon cutoff",
+        (
+            production_openmc_settings
+            .photon_cutoff_energy_ev
+        ),
+        1000.0,
+        1.0e-12,
+    )
+
+    assert_close(
+        "V1.13 OpenMC outer boundary radius",
+        (
+            production_openmc_settings
+            .outer_boundary_radius_cm
+        ),
+        110.0,
+        1.0e-12,
+    )
+
+    assert_equal(
+        "V1.13 OpenMC profiles share spectrum boundaries",
+        (
+            development_openmc_settings
+            .energy_bin_boundaries_ev
+        ),
+        (
+            production_openmc_settings
+            .energy_bin_boundaries_ev
+        ),
+    )
+
+    assert_equal(
+        "V1.13 OpenMC spectrum has 43 boundaries",
+        len(
+            production_openmc_settings
+            .energy_bin_boundaries_ev
+        ),
+        43,
+    )
+
+    assert_equal(
+        "V1.13 Cs-137 line falls in refined source-energy bin",
+        (
+            660000.0
+            < 661657.0
+            < 665000.0
+        ),
+        True,
+    )
+
+    assert_equal(
+        "V1.13 production OpenMC profile preserves checkpoints",
+        (
+            production_openmc_settings
+            .statepoint_batches
+        ),
+        [
+            25,
+            50,
+            75,
+            100,
+        ],
+    )
+
+    assert_equal(
+        "V1.13 development OpenMC profile writes final statepoint",
+        (
+            development_openmc_settings
+            .statepoint_batches
+        ),
+        [
+            10,
+        ],
+    )
+
+    # ------------------------------------------------------------
+    # OpenMC settings serialization
+    # ------------------------------------------------------------
+
+    development_openmc_data = (
+        openmc_settings_to_dict(
+            development_openmc_settings
+        )
+    )
+
+    assert_equal(
+        "V1.13 OpenMC settings serialize schema version",
+        development_openmc_data[
+            "schema_version"
+        ],
+        "1.0",
+    )
+
+    assert_equal(
+        "V1.13 OpenMC settings serialize execution group",
+        (
+            development_openmc_data[
+                "execution"
+            ][
+                "particles_per_batch"
+            ]
+        ),
+        10000,
+    )
+
+    assert_equal(
+        "V1.13 OpenMC settings serialize physics group",
+        (
+            development_openmc_data[
+                "physics"
+            ][
+                "electron_treatment"
+            ]
+        ),
+        "ttb",
+    )
+
+    assert_equal(
+        "V1.13 OpenMC settings serialize tally boundaries",
+        len(
+            development_openmc_data[
+                "tallies"
+            ][
+                "energy_bin_boundaries_ev"
+            ]
+        ),
+        43,
+    )
+
+    reconstructed_openmc_settings = (
+        openmc_settings_from_dict(
+            development_openmc_data
+        )
+    )
+
+    assert_equal(
+        "V1.13 OpenMC settings dictionary round trip",
+        reconstructed_openmc_settings,
+        development_openmc_settings,
+    )
+
+    with TemporaryDirectory() as temporary_directory:
+        temporary_path = Path(
+            temporary_directory
+        )
+
+        settings_roundtrip_path = (
+            temporary_path
+            / "v113_openmc_settings.json"
+        )
+
+        saved_settings_path = (
+            save_openmc_settings(
+                production_openmc_settings,
+                settings_roundtrip_path,
+            )
+        )
+
+        assert_equal(
+            "V1.13 OpenMC settings save creates file",
+            saved_settings_path.is_file(),
+            True,
+        )
+
+        reloaded_openmc_settings = (
+            load_openmc_settings(
+                settings_roundtrip_path
+            )
+        )
+
+        assert_equal(
+            "V1.13 OpenMC settings file round trip",
+            reloaded_openmc_settings,
+            production_openmc_settings,
+        )
+
+    # ------------------------------------------------------------
+    # Invalid OpenMC settings JSON
+    # ------------------------------------------------------------
+
+    invalid_schema_openmc_data = dict(
+        development_openmc_data
+    )
+
+    invalid_schema_openmc_data[
+        "schema_version"
+    ] = "999.0"
+
+    assert_raises(
+        "V1.13 OpenMC settings reject unsupported schema",
+        ValueError,
+        lambda: openmc_settings_from_dict(
+            invalid_schema_openmc_data
+        ),
+        "Unsupported OpenMC settings schema version",
+    )
+
+    invalid_physics_openmc_data = dict(
+        development_openmc_data
+    )
+
+    invalid_physics_openmc_data[
+        "physics"
+    ] = []
+
+    assert_raises(
+        "V1.13 OpenMC settings reject non-object physics settings",
+        ValueError,
+        lambda: openmc_settings_from_dict(
+            invalid_physics_openmc_data
+        ),
+        "must be a JSON object",
+    )
+
+    invalid_treatment_openmc_data = dict(
+        development_openmc_data
+    )
+
+    invalid_treatment_openmc_data[
+        "physics"
+    ] = dict(
+        development_openmc_data[
+            "physics"
+        ]
+    )
+
+    invalid_treatment_openmc_data[
+        "physics"
+    ][
+        "electron_treatment"
+    ] = "invalid"
+
+    assert_raises(
+        "V1.13 OpenMC settings JSON rejects invalid electron treatment",
+        ValueError,
+        lambda: openmc_settings_from_dict(
+            invalid_treatment_openmc_data
+        ),
+        "Unsupported OpenMC electron treatment",
+    )
+
+    invalid_boundaries_openmc_data = dict(
+        development_openmc_data
+    )
+
+    invalid_boundaries_openmc_data[
+        "tallies"
+    ] = {
+        "energy_bin_boundaries_ev": [
+            1000.0,
+            True,
+            700000.0,
+        ]
+    }
+
+    assert_raises(
+        "V1.13 OpenMC settings JSON rejects Boolean energy boundary",
+        ValueError,
+        lambda: openmc_settings_from_dict(
+            invalid_boundaries_openmc_data
+        ),
+        "must contain only numerical values",
+    )
+
+    invalid_statepoints_openmc_data = dict(
+        development_openmc_data
+    )
+
+    invalid_statepoints_openmc_data[
+        "output"
+    ] = {
+        "statepoint_batches": [
+            5.0,
+            10,
+        ]
+    }
+
+    assert_raises(
+        "V1.13 OpenMC settings JSON rejects noninteger statepoint",
+        ValueError,
+        lambda: openmc_settings_from_dict(
+            invalid_statepoints_openmc_data
+        ),
+        "must contain only integers",
+    )
+
+        # ------------------------------------------------------------
+    # Dry-air OpenMC response-coefficient bridge
+    # ------------------------------------------------------------
+
+    unit_response_coefficient = (
+        calculate_air_kerma_response_coefficient_gy_cm2_per_photon(
+            photon_energy_mev=1.0,
+            mu_en_over_rho_cm2_per_g=1.0,
+        )
+    )
+
+    assert_close(
+        "V1.13 unit dry-air response coefficient",
+        unit_response_coefficient,
+        1.602176634e-10,
+        1.0e-22,
+    )
+
+    cs137_response_point = (
+        get_dry_air_response_point_at_energy(
+            photon_energy_mev=0.661657
+        )
+    )
+
+    assert_close(
+        "V1.13 Cs-137 response-point energy",
+        cs137_response_point.energy_ev,
+        661657.0,
+        1.0e-9,
+    )
+
+    assert_close(
+        "V1.13 Cs-137 dry-air response coefficient",
+        (
+            cs137_response_point
+            .response_coefficient_gy_cm2_per_photon
+        ),
+        3.1046519590756027e-12,
+        1.0e-24,
+    )
+
+    assert_equal(
+        "V1.13 Cs-137 response point preserves NIST source",
+        (
+            "NIST X-Ray Mass Attenuation Coefficients"
+            in cs137_response_point
+            .coefficient_source
+        ),
+        True,
+    )
+
+    dry_air_response_function = (
+        create_openmc_dry_air_response_function()
+    )
+
+    assert_equal(
+        "V1.13 OpenMC dry-air response function type",
+        isinstance(
+            dry_air_response_function,
+            OpenMCAirKermaResponseFunction,
+        ),
+        True,
+    )
+
+    assert_equal(
+        "V1.13 OpenMC dry-air response function has 38 points",
+        len(
+            dry_air_response_function
+            .points
+        ),
+        38,
+    )
+
+    assert_equal(
+        "V1.13 OpenMC dry-air response function uses log-log interpolation",
+        dry_air_response_function.interpolation,
+        "log-log",
+    )
+
+    assert_close(
+        "V1.13 OpenMC response minimum energy",
+        (
+            dry_air_response_function
+            .minimum_energy_ev
+        ),
+        1000.0,
+        1.0e-12,
+    )
+
+    assert_close(
+        "V1.13 OpenMC response maximum energy",
+        (
+            dry_air_response_function
+            .maximum_energy_ev
+        ),
+        20000000.0,
+        1.0e-6,
+    )
+
+    response_edge_points = [
+        point
+        for point in (
+            dry_air_response_function
+            .points
+        )
+        if (
+            point.absorption_edge_side
+            is not None
+        )
+    ]
+
+    assert_equal(
+        "V1.13 OpenMC response preserves two argon edge values",
+        len(response_edge_points),
+        2,
+    )
+
+    assert_equal(
+        "V1.13 OpenMC response preserves below-edge side",
+        (
+            response_edge_points[0]
+            .absorption_edge_side
+        ),
+        "below",
+    )
+
+    assert_equal(
+        "V1.13 OpenMC response preserves above-edge side",
+        (
+            response_edge_points[1]
+            .absorption_edge_side
+        ),
+        "above",
+    )
+
+    assert_equal(
+        "V1.13 OpenMC response edge energies are strictly increasing",
+        (
+            response_edge_points[1]
+            .energy_ev
+            > response_edge_points[0]
+            .energy_ev
+        ),
+        True,
+    )
+
+    assert_close(
+        "V1.13 below-edge dry-air response coefficient",
+        (
+            response_edge_points[0]
+            .response_coefficient_gy_cm2_per_photon
+        ),
+        6.825043349581339e-11,
+        1.0e-22,
+    )
+
+    assert_close(
+        "V1.13 above-edge dry-air response coefficient",
+        (
+            response_edge_points[1]
+            .response_coefficient_gy_cm2_per_photon
+        ),
+        7.492152849916356e-11,
+        1.0e-22,
+    )
+
+    interpolated_cs137_response = (
+        evaluate_openmc_response_function_at_energy_ev(
+            response_function=(
+                dry_air_response_function
+            ),
+            energy_ev=661657.0,
+        )
+    )
+
+    assert_close(
+        "V1.13 OpenMC response interpolation matches deterministic Cs-137 coefficient",
+        interpolated_cs137_response,
+        (
+            cs137_response_point
+            .response_coefficient_gy_cm2_per_photon
+        ),
+        1.0e-23,
+    )
+
+    production_shell_air_kerma_from_bridge = (
+        fold_photon_fluence_rate_to_air_kerma_rate_gy_per_s(
+            photon_fluence_rate_per_cm2_s=(
+                production_shell_result
+                .total_shell_average_uncollided_photon_fluence_rate_per_cm2_s
+            ),
+            response_coefficient_gy_cm2_per_photon=(
+                interpolated_cs137_response
+            ),
+        )
+    )
+
+    assert_close(
+        "V1.13 response bridge reproduces production shell air kerma",
+        production_shell_air_kerma_from_bridge,
+        (
+            production_shell_result
+            .total_shell_average_uncollided_collision_air_kerma_rate_gy_per_s
+        ),
+        1.0e-20,
+    )
+
+    representative_source_bin_energy = (
+        calculate_energy_bin_representative_energy_ev(
+            lower_energy_ev=660000.0,
+            upper_energy_ev=665000.0,
+        )
+    )
+
+    assert_close(
+        "V1.13 refined Cs-137 bin geometric energy",
+        representative_source_bin_energy,
+        662495.2830020754,
+        1.0e-9,
+    )
+
+    representative_source_bin_response = (
+        calculate_energy_bin_response_coefficient_gy_cm2_per_photon(
+            response_function=(
+                dry_air_response_function
+            ),
+            lower_energy_ev=660000.0,
+            upper_energy_ev=665000.0,
+        )
+    )
+
+    assert_close(
+        "V1.13 refined Cs-137 bin response coefficient",
+        representative_source_bin_response,
+        3.1082524326733914e-12,
+        1.0e-23,
+    )
+
+    assert_close(
+        "V1.13 response function is zero below supplied range",
+        evaluate_openmc_response_function_at_energy_ev(
+            response_function=(
+                dry_air_response_function
+            ),
+            energy_ev=500.0,
+        ),
+        0.0,
+        0.0,
+    )
+
+    validate_response_function_covers_openmc_settings(
+        response_function=(
+            dry_air_response_function
+        ),
+        settings=(
+            development_openmc_settings
+        ),
+    )
+
+    assert_equal(
+        "V1.13 dry-air response covers development profile",
+        True,
+        True,
+    )
+
+    validate_response_function_covers_openmc_settings(
+        response_function=(
+            dry_air_response_function
+        ),
+        settings=(
+            production_openmc_settings
+        ),
+    )
+
+    assert_equal(
+        "V1.13 dry-air response covers production profile",
+        True,
+        True,
+    )
+
+    # ------------------------------------------------------------
+    # Invalid response-coefficient inputs
+    # ------------------------------------------------------------
+
+    assert_raises(
+        "V1.13 response coefficient rejects zero photon energy",
+        ValueError,
+        lambda: calculate_air_kerma_response_coefficient_gy_cm2_per_photon(
+            photon_energy_mev=0.0,
+            mu_en_over_rho_cm2_per_g=0.03,
+        ),
+        "energy must be greater than zero",
+    )
+
+    assert_raises(
+        "V1.13 response coefficient rejects zero mu_en over rho",
+        ValueError,
+        lambda: calculate_air_kerma_response_coefficient_gy_cm2_per_photon(
+            photon_energy_mev=0.661657,
+            mu_en_over_rho_cm2_per_g=0.0,
+        ),
+        "coefficient must be greater than zero",
+    )
+
+    assert_raises(
+        "V1.13 OpenMC response point rejects zero coefficient",
+        ValueError,
+        lambda: OpenMCAirKermaResponsePoint(
+            energy_ev=1000.0,
+            response_coefficient_gy_cm2_per_photon=0.0,
+            coefficient_source="Test source",
+        ),
+        "coefficient must be greater than zero",
+    )
+
+    assert_raises(
+        "V1.13 OpenMC response function rejects unordered energies",
+        ValueError,
+        lambda: OpenMCAirKermaResponseFunction(
+            points=(
+                OpenMCAirKermaResponsePoint(
+                    energy_ev=2000.0,
+                    response_coefficient_gy_cm2_per_photon=1.0,
+                    coefficient_source="Test source",
+                ),
+                OpenMCAirKermaResponsePoint(
+                    energy_ev=1000.0,
+                    response_coefficient_gy_cm2_per_photon=1.0,
+                    coefficient_source="Test source",
+                ),
+            )
+        ),
+        "strictly increasing",
+    )
+
+    assert_raises(
+        "V1.13 spectrum-bin response rejects reversed boundaries",
+        ValueError,
+        lambda: calculate_energy_bin_response_coefficient_gy_cm2_per_photon(
+            response_function=(
+                dry_air_response_function
+            ),
+            lower_energy_ev=700000.0,
+            upper_energy_ev=600000.0,
+        ),
+        "upper boundary must be greater",
+    )
+
+    assert_raises(
+        "V1.13 response folding rejects negative fluence",
+        ValueError,
+        lambda: fold_photon_fluence_rate_to_air_kerma_rate_gy_per_s(
+            photon_fluence_rate_per_cm2_s=-1.0,
+            response_coefficient_gy_cm2_per_photon=(
+                1.0e-12
+            ),
+        ),
+        "fluence rate cannot be negative",
+    )
+
+    insufficient_response_function = (
+        OpenMCAirKermaResponseFunction(
+            points=(
+                OpenMCAirKermaResponsePoint(
+                    energy_ev=2000.0,
+                    response_coefficient_gy_cm2_per_photon=1.0e-10,
+                    coefficient_source="Test source",
+                ),
+                OpenMCAirKermaResponsePoint(
+                    energy_ev=600000.0,
+                    response_coefficient_gy_cm2_per_photon=1.0e-12,
+                    coefficient_source="Test source",
+                ),
+            )
+        )
+    )
+
+    assert_raises(
+        "V1.13 response coverage rejects minimum above cutoff",
+        ValueError,
+        lambda: validate_response_function_covers_openmc_settings(
+            response_function=(
+                insufficient_response_function
+            ),
+            settings=(
+                production_openmc_settings
+            ),
+        ),
+        "must not exceed the photon cutoff",
+    )
+
+        # ------------------------------------------------------------
+    # OpenMC physical source-rate reconstruction
+    # ------------------------------------------------------------
+
+    assert_close(
+        "V1.13 development statepoint source rate",
+        calculate_scenario_physical_source_rate_per_s(
+            development_scenario
+        ),
+        3.1487e10,
+        1.0e-3,
+    )
+
+    assert_close(
+        "V1.13 production statepoint source rate",
+        calculate_scenario_physical_source_rate_per_s(
+            production_scenario
+        ),
+        3.1487e10,
+        1.0e-3,
+    )
+
+    assert_raises(
+        "V1.13 statepoint source rate rejects optimization mode",
+        ValueError,
+        lambda: calculate_scenario_physical_source_rate_per_s(
+            schema_10_scenario
+        ),
+        "requires fixed_shield_response mode",
+    )
+
+        # ------------------------------------------------------------
+    # Processed OpenMC output serialization
+    # ------------------------------------------------------------
+
+    synthetic_response_data = (
+        openmc_response_result_to_dict(
+            synthetic_response_result
+        )
+    )
+
+    assert_equal(
+        "V1.13 processed response preserves record type",
+        synthetic_response_data[
+            "record_type"
+        ],
+        "openmc_response",
+    )
+
+    assert_equal(
+        "V1.13 processed response preserves energy-bin count",
+        (
+            synthetic_response_data[
+                "spectrum_summary"
+            ][
+                "energy_bin_count"
+            ]
+        ),
+        2,
+    )
+
+    assert_close(
+        "V1.13 processed response preserves physical rate",
+        (
+            synthetic_response_data[
+                "direct_response"
+            ][
+                "rate_gy_per_s"
+            ]
+        ),
+        1.5,
+        1.0e-12,
+    )
+
+    synthetic_fixed_result = (
+        FixedShieldDeterministicResult(
+            scenario_id=(
+                "synthetic_v113_response"
+            ),
+            source_name=(
+                development_fixed_result
+                .source_name
+            ),
+            activity_bq=(
+                development_fixed_result
+                .activity_bq
+            ),
+            geometry=(
+                development_fixed_result
+                .geometry
+            ),
+            line_results=(
+                development_fixed_result
+                .line_results
+            ),
+            source_air_kerma_result=(
+                development_fixed_result
+                .source_air_kerma_result
+            ),
+            buildup_requested=(
+                development_fixed_result
+                .buildup_requested
+            ),
+        )
+    )
+
+    synthetic_deterministic_result = (
+        create_deterministic_shell_average_result(
+            fixed_shield_result=(
+                synthetic_fixed_result
+            ),
+            evaluation_shell_thickness_cm=1.0,
+        )
+    )
+
+    synthetic_uncollided = (
+        synthetic_deterministic_result
+        .total_shell_average_uncollided_collision_air_kerma_rate_gy_per_s
+    )
+
+    synthetic_gp = (
+        synthetic_deterministic_result
+        .total_shell_average_buildup_adjusted_collision_air_kerma_rate_gy_per_s
+    )
+
+    synthetic_relative_difference_from_gp = None
+
+    if synthetic_gp is not None:
+        synthetic_relative_difference_from_gp = (
+            calculate_relative_difference(
+                comparison_value=(
+                    synthetic_response_result
+                    .direct_response_rate_gy_per_s
+                ),
+                reference_value=(
+                    synthetic_gp
+                ),
+            )
+        )
+
+    synthetic_comparison = (
+        DeterministicOpenMCComparison(
+            deterministic_result=(
+                synthetic_deterministic_result
+            ),
+            openmc_result=(
+                synthetic_response_result
+            ),
+            relative_difference_from_uncollided=(
+                calculate_relative_difference(
+                    comparison_value=(
+                        synthetic_response_result
+                        .direct_response_rate_gy_per_s
+                    ),
+                    reference_value=(
+                        synthetic_uncollided
+                    ),
+                )
+            ),
+            relative_difference_from_gp=(
+                synthetic_relative_difference_from_gp
+            ),
+            observed_monte_carlo_buildup_ratio=(
+                calculate_observed_monte_carlo_buildup_ratio(
+                    openmc_response=(
+                        synthetic_response_result
+                        .direct_response_rate_gy_per_s
+                    ),
+                    deterministic_uncollided_response=(
+                        synthetic_uncollided
+                    ),
+                )
+            ),
+        )
+    )
+
+    synthetic_comparison_data = (
+        deterministic_openmc_comparison_to_dict(
+            synthetic_comparison
+        )
+    )
+
+    assert_equal(
+        "V1.13 processed comparison preserves record type",
+        synthetic_comparison_data[
+            "record_type"
+        ],
+        "deterministic_openmc_comparison",
+    )
+
+    assert_equal(
+        "V1.13 processed comparison direct-versus-folded passes",
+        (
+            synthetic_comparison_data[
+                "acceptance_checks"
+            ][
+                "direct_vs_folded_pass"
+            ]
+        ),
+        True,
+    )
+
+    with TemporaryDirectory() as temporary_directory:
+        processed_output_paths = (
+            save_openmc_benchmark_outputs(
+                openmc_result=(
+                    synthetic_response_result
+                ),
+                comparison=(
+                    synthetic_comparison
+                ),
+                output_directory=(
+                    Path(
+                        temporary_directory
+                    )
+                ),
+            )
+        )
+
+        assert_equal(
+            "V1.13 processed response JSON is created",
+            (
+                processed_output_paths
+                .response_json_path
+                .is_file()
+            ),
+            True,
+        )
+
+        assert_equal(
+            "V1.13 processed comparison JSON is created",
+            (
+                processed_output_paths
+                .comparison_json_path
+                .is_file()
+            ),
+            True,
+        )
+
+        assert_equal(
+            "V1.13 processed spectrum CSV is created",
+            (
+                processed_output_paths
+                .spectrum_csv_path
+                .is_file()
+            ),
+            True,
+        )
+
+        spectrum_csv_text = (
+            processed_output_paths
+            .spectrum_csv_path
+            .read_text(
+                encoding="utf-8"
+            )
+        )
+
+        assert_equal(
+            "V1.13 processed spectrum CSV contains physical fluence column",
+            (
+                "physical_fluence_rate_mean_per_cm2_s"
+                in spectrum_csv_text
+            ),
+            True,
+        )
+
+            # ------------------------------------------------------------
+    # OpenMC checkpoint and run-manifest support
+    # ------------------------------------------------------------
+
+    class SyntheticCheckpointStatepoint:
+        tallies_present = True
+        photon_transport = True
+        current_batch = 25
+        n_particles = 50000
+
+    validate_statepoint_metadata(
+        statepoint=(
+            SyntheticCheckpointStatepoint()
+        ),
+        settings_profile=(
+            production_openmc_settings
+        ),
+        expected_batch=25,
+    )
+
+    assert_equal(
+        "V1.13 statepoint metadata accepts configured checkpoint",
+        True,
+        True,
+    )
+
+    assert_raises(
+        "V1.13 statepoint metadata rejects unconfigured checkpoint",
+        ValueError,
+        lambda: validate_statepoint_metadata(
+            statepoint=(
+                SyntheticCheckpointStatepoint()
+            ),
+            settings_profile=(
+                production_openmc_settings
+            ),
+            expected_batch=30,
+        ),
+        "must be listed in the settings profile",
+    )
+
+    assert_raises(
+        "V1.13 statepoint metadata rejects checkpoint mismatch",
+        ValueError,
+        lambda: validate_statepoint_metadata(
+            statepoint=(
+                SyntheticCheckpointStatepoint()
+            ),
+            settings_profile=(
+                production_openmc_settings
+            ),
+            expected_batch=50,
+        ),
+        "does not match the expected checkpoint",
+    )
+
+    synthetic_manifest_data = (
+        openmc_run_manifest_to_dict(
+            synthetic_manifest
+        )
+    )
+
+    assert_equal(
+        "V1.13 run manifest preserves record type",
+        synthetic_manifest_data[
+            "record_type"
+        ],
+        "openmc_run_manifest",
+    )
+
+    assert_equal(
+        "V1.13 run manifest preserves particle total",
+        (
+            synthetic_manifest_data[
+                "execution"
+            ][
+                "total_source_particles"
+            ]
+        ),
+        10000,
+    )
+
+    assert_equal(
+        "V1.13 run manifest preserves cross-section library",
+        (
+            synthetic_manifest_data[
+                "nuclear_data"
+            ][
+                "cross_section_library"
+            ]
+        ),
+        "/example/cross_sections.xml",
+    )
+
+    with TemporaryDirectory() as temporary_directory:
+        manifest_path = (
+            save_openmc_run_manifest(
+                manifest=(
+                    synthetic_manifest
+                ),
+                output_path=(
+                    Path(
+                        temporary_directory
+                    )
+                    / "run_manifest.json"
+                ),
+            )
+        )
+
+        assert_equal(
+            "V1.13 run manifest JSON is created",
+            manifest_path.is_file(),
+            True,
+        )
+
+        manifest_text = (
+            manifest_path.read_text(
+                encoding="utf-8"
+            )
+        )
+
+        assert_equal(
+            "V1.13 run manifest JSON contains OpenMC version",
+            (
+                '"openmc_version": "0.15.0"'
+                in manifest_text
+            ),
+            True,
+        )
 
 
 if __name__ == "__main__":

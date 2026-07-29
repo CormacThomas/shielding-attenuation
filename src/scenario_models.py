@@ -9,8 +9,12 @@
 #   - optimization objectives and weights
 #   - deterministic calculation settings
 #
-# scenario_runner.py converts these specifications into validated
-# runtime calculation objects.
+# V1.13 extends the scenario system with a fixed-shield-response mode.
+# The physical source and geometry remain backend independent so the same
+# completed shield can be evaluated by the deterministic and OpenMC backends.
+#
+# scenario_runner.py converts these specifications into validated runtime
+# calculation objects.
 
 
 from dataclasses import dataclass, field
@@ -99,11 +103,19 @@ TargetSpec: TypeAlias = (
 
 ScenarioCalculationMode = Literal[
     "material_optimization",
+    "fixed_shield_response",
 ]
 
 
 VALID_SCENARIO_CALCULATION_MODES = (
     "material_optimization",
+    "fixed_shield_response",
+)
+
+
+VALID_SCENARIO_SCHEMA_VERSIONS = (
+    "1.0",
+    "1.1",
 )
 
 
@@ -119,6 +131,9 @@ class DeterministicSettings:
     # calculation_max_thickness_cm:
     #   Optional upper search bound for target-driven thickness calculations.
     #   None allows the existing solver to use its default bound.
+    #
+    # Fixed-shield-response scenarios do not perform a thickness search, so
+    # calculation_max_thickness_cm must remain None for that mode.
 
     apply_buildup: bool = False
     calculation_max_thickness_cm: float | None = None
@@ -131,62 +146,52 @@ class DeterministicSettings:
             raise ValueError(
                 "Calculation maximum thickness must be greater than zero."
             )
-        
+
 
 @dataclass
 class ShieldingScenario:
-    # Complete reproducible specification for one shielding design problem.
+    # Complete reproducible specification for one shielding problem.
     #
-    # V1.11 initially supports material-optimization scenarios only.
-    # The scenario stores physical and engineering inputs but does not
-    # perform calculations itself.
+    # The scenario stores physical and engineering inputs but does not perform
+    # calculations itself. Mode-specific validation prevents optimization
+    # inputs from being mixed with completed fixed-shield inputs.
     #
-    # scenario_id:
-    #   Stable, machine-readable scenario identifier.
+    # Shared required fields:
+    #   scenario_id
+    #   description
+    #   calculation_mode
+    #   source
+    #   geometry
     #
-    # description:
-    #   Human-readable explanation of the engineering problem.
+    # Material-optimization fields:
+    #   candidate_material_keys
+    #   target
+    #   constraints
+    #   optimization_mode
+    #   optional optimization_weights
     #
-    # calculation_mode:
-    #   Workflow requested by the scenario. V1.11 currently supports
-    #   material_optimization only.
-    #
-    # source:
-    #   Serializable manual or isotope source specification.
-    #
-    # geometry:
-    #   Concentric spherical source, shielding, and evaluation geometry.
-    #
-    # candidate_material_keys:
-    #   Stable material-library keys evaluated by the optimizer.
-    #
-    # target:
-    #   Validated transmission, reduction-factor, photon-fluence-rate,
-    #   or collision-air-kerma-rate target.
-    # constraints:
-    #   Existing V1.09 engineering design constraints.
-    #
-    # optimization_mode:
-    #   Existing V1.09 ranking objective.
-    #
-    # deterministic_settings:
-    #   Backend-specific buildup and thickness-search settings.
-    #
-    # optimization_weights:
-    #   Required only for balanced optimization.
+    # Fixed-shield-response fields:
+    #   geometry.layers must contain at least one completed shield layer
+    #   target is optional
+    #   optimization-only fields must be absent or empty
     #
     # schema_version:
-    #   Version of the serialized scenario structure.
+    #   Version 1.0 preserves the original material-optimization structure.
+    #   Version 1.1 adds fixed_shield_response.
 
     scenario_id: str
     description: str
     calculation_mode: ScenarioCalculationMode
     source: SourceSpec
     geometry: ConcentricSphericalGeometry
-    candidate_material_keys: list[str]
-    target: TargetSpec
-    constraints: DesignConstraints
-    optimization_mode: OptimizationMode
+
+    candidate_material_keys: list[str] = field(
+        default_factory=list
+    )
+
+    target: TargetSpec | None = None
+    constraints: DesignConstraints | None = None
+    optimization_mode: OptimizationMode | None = None
 
     deterministic_settings: DeterministicSettings = field(
         default_factory=DeterministicSettings
@@ -199,6 +204,18 @@ class ShieldingScenario:
         self.scenario_id = self.scenario_id.lower().strip()
         self.description = self.description.strip()
         self.schema_version = self.schema_version.strip()
+
+        self._validate_shared_fields()
+        self._normalize_candidate_material_keys()
+
+        if self.calculation_mode == "material_optimization":
+            self._validate_material_optimization_mode()
+
+        elif self.calculation_mode == "fixed_shield_response":
+            self._validate_fixed_shield_response_mode()
+
+    def _validate_shared_fields(self) -> None:
+        # Validate fields required by every calculation mode.
 
         if self.scenario_id == "":
             raise ValueError(
@@ -213,6 +230,15 @@ class ShieldingScenario:
         if self.schema_version == "":
             raise ValueError(
                 "Scenario schema version cannot be empty."
+            )
+
+        if (
+            self.schema_version
+            not in VALID_SCENARIO_SCHEMA_VERSIONS
+        ):
+            raise ValueError(
+                "Unsupported scenario schema version: "
+                f"{self.schema_version}"
             )
 
         if (
@@ -232,26 +258,55 @@ class ShieldingScenario:
             )
 
         if not isinstance(
-            self.target,
-            (
-                AirKermaRateTarget,
-                FluxTarget,
-                ReductionFactorTarget,
-                TransmissionTarget,
-            ),
+            self.geometry,
+            ConcentricSphericalGeometry,
         ):
             raise ValueError(
-                "Scenario target must be a supported target type."
+                "Scenario geometry must be a concentric spherical geometry."
             )
 
-        if self.optimization_mode not in VALID_OPTIMIZATION_MODES:
+        if not isinstance(
+            self.deterministic_settings,
+            DeterministicSettings,
+        ):
             raise ValueError(
-                "Unsupported scenario optimization mode."
+                "Scenario deterministic settings must use "
+                "DeterministicSettings."
             )
 
-        normalized_material_keys = []
+        if self.target is not None:
+            if not isinstance(
+                self.target,
+                (
+                    AirKermaRateTarget,
+                    FluxTarget,
+                    ReductionFactorTarget,
+                    TransmissionTarget,
+                ),
+            ):
+                raise ValueError(
+                    "Scenario target must be a supported target type or None."
+                )
+
+    def _normalize_candidate_material_keys(self) -> None:
+        # Normalize stable material keys before mode-specific validation.
+
+        if not isinstance(
+            self.candidate_material_keys,
+            list,
+        ):
+            raise ValueError(
+                "Candidate material keys must be stored in a list."
+            )
+
+        normalized_material_keys: list[str] = []
 
         for material_key in self.candidate_material_keys:
+            if not isinstance(material_key, str):
+                raise ValueError(
+                    "Candidate material keys must be strings."
+                )
+
             normalized_key = material_key.lower().strip()
 
             if normalized_key == "":
@@ -261,12 +316,6 @@ class ShieldingScenario:
 
             normalized_material_keys.append(
                 normalized_key
-            )
-
-        if len(normalized_material_keys) == 0:
-            raise ValueError(
-                "Material optimization requires at least one "
-                "candidate material."
             )
 
         if (
@@ -281,12 +330,43 @@ class ShieldingScenario:
             normalized_material_keys
         )
 
-        if self.calculation_mode == "material_optimization":
-            if len(self.geometry.layers) > 0:
-                raise ValueError(
-                    "Material-optimization scenarios cannot contain "
-                    "fixed shield layers."
-                )
+    def _validate_material_optimization_mode(self) -> None:
+        # Validate the original V1.11/V1.12 optimization pathway.
+
+        if len(self.geometry.layers) > 0:
+            raise ValueError(
+                "Material-optimization scenarios cannot contain "
+                "fixed shield layers."
+            )
+
+        if len(self.candidate_material_keys) == 0:
+            raise ValueError(
+                "Material optimization requires at least one "
+                "candidate material."
+            )
+
+        if self.target is None:
+            raise ValueError(
+                "Material optimization requires a response target."
+            )
+
+        if not isinstance(
+            self.constraints,
+            DesignConstraints,
+        ):
+            raise ValueError(
+                "Material optimization requires design constraints."
+            )
+
+        if (
+            self.optimization_mode is None
+            or self.optimization_mode
+            not in VALID_OPTIMIZATION_MODES
+        ):
+            raise ValueError(
+                "Material optimization requires a supported "
+                "optimization mode."
+            )
 
         if self.optimization_mode == "balanced":
             if self.optimization_weights is None:
@@ -319,4 +399,54 @@ class ShieldingScenario:
                 "Calculation maximum thickness cannot exceed "
                 "the radial space between the source cavity "
                 "and evaluation location."
+            )
+
+    def _validate_fixed_shield_response_mode(self) -> None:
+        # Validate a completed physical shield for deterministic and OpenMC
+        # response calculations.
+
+        if self.schema_version != "1.1":
+            raise ValueError(
+                "Fixed-shield-response scenarios require "
+                "schema version 1.1."
+            )
+
+        if len(self.geometry.layers) == 0:
+            raise ValueError(
+                "Fixed-shield-response scenarios require at least "
+                "one fixed shield layer."
+            )
+
+        if len(self.candidate_material_keys) > 0:
+            raise ValueError(
+                "Fixed-shield-response scenarios cannot contain "
+                "candidate material keys."
+            )
+
+        if self.constraints is not None:
+            raise ValueError(
+                "Fixed-shield-response scenarios cannot contain "
+                "optimization constraints."
+            )
+
+        if self.optimization_mode is not None:
+            raise ValueError(
+                "Fixed-shield-response scenarios cannot contain "
+                "an optimization mode."
+            )
+
+        if self.optimization_weights is not None:
+            raise ValueError(
+                "Fixed-shield-response scenarios cannot contain "
+                "optimization weights."
+            )
+
+        if (
+            self.deterministic_settings
+            .calculation_max_thickness_cm
+            is not None
+        ):
+            raise ValueError(
+                "Fixed-shield-response scenarios do not use a "
+                "calculation maximum thickness."
             )

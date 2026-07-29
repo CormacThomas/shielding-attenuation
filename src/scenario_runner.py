@@ -1,46 +1,71 @@
 # Reproducible deterministic scenario execution.
 #
 # This module converts backend-independent scenario specifications into
-# validated runtime objects and routes material-optimization scenarios
-# into the correct response-specific optimizer.
+# validated runtime calculations.
 #
-# Responsibilities:
-#   - create runtime manual or isotope sources
-#   - resolve stable material keys
-#   - route AirKermaRateTarget to the V1.12 air-kerma optimizer
-#   - route legacy photon targets to the compatible photon optimizer
+# Supported calculation modes:
+#
+#   material_optimization
+#       -> constrained material-selection workflow
+#
+#   fixed_shield_response
+#       -> deterministic response of a completed physical shield
 #
 # This module does not:
 #   - read or write JSON
-#   - perform attenuation calculations directly
-#   - implement optimization formulas
+#   - implement attenuation formulas directly
 #   - generate OpenMC models
 
+
+from typing import Any
 
 from constraint_optimizer import (
     optimize_air_kerma_material_selection,
     optimize_material_selection,
 )
-from material_library import get_material_library
+from fixed_shield_models import (
+    FixedShieldDeterministicResult,
+)
+from fixed_shield_response import (
+    calculate_fixed_shield_response,
+)
+from material_library import (
+    get_material_library,
+)
 from models import Material
-from optimization_models import OptimizedDesignResult
+from optimization_models import (
+    DesignConstraints,
+    OptimizedDesignResult,
+    OptimizationMode,
+)
 from scenario_models import (
     IsotopeSourceSpec,
     ManualPhotonSourceSpec,
     ShieldingScenario,
     SourceSpec,
+    TargetSpec,
 )
-from source_library import create_isotope_source
+from source_library import (
+    create_isotope_source,
+)
 from source_models import (
     IsotopeSource,
     ManualPhotonSource,
 )
-from target_models import AirKermaRateTarget
+from target_models import (
+    AirKermaRateTarget,
+)
 
 
 RuntimeSource = (
     ManualPhotonSource
     | IsotopeSource
+)
+
+
+ScenarioResult = (
+    OptimizedDesignResult
+    | FixedShieldDeterministicResult
 )
 
 
@@ -80,14 +105,27 @@ def resolve_candidate_materials(
     # by the existing optimizer.
     #
     # Material order is preserved so scenario files remain deterministic and
-    # readable. The optimizer performs its own objective-specific ranking later.
+    # readable. The optimizer later performs objective-specific ranking.
 
-    material_library = get_material_library()
-    selected_materials = []
-    unknown_material_keys = []
+    material_library = (
+        get_material_library()
+    )
 
-    for material_key in candidate_material_keys:
-        if material_key not in material_library:
+    selected_materials: list[
+        Material
+    ] = []
+
+    unknown_material_keys: list[
+        str
+    ] = []
+
+    for material_key in (
+        candidate_material_keys
+    ):
+        if (
+            material_key
+            not in material_library
+        ):
             unknown_material_keys.append(
                 material_key
             )
@@ -95,10 +133,14 @@ def resolve_candidate_materials(
             continue
 
         selected_materials.append(
-            material_library[material_key]
+            material_library[
+                material_key
+            ]
         )
 
-    if len(unknown_material_keys) > 0:
+    if len(
+        unknown_material_keys
+    ) > 0:
         formatted_keys = ", ".join(
             unknown_material_keys
         )
@@ -111,64 +153,120 @@ def resolve_candidate_materials(
     return selected_materials
 
 
+def require_material_optimization_inputs(
+    scenario: ShieldingScenario,
+) -> tuple[
+    TargetSpec,
+    DesignConstraints,
+    OptimizationMode,
+]:
+    # Narrow fields that are optional on the shared scenario dataclass but
+    # required by material-optimization mode.
+    #
+    # ShieldingScenario already validates these invariants. Rechecking them at
+    # the execution boundary keeps this module independently defensive and
+    # gives static type checkers non-optional values.
+
+    if (
+        scenario.calculation_mode
+        != "material_optimization"
+    ):
+        raise ValueError(
+            "Scenario runner expected "
+            "material_optimization mode."
+        )
+
+    target = scenario.target
+    constraints = scenario.constraints
+    optimization_mode = (
+        scenario.optimization_mode
+    )
+
+    if target is None:
+        raise ValueError(
+            "Material-optimization scenario is "
+            "missing its target."
+        )
+
+    if constraints is None:
+        raise ValueError(
+            "Material-optimization scenario is "
+            "missing its constraints."
+        )
+
+    if optimization_mode is None:
+        raise ValueError(
+            "Material-optimization scenario is missing "
+            "its optimization mode."
+        )
+
+    return (
+        target,
+        constraints,
+        optimization_mode,
+    )
+
+
 def run_material_optimization_scenario(
     scenario: ShieldingScenario,
 ) -> OptimizedDesignResult:
     # Run one reproducible material-optimization scenario.
     #
-    # Target routing:
-    #
-    # AirKermaRateTarget
-    #     -> explicit V1.12 collision-air-kerma optimizer
-    #
-    # TransmissionTarget, ReductionFactorTarget, or FluxTarget
-    #     -> legacy deterministic optimization pathway
-    #
-    # This preserves all V1.11 scenarios while allowing air-kerma
-    # scenarios to retain their response-specific result data.
+    # AirKermaRateTarget uses the explicit V1.12 air-kerma optimizer.
+    # Legacy photon-number targets retain the compatible photon optimizer.
 
-    if scenario.calculation_mode != "material_optimization":
-        raise ValueError(
-            "Scenario runner expected material_optimization mode."
-        )
+    (
+        target,
+        constraints,
+        optimization_mode,
+    ) = require_material_optimization_inputs(
+        scenario
+    )
 
     runtime_source = create_runtime_source(
         scenario.source
     )
 
-    candidate_materials = resolve_candidate_materials(
-        scenario.candidate_material_keys
+    candidate_materials = (
+        resolve_candidate_materials(
+            scenario.candidate_material_keys
+        )
     )
 
-    settings = scenario.deterministic_settings
+    settings = (
+        scenario.deterministic_settings
+    )
 
     if isinstance(
-        scenario.target,
+        target,
         AirKermaRateTarget,
     ):
-        return optimize_air_kerma_material_selection(
-            source=runtime_source,
-            materials=candidate_materials,
-            detector_distance=(
-                scenario
-                .geometry
-                .evaluation_radius_cm
-            ),
-            target=scenario.target,
-            constraints=scenario.constraints,
-            optimization_mode=(
-                scenario.optimization_mode
-            ),
-            weights=(
-                scenario.optimization_weights
-            ),
-            calculation_max_thickness=(
-                settings
-                .calculation_max_thickness_cm
-            ),
-            apply_buildup=(
-                settings.apply_buildup
-            ),
+        return (
+            optimize_air_kerma_material_selection(
+                source=runtime_source,
+                materials=candidate_materials,
+                detector_distance=(
+                    scenario
+                    .geometry
+                    .evaluation_radius_cm
+                ),
+                target=target,
+                constraints=constraints,
+                optimization_mode=(
+                    optimization_mode
+                ),
+                weights=(
+                    scenario
+                    .optimization_weights
+                ),
+                calculation_max_thickness=(
+                    settings
+                    .calculation_max_thickness_cm
+                ),
+                apply_buildup=(
+                    settings.apply_buildup
+                ),
+            )
         )
 
     return optimize_material_selection(
@@ -179,10 +277,10 @@ def run_material_optimization_scenario(
             .geometry
             .evaluation_radius_cm
         ),
-        target=scenario.target,
-        constraints=scenario.constraints,
+        target=target,
+        constraints=constraints,
         optimization_mode=(
-            scenario.optimization_mode
+            optimization_mode
         ),
         weights=(
             scenario.optimization_weights
@@ -197,19 +295,58 @@ def run_material_optimization_scenario(
     )
 
 
+def run_fixed_shield_response_scenario(
+    scenario: ShieldingScenario,
+) -> FixedShieldDeterministicResult:
+    # Run one completed physical shield through the deterministic response
+    # pathway.
+
+    if (
+        scenario.calculation_mode
+        != "fixed_shield_response"
+    ):
+        raise ValueError(
+            "Scenario runner expected "
+            "fixed_shield_response mode."
+        )
+
+    return calculate_fixed_shield_response(
+        scenario
+    )
+
+
 def run_scenario(
     scenario: ShieldingScenario,
-) -> OptimizedDesignResult:
-    # Public V1.11 scenario execution entry point.
+) -> Any:
+    # Public dynamic scenario-routing entry point.
     #
-    # Later versions can route additional calculation modes here without
-    # changing the JSON loading or scenario-model layers.
+    # The specialized functions above retain precise return annotations.
+    # This router returns Any because ShieldingScenario is currently one shared
+    # dataclass rather than a statically discriminated scenario-class hierarchy.
+    # That preserves clean static checking for existing optimization callers
+    # while still allowing runtime mode dispatch.
 
-    if scenario.calculation_mode == "material_optimization":
-        return run_material_optimization_scenario(
-            scenario
+    if (
+        scenario.calculation_mode
+        == "material_optimization"
+    ):
+        return (
+            run_material_optimization_scenario(
+                scenario
+            )
+        )
+
+    if (
+        scenario.calculation_mode
+        == "fixed_shield_response"
+    ):
+        return (
+            run_fixed_shield_response_scenario(
+                scenario
+            )
         )
 
     raise ValueError(
-        "Unsupported scenario calculation mode."
+        "Unsupported scenario calculation mode: "
+        f"{scenario.calculation_mode}"
     )

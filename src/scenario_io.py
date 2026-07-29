@@ -1,19 +1,26 @@
-# V1.11 scenario serialization and file I/O.
+# V1.11/V1.13 scenario serialization and file I/O.
 #
-# This module converts validated ShieldingScenario objects into a stable,
-# human-readable JSON structure.
+# This module converts validated ShieldingScenario objects into stable,
+# human-readable JSON and reconstructs them from JSON data.
 #
-# Deserialization will be added after the output structure has been reviewed
-# and tested.
+# Schema 1.0:
+#   - material_optimization only
+#
+# Schema 1.1:
+#   - material_optimization
+#   - fixed_shield_response
 #
 # The JSON format uses explicit type fields for sources, geometry, and targets.
-# This prevents the loader from having to guess which dataclass should be
-# reconstructed from a group of numerical fields.
+# Optimization-only fields are omitted from fixed-shield-response scenarios.
+
+
+from __future__ import annotations
 
 
 import json
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
+
 
 from geometry_models import (
     ConcentricSphericalGeometry,
@@ -22,14 +29,20 @@ from geometry_models import (
 
 from optimization_models import (
     DesignConstraints,
+    OptimizationMode,
     OptimizationWeights,
+    VALID_OPTIMIZATION_MODES,
 )
 
 from scenario_models import (
     DeterministicSettings,
     IsotopeSourceSpec,
     ManualPhotonSourceSpec,
+    ScenarioCalculationMode,
     ShieldingScenario,
+    TargetSpec,
+    VALID_SCENARIO_CALCULATION_MODES,
+    VALID_SCENARIO_SCHEMA_VERSIONS,
 )
 
 from target_models import (
@@ -38,28 +51,96 @@ from target_models import (
     ReductionFactorTarget,
     TransmissionTarget,
 )
-SUPPORTED_SCHEMA_VERSIONS = {
-    "1.0",
-}
+
+
+SUPPORTED_SCHEMA_VERSIONS = set(
+    VALID_SCENARIO_SCHEMA_VERSIONS
+)
+
+
+def require_json_object(
+    value: Any,
+    description: str,
+) -> dict[str, Any]:
+    # Require one nested JSON value to be an object.
+
+    if not isinstance(
+        value,
+        dict,
+    ):
+        raise ValueError(
+            f"{description} must be a JSON object."
+        )
+
+    return value
+
+
+def require_json_string_list(
+    value: Any,
+    description: str,
+) -> list[str]:
+    # Require a JSON array containing strings only.
+
+    if not isinstance(
+        value,
+        list,
+    ):
+        raise ValueError(
+            f"{description} must be a list."
+        )
+
+    string_values: list[str] = []
+
+    for item in value:
+        if not isinstance(
+            item,
+            str,
+        ):
+            raise ValueError(
+                f"{description} must contain only strings."
+            )
+
+        string_values.append(
+            item
+        )
+
+    return string_values
 
 
 def source_spec_to_dict(
-    source_spec: ManualPhotonSourceSpec | IsotopeSourceSpec,
+    source_spec: (
+        ManualPhotonSourceSpec
+        | IsotopeSourceSpec
+    ),
 ) -> dict[str, Any]:
     # Convert a source specification into an explicitly typed JSON object.
 
-    if isinstance(source_spec, ManualPhotonSourceSpec):
+    if isinstance(
+        source_spec,
+        ManualPhotonSourceSpec,
+    ):
         return {
             "type": "manual",
-            "photon_energy_mev": source_spec.photon_energy_mev,
-            "photon_rate_per_s": source_spec.photon_rate_per_s,
+            "photon_energy_mev": (
+                source_spec.photon_energy_mev
+            ),
+            "photon_rate_per_s": (
+                source_spec.photon_rate_per_s
+            ),
         }
 
-    if isinstance(source_spec, IsotopeSourceSpec):
+    if isinstance(
+        source_spec,
+        IsotopeSourceSpec,
+    ):
         return {
             "type": "isotope",
-            "isotope_key": source_spec.isotope_key,
-            "activity_bq": source_spec.activity_bq,
+            "isotope_key": (
+                source_spec.isotope_key
+            ),
+            "activity_bq": (
+                source_spec.activity_bq
+            ),
         }
 
     raise ValueError(
@@ -69,10 +150,15 @@ def source_spec_to_dict(
 
 def source_spec_from_dict(
     source_data: dict[str, Any],
-) -> ManualPhotonSourceSpec | IsotopeSourceSpec:
+) -> (
+    ManualPhotonSourceSpec
+    | IsotopeSourceSpec
+):
     # Reconstruct a validated source specification from JSON data.
 
-    source_type = source_data.get("type")
+    source_type = source_data.get(
+        "type"
+    )
 
     if source_type == "manual":
         return ManualPhotonSourceSpec(
@@ -95,7 +181,8 @@ def source_spec_from_dict(
         )
 
     raise ValueError(
-        f"Unsupported scenario source type: {source_type}"
+        "Unsupported scenario source type: "
+        f"{source_type}"
     )
 
 
@@ -104,8 +191,8 @@ def geometry_to_dict(
 ) -> dict[str, Any]:
     # Serialize physical geometry inputs only.
     #
-    # Derived shell radii are not stored because they can be reconstructed
-    # deterministically from the cavity radius and ordered layer thicknesses.
+    # Derived shell radii are reconstructed deterministically from the source
+    # cavity radius and ordered layer thicknesses.
 
     return {
         "type": "concentric_spherical",
@@ -117,8 +204,12 @@ def geometry_to_dict(
         ),
         "layers": [
             {
-                "material_key": layer.material_key,
-                "thickness_cm": layer.thickness_cm,
+                "material_key": (
+                    layer.material_key
+                ),
+                "thickness_cm": (
+                    layer.thickness_cm
+                ),
             }
             for layer in geometry.layers
         ],
@@ -128,11 +219,16 @@ def geometry_to_dict(
 def geometry_from_dict(
     geometry_data: dict[str, Any],
 ) -> ConcentricSphericalGeometry:
-    # Reconstruct the supported V1.11 geometry from physical JSON inputs.
+    # Reconstruct the supported concentric spherical geometry.
 
-    geometry_type = geometry_data.get("type")
+    geometry_type = geometry_data.get(
+        "type"
+    )
 
-    if geometry_type != "concentric_spherical":
+    if (
+        geometry_type
+        != "concentric_spherical"
+    ):
         raise ValueError(
             "Unsupported scenario geometry type: "
             f"{geometry_type}"
@@ -143,44 +239,56 @@ def geometry_from_dict(
         [],
     )
 
-    if not isinstance(layer_data_list, list):
+    if not isinstance(
+        layer_data_list,
+        list,
+    ):
         raise ValueError(
             "Scenario geometry layers must be a list."
         )
 
-    layers = [
-        ShieldLayerSpec(
-            material_key=layer_data[
-                "material_key"
-            ],
-            thickness_cm=layer_data[
-                "thickness_cm"
-            ],
+    layers: list[
+        ShieldLayerSpec
+    ] = []
+
+    for layer_data_value in (
+        layer_data_list
+    ):
+        layer_data = require_json_object(
+            layer_data_value,
+            "Scenario geometry layer",
         )
-        for layer_data in layer_data_list
-    ]
+
+        layers.append(
+            ShieldLayerSpec(
+                material_key=layer_data[
+                    "material_key"
+                ],
+                thickness_cm=layer_data[
+                    "thickness_cm"
+                ],
+            )
+        )
 
     return ConcentricSphericalGeometry(
-        source_cavity_radius_cm=geometry_data[
-            "source_cavity_radius_cm"
-        ],
-        evaluation_radius_cm=geometry_data[
-            "evaluation_radius_cm"
-        ],
+        source_cavity_radius_cm=(
+            geometry_data[
+                "source_cavity_radius_cm"
+            ]
+        ),
+        evaluation_radius_cm=(
+            geometry_data[
+                "evaluation_radius_cm"
+            ]
+        ),
         layers=layers,
     )
 
 
 def target_to_dict(
-    target: (
-        AirKermaRateTarget
-        | FluxTarget
-        | ReductionFactorTarget
-        | TransmissionTarget
-    ),
+    target: TargetSpec,
 ) -> dict[str, Any]:
-    # Convert a validated target object into an explicitly typed
-    # JSON object.
+    # Convert one validated target into an explicitly typed JSON object.
 
     if isinstance(
         target,
@@ -194,10 +302,15 @@ def target_to_dict(
             ),
         }
 
-    if isinstance(target, FluxTarget):
+    if isinstance(
+        target,
+        FluxTarget,
+    ):
         return {
             "type": "flux",
-            "target_flux": target.target_flux,
+            "target_flux": (
+                target.target_flux
+            ),
         }
 
     if isinstance(
@@ -229,12 +342,7 @@ def target_to_dict(
 
 def target_from_dict(
     target_data: dict[str, Any],
-) -> (
-    AirKermaRateTarget
-    | FluxTarget
-    | ReductionFactorTarget
-    | TransmissionTarget
-):
+) -> TargetSpec:
     # Reconstruct one validated target from its explicit JSON type.
 
     target_type = target_data.get(
@@ -272,69 +380,332 @@ def target_from_dict(
         )
 
     raise ValueError(
-        f"Unsupported scenario target type: {target_type}"
+        "Unsupported scenario target type: "
+        f"{target_type}"
+    )
+
+
+def constraints_to_dict(
+    constraints: DesignConstraints,
+) -> dict[str, Any]:
+    # Serialize engineering constraints used by optimization mode.
+
+    return {
+        "max_thickness_cm": (
+            constraints.max_thickness_cm
+        ),
+        "max_mass_per_area_g_per_cm2": (
+            constraints
+            .max_mass_per_area_g_per_cm2
+        ),
+        "max_relative_cost_index_per_area": (
+            constraints
+            .max_relative_cost_index_per_area
+        ),
+    }
+
+
+def constraints_from_dict(
+    constraints_data: dict[str, Any],
+) -> DesignConstraints:
+    # Reconstruct validated engineering constraints.
+
+    return DesignConstraints(
+        max_thickness_cm=(
+            constraints_data.get(
+                "max_thickness_cm"
+            )
+        ),
+        max_mass_per_area_g_per_cm2=(
+            constraints_data.get(
+                "max_mass_per_area_g_per_cm2"
+            )
+        ),
+        max_relative_cost_index_per_area=(
+            constraints_data.get(
+                "max_relative_cost_index_per_area"
+            )
+        ),
+    )
+
+
+def optimization_to_dict(
+    optimization_mode: OptimizationMode,
+    optimization_weights: (
+        OptimizationWeights
+        | None
+    ),
+) -> dict[str, Any]:
+    # Serialize one optimization objective and its optional weights.
+
+    optimization_data: dict[
+        str,
+        Any,
+    ] = {
+        "mode": optimization_mode,
+        "weights": None,
+    }
+
+    if (
+        optimization_weights
+        is not None
+    ):
+        optimization_data[
+            "weights"
+        ] = {
+            "thickness_weight": (
+                optimization_weights
+                .thickness_weight
+            ),
+            "mass_weight": (
+                optimization_weights
+                .mass_weight
+            ),
+            "cost_weight": (
+                optimization_weights
+                .cost_weight
+            ),
+        }
+
+    return optimization_data
+
+
+def optimization_from_dict(
+    optimization_data: dict[str, Any],
+) -> tuple[
+    OptimizationMode,
+    OptimizationWeights | None,
+]:
+    # Reconstruct a validated optimization objective and optional weights.
+
+    mode_value = optimization_data[
+        "mode"
+    ]
+
+    if (
+        mode_value
+        not in VALID_OPTIMIZATION_MODES
+    ):
+        raise ValueError(
+            "Unsupported scenario optimization mode: "
+            f"{mode_value}"
+        )
+
+    optimization_mode = cast(
+        OptimizationMode,
+        mode_value,
+    )
+
+    weights_data_value = (
+        optimization_data.get(
+            "weights"
+        )
+    )
+
+    optimization_weights = None
+
+    if (
+        weights_data_value
+        is not None
+    ):
+        weights_data = require_json_object(
+            weights_data_value,
+            "Optimization weights",
+        )
+
+        optimization_weights = (
+            OptimizationWeights(
+                thickness_weight=weights_data[
+                    "thickness_weight"
+                ],
+                mass_weight=weights_data[
+                    "mass_weight"
+                ],
+                cost_weight=weights_data[
+                    "cost_weight"
+                ],
+            )
+        )
+
+    return (
+        optimization_mode,
+        optimization_weights,
+    )
+
+
+def deterministic_settings_to_dict(
+    settings: DeterministicSettings,
+) -> dict[str, Any]:
+    # Serialize deterministic backend settings.
+
+    return {
+        "apply_buildup": (
+            settings.apply_buildup
+        ),
+        "calculation_max_thickness_cm": (
+            settings
+            .calculation_max_thickness_cm
+        ),
+    }
+
+
+def deterministic_settings_from_dict(
+    settings_data: dict[str, Any],
+) -> DeterministicSettings:
+    # Reconstruct deterministic backend settings.
+
+    return DeterministicSettings(
+        apply_buildup=(
+            settings_data.get(
+                "apply_buildup",
+                False,
+            )
+        ),
+        calculation_max_thickness_cm=(
+            settings_data.get(
+                "calculation_max_thickness_cm"
+            )
+        ),
+    )
+
+
+def require_material_optimization_fields(
+    scenario: ShieldingScenario,
+) -> tuple[
+    TargetSpec,
+    DesignConstraints,
+    OptimizationMode,
+]:
+    # Narrow fields that are optional on the shared scenario model but are
+    # required by material-optimization mode.
+
+    if (
+        scenario.calculation_mode
+        != "material_optimization"
+    ):
+        raise ValueError(
+            "Scenario serialization expected "
+            "material_optimization mode."
+        )
+
+    target = scenario.target
+    constraints = scenario.constraints
+    optimization_mode = (
+        scenario.optimization_mode
+    )
+
+    if target is None:
+        raise ValueError(
+            "Material-optimization scenario is "
+            "missing its target."
+        )
+
+    if constraints is None:
+        raise ValueError(
+            "Material-optimization scenario is "
+            "missing its constraints."
+        )
+
+    if optimization_mode is None:
+        raise ValueError(
+            "Material-optimization scenario is missing "
+            "its optimization mode."
+        )
+
+    return (
+        target,
+        constraints,
+        optimization_mode,
     )
 
 
 def scenario_to_dict(
     scenario: ShieldingScenario,
 ) -> dict[str, Any]:
-    # Convert one validated scenario into the complete V1.11 JSON schema.
+    # Convert one validated scenario into its mode-specific JSON structure.
 
-    constraints = scenario.constraints
-    settings = scenario.deterministic_settings
-    weights = scenario.optimization_weights
-
-    optimization_data: dict[str, Any] = {
-        "mode": scenario.optimization_mode,
-        "weights": None,
-    }
-
-    if weights is not None:
-        optimization_data["weights"] = {
-            "thickness_weight": weights.thickness_weight,
-            "mass_weight": weights.mass_weight,
-            "cost_weight": weights.cost_weight,
-        }
-
-    return {
-        "schema_version": scenario.schema_version,
-        "scenario_id": scenario.scenario_id,
-        "description": scenario.description,
-        "calculation_mode": scenario.calculation_mode,
+    scenario_data: dict[
+        str,
+        Any,
+    ] = {
+        "schema_version": (
+            scenario.schema_version
+        ),
+        "scenario_id": (
+            scenario.scenario_id
+        ),
+        "description": (
+            scenario.description
+        ),
+        "calculation_mode": (
+            scenario.calculation_mode
+        ),
         "source": source_spec_to_dict(
             scenario.source
         ),
         "geometry": geometry_to_dict(
             scenario.geometry
         ),
-        "candidate_material_keys": list(
-            scenario.candidate_material_keys
-        ),
-        "target": target_to_dict(
-            scenario.target
-        ),
-        "constraints": {
-            "max_thickness_cm": (
-                constraints.max_thickness_cm
-            ),
-            "max_mass_per_area_g_per_cm2": (
-                constraints
-                .max_mass_per_area_g_per_cm2
-            ),
-            "max_relative_cost_index_per_area": (
-                constraints
-                .max_relative_cost_index_per_area
-            ),
-        },
-        "optimization": optimization_data,
-        "deterministic_settings": {
-            "apply_buildup": settings.apply_buildup,
-            "calculation_max_thickness_cm": (
-                settings.calculation_max_thickness_cm
-            ),
-        },
     }
+
+    if (
+        scenario.calculation_mode
+        == "material_optimization"
+    ):
+        (
+            target,
+            constraints,
+            optimization_mode,
+        ) = require_material_optimization_fields(
+            scenario
+        )
+
+        scenario_data.update(
+            {
+                "candidate_material_keys": list(
+                    scenario
+                    .candidate_material_keys
+                ),
+                "target": target_to_dict(
+                    target
+                ),
+                "constraints": constraints_to_dict(
+                    constraints
+                ),
+                "optimization": optimization_to_dict(
+                    optimization_mode,
+                    scenario.optimization_weights,
+                ),
+            }
+        )
+
+    elif (
+        scenario.calculation_mode
+        == "fixed_shield_response"
+    ):
+        scenario_data[
+            "target"
+        ] = (
+            None
+            if scenario.target is None
+            else target_to_dict(
+                scenario.target
+            )
+        )
+
+    else:
+        raise ValueError(
+            "Unsupported scenario calculation mode "
+            "for serialization."
+        )
+
+    scenario_data[
+        "deterministic_settings"
+    ] = deterministic_settings_to_dict(
+        scenario.deterministic_settings
+    )
+
+    return scenario_data
 
 
 def scenario_from_dict(
@@ -344,148 +715,280 @@ def scenario_from_dict(
     #
     # Nested models perform their own domain validation after reconstruction.
 
-    schema_version = scenario_data.get(
-        "schema_version"
+    schema_version_value = (
+        scenario_data[
+            "schema_version"
+        ]
     )
 
-    if schema_version not in SUPPORTED_SCHEMA_VERSIONS:
+    if not isinstance(
+        schema_version_value,
+        str,
+    ):
+        raise ValueError(
+            "Scenario schema version must be a string."
+        )
+
+    if (
+        schema_version_value
+        not in SUPPORTED_SCHEMA_VERSIONS
+    ):
         raise ValueError(
             "Unsupported scenario schema version: "
-            f"{schema_version}"
+            f"{schema_version_value}"
         )
 
-    source_data = scenario_data[
-        "source"
-    ]
-
-    geometry_data = scenario_data[
-        "geometry"
-    ]
-
-    target_data = scenario_data[
-        "target"
-    ]
-
-    constraints_data = scenario_data[
-        "constraints"
-    ]
-
-    optimization_data = scenario_data[
-        "optimization"
-    ]
-
-    settings_data = scenario_data[
-        "deterministic_settings"
-    ]
-
-    if not isinstance(source_data, dict):
-        raise ValueError(
-            "Scenario source must be a JSON object."
-        )
-
-    if not isinstance(geometry_data, dict):
-        raise ValueError(
-            "Scenario geometry must be a JSON object."
-        )
-
-    if not isinstance(target_data, dict):
-        raise ValueError(
-            "Scenario target must be a JSON object."
-        )
-
-    if not isinstance(constraints_data, dict):
-        raise ValueError(
-            "Scenario constraints must be a JSON object."
-        )
-
-    if not isinstance(optimization_data, dict):
-        raise ValueError(
-            "Scenario optimization settings must be a JSON object."
-        )
-
-    if not isinstance(settings_data, dict):
-        raise ValueError(
-            "Deterministic settings must be a JSON object."
-        )
-
-    weights_data = optimization_data.get(
-        "weights"
+    calculation_mode_value = (
+        scenario_data[
+            "calculation_mode"
+        ]
     )
 
-    optimization_weights = None
-
-    if weights_data is not None:
-        if not isinstance(weights_data, dict):
-            raise ValueError(
-                "Optimization weights must be a JSON object or null."
-            )
-
-        optimization_weights = OptimizationWeights(
-            thickness_weight=weights_data[
-                "thickness_weight"
-            ],
-            mass_weight=weights_data[
-                "mass_weight"
-            ],
-            cost_weight=weights_data[
-                "cost_weight"
-            ],
+    if (
+        calculation_mode_value
+        not in VALID_SCENARIO_CALCULATION_MODES
+    ):
+        raise ValueError(
+            "Unsupported scenario calculation mode: "
+            f"{calculation_mode_value}"
         )
 
+    calculation_mode = cast(
+        ScenarioCalculationMode,
+        calculation_mode_value,
+    )
+
+    source_data = require_json_object(
+        scenario_data[
+            "source"
+        ],
+        "Scenario source",
+    )
+
+    geometry_data = require_json_object(
+        scenario_data[
+            "geometry"
+        ],
+        "Scenario geometry",
+    )
+
+    settings_data = require_json_object(
+        scenario_data[
+            "deterministic_settings"
+        ],
+        "Deterministic settings",
+    )
+
+    source = source_spec_from_dict(
+        source_data
+    )
+
+    geometry = geometry_from_dict(
+        geometry_data
+    )
+
+    deterministic_settings = (
+        deterministic_settings_from_dict(
+            settings_data
+        )
+    )
+
+    if (
+        calculation_mode
+        == "material_optimization"
+    ):
+        target_data_value = (
+            scenario_data[
+                "target"
+            ]
+        )
+
+    else:
+        target_data_value = (
+            scenario_data.get(
+                "target"
+            )
+        )
+
+    target = None
+
+    if (
+        target_data_value
+        is not None
+    ):
+        target_data = require_json_object(
+            target_data_value,
+            "Scenario target",
+        )
+
+        target = target_from_dict(
+            target_data
+        )
+
+    if (
+        calculation_mode
+        == "material_optimization"
+    ):
+        candidate_material_keys = (
+            require_json_string_list(
+                scenario_data[
+                    "candidate_material_keys"
+                ],
+                "Candidate material keys",
+            )
+        )
+
+        constraints_data = (
+            require_json_object(
+                scenario_data[
+                    "constraints"
+                ],
+                "Scenario constraints",
+            )
+        )
+
+        optimization_data = (
+            require_json_object(
+                scenario_data[
+                    "optimization"
+                ],
+                "Scenario optimization settings",
+            )
+        )
+
+        (
+            optimization_mode,
+            optimization_weights,
+        ) = optimization_from_dict(
+            optimization_data
+        )
+
+        return ShieldingScenario(
+            schema_version=(
+                schema_version_value
+            ),
+            scenario_id=scenario_data[
+                "scenario_id"
+            ],
+            description=scenario_data[
+                "description"
+            ],
+            calculation_mode=(
+                calculation_mode
+            ),
+            source=source,
+            geometry=geometry,
+            candidate_material_keys=(
+                candidate_material_keys
+            ),
+            target=target,
+            constraints=constraints_from_dict(
+                constraints_data
+            ),
+            optimization_mode=(
+                optimization_mode
+            ),
+            optimization_weights=(
+                optimization_weights
+            ),
+            deterministic_settings=(
+                deterministic_settings
+            ),
+        )
+
+    candidate_material_keys = (
+        require_json_string_list(
+            scenario_data.get(
+                "candidate_material_keys",
+                [],
+            ),
+            "Candidate material keys",
+        )
+    )
+
+    constraints = None
+
+    constraints_data_value = (
+        scenario_data.get(
+            "constraints"
+        )
+    )
+
+    if (
+        constraints_data_value
+        is not None
+    ):
+        constraints_data = (
+            require_json_object(
+                constraints_data_value,
+                "Scenario constraints",
+            )
+        )
+
+        constraints = (
+            constraints_from_dict(
+                constraints_data
+            )
+        )
+
+    optimization_mode = None
+    optimization_weights = None
+
+    optimization_data_value = (
+        scenario_data.get(
+            "optimization"
+        )
+    )
+
+    if (
+        optimization_data_value
+        is not None
+    ):
+        optimization_data = (
+            require_json_object(
+                optimization_data_value,
+                "Scenario optimization settings",
+            )
+        )
+
+        if len(
+            optimization_data
+        ) > 0:
+            (
+                optimization_mode,
+                optimization_weights,
+            ) = optimization_from_dict(
+                optimization_data
+            )
+
     return ShieldingScenario(
-        schema_version=schema_version,
+        schema_version=(
+            schema_version_value
+        ),
         scenario_id=scenario_data[
             "scenario_id"
         ],
         description=scenario_data[
             "description"
         ],
-        calculation_mode=scenario_data[
-            "calculation_mode"
-        ],
-        source=source_spec_from_dict(
-            source_data
+        calculation_mode=(
+            calculation_mode
         ),
-        geometry=geometry_from_dict(
-            geometry_data
+        source=source,
+        geometry=geometry,
+        candidate_material_keys=(
+            candidate_material_keys
         ),
-        candidate_material_keys=list(
-            scenario_data[
-                "candidate_material_keys"
-            ]
+        target=target,
+        constraints=constraints,
+        optimization_mode=(
+            optimization_mode
         ),
-        target=target_from_dict(
-            target_data
+        optimization_weights=(
+            optimization_weights
         ),
-        constraints=DesignConstraints(
-            max_thickness_cm=constraints_data.get(
-                "max_thickness_cm"
-            ),
-            max_mass_per_area_g_per_cm2=(
-                constraints_data.get(
-                    "max_mass_per_area_g_per_cm2"
-                )
-            ),
-            max_relative_cost_index_per_area=(
-                constraints_data.get(
-                    "max_relative_cost_index_per_area"
-                )
-            ),
-        ),
-        optimization_mode=optimization_data[
-            "mode"
-        ],
-        optimization_weights=optimization_weights,
-        deterministic_settings=DeterministicSettings(
-            apply_buildup=settings_data.get(
-                "apply_buildup",
-                False,
-            ),
-            calculation_max_thickness_cm=(
-                settings_data.get(
-                    "calculation_max_thickness_cm"
-                )
-            ),
+        deterministic_settings=(
+            deterministic_settings
         ),
     )
 
@@ -499,7 +1002,9 @@ def save_scenario(
     # Parent directories are created automatically so callers can write
     # directly to paths such as scenarios/cs137_reference.json.
 
-    output_path = Path(file_path)
+    output_path = Path(
+        file_path
+    )
 
     output_path.parent.mkdir(
         parents=True,
@@ -522,7 +1027,9 @@ def save_scenario(
         )
 
         # End text files with a newline for cleaner Git diffs.
-        output_file.write("\n")
+        output_file.write(
+            "\n"
+        )
 
     return output_path
 
@@ -532,16 +1039,20 @@ def load_scenario(
 ) -> ShieldingScenario:
     # Load and validate one scenario from a UTF-8 JSON file.
 
-    input_path = Path(file_path)
+    input_path = Path(
+        file_path
+    )
 
     if not input_path.exists():
         raise FileNotFoundError(
-            f"Scenario file does not exist: {input_path}"
+            "Scenario file does not exist: "
+            f"{input_path}"
         )
 
     if not input_path.is_file():
         raise ValueError(
-            f"Scenario path is not a file: {input_path}"
+            "Scenario path is not a file: "
+            f"{input_path}"
         )
 
     try:
@@ -559,7 +1070,10 @@ def load_scenario(
             f"{error}"
         ) from error
 
-    if not isinstance(scenario_data, dict):
+    if not isinstance(
+        scenario_data,
+        dict,
+    ):
         raise ValueError(
             "Scenario JSON root must be an object."
         )
@@ -570,7 +1084,9 @@ def load_scenario(
         )
 
     except KeyError as error:
-        missing_field = error.args[0]
+        missing_field = error.args[
+            0
+        ]
 
         raise ValueError(
             "Scenario JSON is missing required field: "

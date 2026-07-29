@@ -1,0 +1,13 @@
+<?xml version='1.0' encoding='UTF-8'?>
+<geometry>
+  <cell id="1001" name="v113_source_cavity" material="void" region="-101" universe="1"/>
+  <cell id="1101" name="v113_shield_layer_1_lead" material="2001" region="101 -201" universe="1"/>
+  <cell id="1201" name="v113_transport_void" material="void" region="201 -301" universe="1"/>
+  <cell id="1202" name="v113_evaluation_shell" material="void" region="301 -302" universe="1"/>
+  <cell id="1203" name="v113_exterior_void" material="void" region="302 -303" universe="1"/>
+  <surface id="101" name="v113_source_cavity_boundary" type="sphere" coeffs="0.0 0.0 0.0 1.0"/>
+  <surface id="201" name="v113_shield_layer_1_outer_boundary" type="sphere" coeffs="0.0 0.0 0.0 6.0"/>
+  <surface id="301" name="v113_evaluation_shell_inner_boundary" type="sphere" coeffs="0.0 0.0 0.0 99.5"/>
+  <surface id="302" name="v113_evaluation_shell_outer_boundary" type="sphere" coeffs="0.0 0.0 0.0 100.5"/>
+  <surface id="303" name="v113_outer_vacuum_boundary" type="sphere" boundary="vacuum" coeffs="0.0 0.0 0.0 110.0"/>
+</geometry>
