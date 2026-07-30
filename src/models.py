@@ -106,18 +106,14 @@ class LayerResult:
 
 @dataclass
 class ShieldingResult:
-    # Stores the complete result of one shielding calculation.
-    # This object keeps all output values together so main.py and output.py
-    # do not need to pass many separate floats.
-    # buildup_factor and buildup_corrected_flux are optional because not all
-    # calculations use G-P buildup correction.
+    # Complete result of one narrow-beam photon attenuation
+    # calculation.
+    #
+    # This result stores attenuation and uncollided photon
+    # fluence only. Response-specific quantities such as
+    # collision air kerma and G-P buildup are calculated by
+    # the dedicated air-response pathway.
 
-    # Note:
-    # buildup_factor and buildup_corrected_flux are filled in later by
-    # source_calculator.calculate_buildup_for_result(). They are optional because
-    # the core calculator always starts with narrow-beam uncollided flux.
-
-    
     layers: list[Layer]
     layer_results: list[LayerResult]
     photon_energy: float
@@ -127,43 +123,55 @@ class ShieldingResult:
     total_mfp: float
     total_transmission: float
     uncollided_flux: float
-    buildup_factor: float | None = None
-    buildup_corrected_flux: float | None = None
 
     def __post_init__(self):
         if self.photon_energy <= 0:
-            raise ValueError("Photon energy must be greater than zero.")
+            raise ValueError(
+                "Photon energy must be greater than zero."
+            )
 
         if self.source_strength < 0:
-            raise ValueError("Source strength cannot be negative.")
+            raise ValueError(
+                "Source strength cannot be negative."
+            )
 
         if self.detector_distance <= 0:
-            raise ValueError("Detector distance must be greater than zero.")
+            raise ValueError(
+                "Detector distance must be greater than zero."
+            )
 
         if len(self.layers) != len(self.layer_results):
-            raise ValueError("Number of layers and layer results must match.")
+            raise ValueError(
+                "Number of layers and layer results must match."
+            )
 
         if self.total_thickness < 0:
-            raise ValueError("Total thickness cannot be negative.")
+            raise ValueError(
+                "Total thickness cannot be negative."
+            )
 
         if self.total_thickness > self.detector_distance:
             raise ValueError(
-                "Total thickness cannot be greater than detector distance.")
-        # Total thickness cannot be greater than detector distance.
+                "Total thickness cannot be greater than "
+                "detector distance."
+            )
+
         if self.total_mfp < 0:
-            raise ValueError("Total MFP cannot be negative.")
+            raise ValueError(
+                "Total MFP cannot be negative."
+            )
 
         if self.total_transmission < 0:
-            raise ValueError("Total transmission cannot be negative.")
-        
+            raise ValueError(
+                "Total transmission cannot be negative."
+            )
+
         if self.total_transmission > 1:
-            raise ValueError("Total transmission cannot be greater than 1.")
+            raise ValueError(
+                "Total transmission cannot be greater than 1."
+            )
 
         if self.uncollided_flux < 0:
-            raise ValueError("Uncollided flux cannot be negative.")
-
-        if self.buildup_factor is not None and self.buildup_factor < 1:
-            raise ValueError("Buildup factor cannot be less than 1.")
-
-        if self.buildup_corrected_flux is not None and self.buildup_corrected_flux < 0:
-            raise ValueError("Buildup-corrected flux cannot be negative.")
+            raise ValueError(
+                "Uncollided flux cannot be negative."
+            )

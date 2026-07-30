@@ -124,7 +124,6 @@ def run_fixed_thickness_mode() -> None:
                 source,
                 layers,
                 detector_distance,
-                apply_buildup=False,
             )
         )
 
@@ -137,7 +136,6 @@ def run_fixed_thickness_mode() -> None:
                 source,
                 layers,
                 detector_distance,
-                apply_buildup=False,
             )
         )
 
@@ -246,7 +244,6 @@ def run_minimum_thickness_mode() -> None:
                 detector_distance,
                 target,
                 calculation_max_thickness,
-                apply_buildup=False,
             )
         )
 
@@ -261,7 +258,6 @@ def run_minimum_thickness_mode() -> None:
                 detector_distance,
                 target,
                 calculation_max_thickness,
-                apply_buildup=False,
             )
         )
 

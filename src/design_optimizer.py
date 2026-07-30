@@ -507,10 +507,9 @@ def create_candidate_from_minimum_thickness_result(
         required_thickness=result.required_thickness,
         final_flux=result.final_flux,
         final_transmission=result.final_transmission,
-        buildup_used=result.buildup_used,
         calculation_mode=result.calculation_mode,
-        warnings=result.warnings,
-        failure_reason=None,
+        buildup_used=False,
+        warnings=list(result.warnings),
     )
 
 
@@ -542,7 +541,6 @@ def calculate_material_candidate(
                 detector_distance,
                 target,
                 max_thickness,
-                apply_buildup=apply_buildup,
             )
 
         elif isinstance(source, IsotopeSource):
@@ -552,7 +550,6 @@ def calculate_material_candidate(
                 detector_distance,
                 target,
                 max_thickness,
-                apply_buildup=apply_buildup,
             )
 
         else:
@@ -668,7 +665,6 @@ def compare_materials_for_target(
     return MaterialComparisonResult(
         get_target_description(
             target,
-            apply_buildup=apply_buildup,
         ),
         apply_buildup,
         sorted_candidates,

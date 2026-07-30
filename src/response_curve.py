@@ -197,86 +197,34 @@ def calculate_uncollided_curve_flux(
     thickness_cm: float,
     detector_distance_cm: float,
 ) -> float:
-    # Evaluate narrow-beam uncollided flux at one thickness.
-    #
-    # This function deliberately calls the existing V1.07 calculation helpers
-    # rather than reproducing Beer-Lambert or isotope summation logic.
+    # Calculate the uncollided photon fluence rate at
+    # one response-curve thickness.
 
-    if isinstance(source, ManualPhotonSource):
-        _, uncollided_flux, _ = (
-            calculate_manual_flux_at_thickness(
-                source=source,
-                material=material,
-                thickness=thickness_cm,
-                detector_distance=detector_distance_cm,
-                apply_buildup=False,
-            )
+    if isinstance(
+        source,
+        ManualPhotonSource,
+    ):
+        return calculate_manual_flux_at_thickness(
+            source=source,
+            material=material,
+            thickness=thickness_cm,
+            detector_distance=detector_distance_cm,
         )
 
-        return uncollided_flux
-
-    if isinstance(source, IsotopeSource):
-        _, uncollided_flux, _ = (
-            calculate_isotope_flux_at_thickness(
-                source=source,
-                material=material,
-                thickness=thickness_cm,
-                detector_distance=detector_distance_cm,
-                apply_buildup=False,
-            )
+    if isinstance(
+        source,
+        IsotopeSource,
+    ):
+        return calculate_isotope_flux_at_thickness(
+            source=source,
+            material=material,
+            thickness=thickness_cm,
+            detector_distance=detector_distance_cm,
         )
 
-        return uncollided_flux
-
-    raise ValueError("Unsupported source type.")
-
-
-def calculate_buildup_curve_flux(
-    source: Source,
-    material: Material,
-    thickness_cm: float,
-    detector_distance_cm: float,
-) -> float:
-    # Evaluate the current G-P buildup-adjusted result at one thickness.
-    #
-    # This function does not perform fallback. A buildup curve must contain
-    # actual buildup-aware values or None.
-    #
-    # If buildup is unsupported or outside its valid range, the existing
-    # calculation helper raises ValueError. The curve generator catches that
-    # error and ends the buildup series.
-
-    if isinstance(source, ManualPhotonSource):
-        _, _, buildup_corrected_flux = (
-            calculate_manual_flux_at_thickness(
-                source=source,
-                material=material,
-                thickness=thickness_cm,
-                detector_distance=detector_distance_cm,
-                apply_buildup=True,
-            )
-        )
-
-    elif isinstance(source, IsotopeSource):
-        _, _, buildup_corrected_flux = (
-            calculate_isotope_flux_at_thickness(
-                source=source,
-                material=material,
-                thickness=thickness_cm,
-                detector_distance=detector_distance_cm,
-                apply_buildup=True,
-            )
-        )
-
-    else:
-        raise ValueError("Unsupported source type.")
-
-    if buildup_corrected_flux is None:
-        raise ValueError(
-            "Buildup-adjusted curve value was not calculated."
-        )
-
-    return buildup_corrected_flux
+    raise ValueError(
+        "Unsupported source type for response curve."
+    )
 
 
 def calculate_response_curve_target_flux(
@@ -364,7 +312,6 @@ def create_response_curve(
     # Because thickness values are increasing, exceeding the 40-MFP limit is
     # permanent for all later points. Unsupported material or energy data is
     # also permanent. Once buildup fails, the series therefore remains None.
-    buildup_series_active = apply_buildup
 
     for thickness_cm in thickness_values:
         uncollided_flux = calculate_uncollided_curve_flux(
@@ -374,34 +321,11 @@ def create_response_curve(
             detector_distance_cm=detector_distance_cm,
         )
 
-        buildup_corrected_flux = None
-
-        if buildup_series_active:
-            try:
-                buildup_corrected_flux = (
-                    calculate_buildup_curve_flux(
-                        source=source,
-                        material=material,
-                        thickness_cm=thickness_cm,
-                        detector_distance_cm=detector_distance_cm,
-                    )
-                )
-
-            except ValueError as error:
-                warnings.append(
-                    f"G-P buildup curve became unavailable at "
-                    f"{thickness_cm:.6g} cm for {material.name}: "
-                    f"{error}"
-                )
-
-                buildup_series_active = False
-                buildup_corrected_flux = None
-
         points.append(
             ResponseCurvePoint(
                 thickness_cm=thickness_cm,
                 uncollided_flux=uncollided_flux,
-                buildup_corrected_flux=buildup_corrected_flux,
+                buildup_corrected_flux=None,
             )
         )
 
@@ -414,7 +338,7 @@ def create_response_curve(
         material_name=material.name,
         detector_distance_cm=detector_distance_cm,
         points=tuple(points),
-        buildup_requested=apply_buildup,
+        buildup_requested=False,
         target_flux=target_flux,
         required_thickness_cm=required_thickness_cm,
         warnings=tuple(warnings),

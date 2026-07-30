@@ -185,7 +185,6 @@ from output import (
     print_minimum_thickness_result,
     print_optimized_design_result,
     print_source_air_kerma_result,
-    print_source_results,
 )
 from contextlib import redirect_stdout
 from io import StringIO
@@ -482,7 +481,6 @@ def run_validation_tests() -> None:
             source,
             layers,
             detector_distance,
-            apply_buildup=False,
         )
 
         assert_equal(
@@ -531,7 +529,6 @@ def run_validation_tests() -> None:
         manual_source,
         layers,
         detector_distance,
-        apply_buildup=True,
     )
 
     assert_close(
@@ -539,74 +536,6 @@ def run_validation_tests() -> None:
         manual_result.total_uncollided_flux,
         5.40662e2,
         1e-2,
-    )
-
-    manual_buildup_flux = assert_not_none(
-        "Manual source V1.05 buildup-corrected flux regression",
-        manual_result.total_buildup_corrected_flux,
-    )
-
-    assert_close(
-        "Manual source V1.05 buildup-corrected flux regression",
-        manual_buildup_flux,
-        1.42612e3,
-        1e-2,
-    )
-
-    # Validate that multi-line buildup totals equal the sum of valid line-by-line results.
-
-    co60_source = create_isotope_source("co60", one_ci_bq)
-
-    co60_result = calculate_isotope_source_result(
-        co60_source,
-        layers,
-        detector_distance,
-        apply_buildup=True,
-    )
-
-    co60_buildup_flux_sum = 0.0
-
-    for line_result in co60_result.line_results:
-        line_buildup_flux = assert_not_none(
-            "Co-60 line buildup-corrected flux",
-            line_result.shielding_result.buildup_corrected_flux,
-        )
-
-        co60_buildup_flux_sum = co60_buildup_flux_sum + line_buildup_flux
-
-    co60_total_buildup_flux = assert_not_none(
-        "Co-60 total buildup-corrected flux",
-        co60_result.total_buildup_corrected_flux,
-    )
-
-    assert_close(
-        "Co-60 total buildup-corrected flux equals sum of line fluxes",
-        co60_total_buildup_flux,
-        co60_buildup_flux_sum,
-        1e-6,
-    )
-
-    # Validate warning behavior when buildup is requested outside the valid G-P MFP range.
-
-    am241_source = create_isotope_source("am241", one_ci_bq)
-
-    am241_result = calculate_isotope_source_result(
-        am241_source,
-        layers,
-        detector_distance,
-        apply_buildup=True,
-    )
-
-    assert_equal(
-        "Am-241 total buildup-corrected flux is unavailable above G-P MFP range",
-        am241_result.total_buildup_corrected_flux,
-        None,
-    )
-
-    assert_greater_than(
-        "Am-241 buildup warning generated",
-        len(am241_result.warnings),
-        0,
     )
 
 
@@ -692,87 +621,6 @@ def run_validation_tests() -> None:
     assert_greater_than(
         "No shielding required warning generated",
         len(no_shielding_required_result.warnings),
-        0,
-    )
-
-
-    # Validate buildup-aware V1.07 minimum shielding thickness calculations.
-
-    manual_buildup_flux_target_result = calculate_manual_minimum_thickness(
-        manual_source,
-        materials["lead"],
-        detector_distance,
-        FluxTarget(100.0),
-        apply_buildup=True,
-    )
-
-    assert_less_than_or_equal(
-        "Manual buildup-aware minimum thickness flux target",
-        manual_buildup_flux_target_result.final_flux,
-        100.000001,
-    )
-
-    assert_equal(
-        "Manual buildup-aware minimum thickness used buildup",
-        manual_buildup_flux_target_result.buildup_used,
-        True,
-    )
-
-    assert_greater_than(
-        "Manual buildup-aware thickness greater than narrow-beam thickness",
-        manual_buildup_flux_target_result.required_thickness,
-        manual_flux_target_result.required_thickness,
-    )
-
-    cs137_buildup_flux_target_result = calculate_isotope_minimum_thickness(
-        cs137_source,
-        materials["lead"],
-        detector_distance,
-        FluxTarget(100.0),
-        max_thickness=detector_distance,
-        apply_buildup=True,
-    )
-
-    assert_less_than_or_equal(
-        "Cs-137 buildup-aware isotope minimum thickness flux target",
-        cs137_buildup_flux_target_result.final_flux,
-        100.000001,
-    )
-
-    assert_equal(
-        "Cs-137 buildup-aware isotope minimum thickness used buildup",
-        cs137_buildup_flux_target_result.buildup_used,
-        True,
-    )
-
-    am241_manual_source = ManualPhotonSource(
-        0.059541,
-        3.7e10,
-    )
-
-    am241_buildup_fallback_result = calculate_manual_minimum_thickness(
-        am241_manual_source,
-        materials["lead"],
-        detector_distance,
-        FluxTarget(1.0e-121),
-        apply_buildup=True,
-    )
-
-    assert_less_than_or_equal(
-        "Am-241 fallback minimum thickness reaches flux target",
-        am241_buildup_fallback_result.final_flux,
-        1.000001e-121,
-    )
-
-    assert_equal(
-        "Am-241 fallback minimum thickness did not use buildup",
-        am241_buildup_fallback_result.buildup_used,
-        False,
-    )
-
-    assert_greater_than(
-        "Am-241 fallback minimum thickness warning generated",
-        len(am241_buildup_fallback_result.warnings),
         0,
     )
 
@@ -6321,13 +6169,13 @@ def run_v112_validation_tests() -> None:
         .args[0]
     )
 
-    assert_equal(
-        "V1.12 photon fixed-thickness CLI stores no buildup total",
+    assert_greater_than(
         (
-            fixed_photon_result
-            .total_buildup_corrected_flux
+            "V1.12 photon fixed-thickness CLI "
+            "produces positive uncollided fluence"
         ),
-        None,
+        fixed_photon_result.total_uncollided_flux,
+        0.0,
     )
 
     with (
@@ -6501,9 +6349,15 @@ def run_v112_validation_tests() -> None:
     )
 
     assert_equal(
-        "V1.12 photon minimum-thickness CLI does not use buildup",
-        cli_photon_design.buildup_used,
-        False,
+        (
+            "V1.12 photon minimum-thickness CLI "
+            "uses uncollided calculation mode"
+        ),
+        cli_photon_design.calculation_mode,
+        (
+            "Uncollided photon-fluence "
+            "minimum thickness design"
+        ),
     )
 
     assert_less_than_or_equal(
@@ -7581,7 +7435,6 @@ def run_v112_validation_tests() -> None:
             FluxTarget(
                 target_flux=100.0
             ),
-            apply_buildup=False,
         ),
         (
             "Uncollided photon fluence-rate target "
@@ -7589,19 +7442,6 @@ def run_v112_validation_tests() -> None:
         ),
     )
 
-    assert_equal(
-        "V1.12 historical buildup target description identifies proxy",
-        get_target_description(
-            FluxTarget(
-                target_flux=100.0
-            ),
-            apply_buildup=True,
-        ),
-        (
-            "Legacy G-P exposure-buildup-adjusted "
-            "photon-response proxy target <= 100"
-        ),
-    )
 
     photon_minimum_output_buffer = (
         StringIO()
@@ -7621,19 +7461,15 @@ def run_v112_validation_tests() -> None:
 
     photon_minimum_requirements = [
         (
-            "Photon-response minimum shielding "
+            "Photon-fluence minimum shielding "
             "thickness result"
         ),
         (
-            "Final selected-response ratio:"
+            "Final uncollided response ratio:"
         ),
         (
             "Final target-comparison uncollided "
             "photon fluence rate:"
-        ),
-        (
-            "Final uncollided photon "
-            "fluence rate:"
         ),
         "photons/cm^2/s",
     ]

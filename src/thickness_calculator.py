@@ -23,7 +23,7 @@ import math
 from calculator import calculate_shielding_result
 from models import Layer, Material
 from physics import calculate_flux, calculate_mu, get_mu_over_p_at_energy
-from source_calculator import calculate_buildup_for_result, calculate_isotope_source_result
+from source_calculator import calculate_isotope_source_result
 from source_models import IsotopeSource, ManualPhotonSource
 from air_response import (
     calculate_source_air_kerma_result,
@@ -53,59 +53,16 @@ AirKermaSource = (
 
 def get_target_description(
     target: Target,
-    apply_buildup: bool = False,
 ) -> str:
-    # Describe the exact response constrained by a legacy-compatible
-    # photon minimum-thickness calculation.
-    #
-    # Current public photon CLI paths always use apply_buildup=False.
-    # The buildup-aware descriptions remain only for historical
-    # regression compatibility.
-
-    if not apply_buildup:
-        if isinstance(
-            target,
-            TransmissionTarget,
-        ):
-            return (
-                "Uncollided transmission target <= "
-                f"{target.target_transmission:.6g}"
-            )
-
-        if isinstance(
-            target,
-            ReductionFactorTarget,
-        ):
-            return (
-                "Uncollided photon fluence-rate "
-                "reduction factor >= "
-                f"{target.reduction_factor:.6g}"
-            )
-
-        if isinstance(
-            target,
-            FluxTarget,
-        ):
-            return (
-                "Uncollided photon fluence-rate target <= "
-                f"{target.target_flux:.6g} photons/cm^2/s"
-            )
-
-        raise ValueError(
-            "Unsupported target type."
-        )
-
-    # This branch documents the historical V1.06–V1.11 behavior.
-    # Exposure buildup is not interpreted as a photon-number fluence
-    # correction in the revised V1.12 public pathways.
+    # Describe the uncollided photon quantity constrained
+    # by a photon minimum-thickness calculation.
 
     if isinstance(
         target,
         TransmissionTarget,
     ):
         return (
-            "Legacy G-P exposure-buildup-adjusted "
-            "response-ratio target <= "
+            "Uncollided transmission target <= "
             f"{target.target_transmission:.6g}"
         )
 
@@ -114,8 +71,8 @@ def get_target_description(
         ReductionFactorTarget,
     ):
         return (
-            "Legacy G-P exposure-buildup-adjusted "
-            "response reduction factor >= "
+            "Uncollided photon fluence-rate "
+            "reduction factor >= "
             f"{target.reduction_factor:.6g}"
         )
 
@@ -124,15 +81,13 @@ def get_target_description(
         FluxTarget,
     ):
         return (
-            "Legacy G-P exposure-buildup-adjusted "
-            "photon-response proxy target <= "
-            f"{target.target_flux:.6g}"
+            "Uncollided photon fluence-rate target <= "
+            f"{target.target_flux:.6g} photons/cm^2/s"
         )
 
     raise ValueError(
         "Unsupported target type."
     )
-
 
 def get_air_kerma_target_description(
     target: AirKermaRateTarget,
@@ -754,104 +709,28 @@ def calculate_unshielded_isotope_flux(
     return total_flux
 
 
-def calculate_valid_buildup_max_thickness_for_energy(
-    material: Material,
-    photon_energy: float,
-    detector_distance: float,
-) -> float:
-    # Buildup range helper:
-    # G-P buildup is valid only up to 40 mean free paths.
-    # Since MFP = mu * thickness, this helper converts the 40 MFP limit into
-    # a material/energy-specific maximum physical thickness in cm.
-
-    zero_thickness_result = calculate_shielding_result(
-        [Layer(0.0, material)],
-        photon_energy,
-        1.0,
-        detector_distance,
-    )
-
-    calculate_buildup_for_result(zero_thickness_result)
-
-    mu_over_p = get_mu_over_p_at_energy(
-        material,
-        photon_energy,
-    )
-
-    mu_value = calculate_mu(
-        mu_over_p,
-        material.density,
-    )
-
-    max_buildup_mfp = 40.0
-
-    # The small factor prevents floating-point roundoff from producing
-    # 40.0000000001 MFP at the upper search boundary.
-    return (max_buildup_mfp / mu_value) * (1.0 - 1.0e-12)
-
-
-def calculate_valid_buildup_max_thickness_for_isotope(
-    source: IsotopeSource,
-    material: Material,
-    detector_distance: float,
-) -> float:
-    # For isotope buildup-aware design, all photon lines must remain inside
-    # the G-P valid range. The usable buildup search limit is therefore the
-    # smallest valid thickness among all photon lines.
-
-    valid_thicknesses = []
-
-    for photon_line in source.photon_lines:
-        valid_thickness = calculate_valid_buildup_max_thickness_for_energy(
-            material,
-            photon_line.energy,
-            detector_distance,
-        )
-
-        valid_thicknesses.append(valid_thickness)
-
-    return min(valid_thicknesses)
-
-
 def calculate_manual_flux_at_thickness(
     source: ManualPhotonSource,
     material: Material,
     thickness: float,
     detector_distance: float,
-    apply_buildup: bool,
-) -> tuple[float, float, float | None]:
-    # Calculate manual-source flux at a trial thickness.
-    # Returns:
-    # selected_flux, uncollided_flux, buildup_corrected_flux
-    #
-    # selected_flux is the flux used for target comparison.
-    # If buildup is requested, selected_flux is buildup-corrected flux.
-    # Otherwise, selected_flux is narrow-beam uncollided flux.
+) -> float:
+    # Calculate uncollided manual-source photon fluence
+    # rate at one trial shielding thickness.
 
     shielding_result = calculate_shielding_result(
-        [Layer(thickness, material)],
+        [
+            Layer(
+                thickness=thickness,
+                material=material,
+            ),
+        ],
         source.energy,
         source.photon_rate,
         detector_distance,
     )
 
-    if not apply_buildup:
-        return (
-            shielding_result.uncollided_flux,
-            shielding_result.uncollided_flux,
-            None,
-        )
-
-    calculate_buildup_for_result(shielding_result)
-
-    if shielding_result.buildup_corrected_flux is None:
-        raise ValueError("Buildup-corrected flux was not calculated.")
-
-    return (
-        shielding_result.buildup_corrected_flux,
-        shielding_result.uncollided_flux,
-        shielding_result.buildup_corrected_flux,
-    )
+    return shielding_result.uncollided_flux
 
 
 def calculate_isotope_flux_at_thickness(
@@ -859,44 +738,22 @@ def calculate_isotope_flux_at_thickness(
     material: Material,
     thickness: float,
     detector_distance: float,
-    apply_buildup: bool = False,
-) -> tuple[float, float, float | None]:
-    # Calculate isotope-source flux at a trial thickness.
-    # Returns:
-    # selected_flux, uncollided_flux, buildup_corrected_flux
-    #
-    # If buildup is requested, every photon line must receive valid buildup.
-    # Otherwise, the buildup-aware isotope total is considered unavailable.
-
-    layer = Layer(thickness, material)
+) -> float:
+    # Calculate total uncollided isotope photon fluence
+    # rate at one trial shielding thickness.
 
     source_result = calculate_isotope_source_result(
-        source,
-        [layer],
-        detector_distance,
-        apply_buildup=apply_buildup,
+        source=source,
+        layers=[
+            Layer(
+                thickness=thickness,
+                material=material,
+            ),
+        ],
+        detector_distance=detector_distance,
     )
 
-    if not apply_buildup:
-        return (
-            source_result.total_uncollided_flux,
-            source_result.total_uncollided_flux,
-            None,
-        )
-
-    if source_result.total_buildup_corrected_flux is None:
-        if len(source_result.warnings) > 0:
-            warning_text = " ".join(source_result.warnings)
-        else:
-            warning_text = "Buildup-corrected isotope flux was not calculated."
-
-        raise ValueError(warning_text)
-
-    return (
-        source_result.total_buildup_corrected_flux,
-        source_result.total_uncollided_flux,
-        source_result.total_buildup_corrected_flux,
-    )
+    return source_result.total_uncollided_flux
 
 
 def find_minimum_thickness_by_bisection(
@@ -967,38 +824,23 @@ def calculate_manual_minimum_thickness(
     detector_distance: float,
     target: Target,
     max_thickness: float | None = None,
-    apply_buildup: bool = False,
-    tolerance: float = 1e-6,
-    max_iterations: int = 100,
 ) -> MinimumThicknessResult:
-    # Calculate the minimum single-material shielding thickness for a manual
-    # monoenergetic photon source.
+    # Calculate minimum homogeneous shielding thickness
+    # for an uncollided monoenergetic photon response.
     #
-    # Narrow-beam mode uses the analytical solution:
     # T = exp(-mu * x)
     # x = -ln(T) / mu
-    #
-    # If buildup is requested, the function tries a buildup-aware bisection
-    # calculation. If the buildup model is unsupported or cannot reach the
-    # target within the valid G-P MFP range, it falls back to narrow-beam mode
-    # and reports a warning.
 
     allowed_max_thickness = validate_max_thickness(
         detector_distance,
         max_thickness,
     )
 
-    if tolerance <= 0:
-        raise ValueError("Tolerance must be greater than zero.")
-
-    if max_iterations <= 0:
-        raise ValueError("Maximum iterations must be greater than zero.")
-
     target_description = get_target_description(
-        target,
-        apply_buildup=apply_buildup,
+        target
     )
-    warnings = []
+
+    warnings: list[str] = []
 
     unshielded_flux = calculate_unshielded_manual_flux(
         source,
@@ -1006,111 +848,46 @@ def calculate_manual_minimum_thickness(
     )
 
     if unshielded_flux == 0:
-        warnings.append("Unshielded source flux is zero; no shielding is required.")
-
-        return MinimumThicknessResult(
-            material,
-            0.0,
-            0.0,
-            1.0,
-            target_description,
-            warnings,
-        )
-
-    target_flux = calculate_target_flux_from_unshielded_flux(
-        target,
-        unshielded_flux,
-    )
-
-    if target_flux >= unshielded_flux:
         warnings.append(
-            "Target flux is greater than or equal to the unshielded flux; "
+            "Unshielded source flux is zero; "
             "no shielding is required."
         )
 
         return MinimumThicknessResult(
-            material,
-            0.0,
-            unshielded_flux,
-            1.0,
-            target_description,
-            warnings,
+            material=material,
+            required_thickness=0.0,
+            final_flux=0.0,
+            final_transmission=1.0,
+            target_description=target_description,
+            warnings=warnings,
         )
 
+    target_flux = (
+        calculate_target_flux_from_unshielded_flux(
+            target,
+            unshielded_flux,
+        )
+    )
 
-    # Buildup-aware design cannot use the simple analytical formula because
-    # buildup depends on shield thickness. Use bisection to solve:
-    #
-    #     buildup_corrected_flux(thickness) <= target_flux
-    #
-    # If the G-P model is unsupported or cannot meet the target within its
-    # valid MFP range, continue to the narrow-beam fallback below.
-    if apply_buildup:
-        try:
-            buildup_max_thickness = calculate_valid_buildup_max_thickness_for_energy(
-                material,
-                source.energy,
-                detector_distance,
-            )
+    if target_flux >= unshielded_flux:
+        warnings.append(
+            "Target flux is greater than or equal to "
+            "the unshielded flux; no shielding is required."
+        )
 
-            buildup_high_thickness = min(
-                allowed_max_thickness,
-                buildup_max_thickness,
-            )
+        return MinimumThicknessResult(
+            material=material,
+            required_thickness=0.0,
+            final_flux=unshielded_flux,
+            final_transmission=1.0,
+            target_description=target_description,
+            warnings=warnings,
+        )
 
-            def evaluate_buildup_flux(thickness: float) -> float:
-                selected_flux, _, _ = calculate_manual_flux_at_thickness(
-                    source,
-                    material,
-                    thickness,
-                    detector_distance,
-                    apply_buildup=True,
-                )
-
-                return selected_flux
-
-            required_thickness = find_minimum_thickness_by_bisection(
-                evaluate_buildup_flux,
-                target_flux,
-                buildup_high_thickness,
-                tolerance,
-                max_iterations,
-                "valid G-P buildup thickness range",
-            )
-
-            final_flux, final_uncollided_flux, final_buildup_flux = (
-                calculate_manual_flux_at_thickness(
-                    source,
-                    material,
-                    required_thickness,
-                    detector_distance,
-                    apply_buildup=True,
-                )
-            )
-
-            final_transmission = final_flux / unshielded_flux
-
-            return MinimumThicknessResult(
-                material,
-                required_thickness,
-                final_flux,
-                final_transmission,
-                target_description,
-                warnings,
-                "Buildup-aware minimum thickness design",
-                final_uncollided_flux,
-                final_buildup_flux,
-                True,
-            )
-
-        except ValueError as error:
-            warnings.append(
-                "G-P buildup was requested for minimum-thickness design, but "
-                f"the buildup-aware solution was unavailable: {error} "
-                "The result below uses narrow-beam uncollided flux only."
-            )
-
-    target_transmission = target_flux / unshielded_flux
+    target_transmission = (
+        target_flux
+        / unshielded_flux
+    )
 
     mu_over_p = get_mu_over_p_at_energy(
         material,
@@ -1122,33 +899,48 @@ def calculate_manual_minimum_thickness(
         material.density,
     )
 
-    required_thickness = -math.log(target_transmission) / mu_value
+    required_thickness = (
+        -math.log(
+            target_transmission
+        )
+        / mu_value
+    )
 
     if required_thickness > allowed_max_thickness:
         raise ValueError(
-            "Target cannot be reached within the allowed maximum thickness. "
-            f"Required thickness: {required_thickness:.6g} cm. "
-            f"Allowed maximum thickness: {allowed_max_thickness:.6g} cm."
+            "Target cannot be reached within the allowed "
+            "maximum thickness. "
+            f"Required thickness: "
+            f"{required_thickness:.6g} cm. "
+            f"Allowed maximum thickness: "
+            f"{allowed_max_thickness:.6g} cm."
         )
 
     shielding_result = calculate_shielding_result(
-        [Layer(required_thickness, material)],
+        [
+            Layer(
+                thickness=required_thickness,
+                material=material,
+            ),
+        ],
         source.energy,
         source.photon_rate,
         detector_distance,
     )
 
     return MinimumThicknessResult(
-        material,
-        required_thickness,
-        shielding_result.uncollided_flux,
-        shielding_result.total_transmission,
-        target_description,
-        warnings,
-        "Narrow-beam minimum thickness design",
-        shielding_result.uncollided_flux,
-        None,
-        False,
+        material=material,
+        required_thickness=required_thickness,
+        final_flux=shielding_result.uncollided_flux,
+        final_transmission=(
+            shielding_result.total_transmission
+        ),
+        target_description=target_description,
+        warnings=warnings,
+        calculation_mode=(
+            "Uncollided photon-fluence "
+            "minimum thickness design"
+        ),
     )
 
 
@@ -1169,18 +961,14 @@ def calculate_isotope_minimum_thickness(
     detector_distance: float,
     target: Target,
     max_thickness: float | None = None,
-    apply_buildup: bool = False,
     tolerance: float = 1e-6,
     max_iterations: int = 100,
 ) -> MinimumThicknessResult:
-    # Calculate the minimum single-material shielding thickness for an isotope source.
+    # Calculate minimum homogeneous shielding thickness
+    # for an isotope's summed uncollided photon fluence.
     #
-    # Isotope sources may contain multiple photon lines, and each line attenuates
-    # differently. Because of that, this function uses bisection.
-    #
-    # If buildup is requested, every photon line must receive valid buildup at
-    # the design thickness. If that is not possible, the function falls back to
-    # narrow-beam mode and reports a warning.
+    # Bisection is required because each photon line has
+    # a different energy and attenuation coefficient.
 
     allowed_max_thickness = validate_max_thickness(
         detector_distance,
@@ -1188,16 +976,20 @@ def calculate_isotope_minimum_thickness(
     )
 
     if tolerance <= 0:
-        raise ValueError("Tolerance must be greater than zero.")
+        raise ValueError(
+            "Tolerance must be greater than zero."
+        )
 
     if max_iterations <= 0:
-        raise ValueError("Maximum iterations must be greater than zero.")
+        raise ValueError(
+            "Maximum iterations must be greater than zero."
+        )
 
     target_description = get_target_description(
-        target,
-        apply_buildup=apply_buildup,
+        target
     )
-    warnings = []
+
+    warnings: list[str] = []
 
     unshielded_flux = calculate_unshielded_isotope_flux(
         source,
@@ -1205,140 +997,88 @@ def calculate_isotope_minimum_thickness(
     )
 
     if unshielded_flux == 0:
-        warnings.append("Unshielded source flux is zero; no shielding is required.")
-
-        return MinimumThicknessResult(
-            material,
-            0.0,
-            0.0,
-            1.0,
-            target_description,
-            warnings,
-        )
-
-    target_flux = calculate_target_flux_from_unshielded_flux(
-        target,
-        unshielded_flux,
-    )
-
-    if target_flux >= unshielded_flux:
         warnings.append(
-            "Target flux is greater than or equal to the unshielded flux; "
+            "Unshielded source flux is zero; "
             "no shielding is required."
         )
 
         return MinimumThicknessResult(
-            material,
-            0.0,
+            material=material,
+            required_thickness=0.0,
+            final_flux=0.0,
+            final_transmission=1.0,
+            target_description=target_description,
+            warnings=warnings,
+        )
+
+    target_flux = (
+        calculate_target_flux_from_unshielded_flux(
+            target,
             unshielded_flux,
-            1.0,
-            target_description,
-            warnings,
         )
-
-    if apply_buildup:
-        try:
-            buildup_max_thickness = calculate_valid_buildup_max_thickness_for_isotope(
-                source,
-                material,
-                detector_distance,
-            )
-
-            buildup_high_thickness = min(
-                allowed_max_thickness,
-                buildup_max_thickness,
-            )
-
-            def evaluate_buildup_flux(thickness: float) -> float:
-                selected_flux, _, _ = calculate_isotope_flux_at_thickness(
-                    source,
-                    material,
-                    thickness,
-                    detector_distance,
-                    apply_buildup=True,
-                )
-
-                return selected_flux
-
-            required_thickness = find_minimum_thickness_by_bisection(
-                evaluate_buildup_flux,
-                target_flux,
-                buildup_high_thickness,
-                tolerance,
-                max_iterations,
-            )
-
-            final_flux, final_uncollided_flux, final_buildup_flux = (
-                calculate_isotope_flux_at_thickness(
-                    source,
-                    material,
-                    required_thickness,
-                    detector_distance,
-                    apply_buildup=True,
-                )
-            )
-
-            final_transmission = final_flux / unshielded_flux
-
-            return MinimumThicknessResult(
-                material,
-                required_thickness,
-                final_flux,
-                final_transmission,
-                target_description,
-                warnings,
-                "Buildup-aware minimum thickness design",
-                final_uncollided_flux,
-                final_buildup_flux,
-                True,
-            )
-
-        except ValueError as error:
-            warnings.append(
-                "G-P buildup was requested for minimum-thickness design, but "
-                f"the buildup-aware solution was unavailable: {error} "
-                "The result below uses narrow-beam uncollided flux only."
-            )
-
-    def evaluate_narrow_beam_flux(thickness: float) -> float:
-        selected_flux, _, _ = calculate_isotope_flux_at_thickness(
-            source,
-            material,
-            thickness,
-            detector_distance,
-            apply_buildup=False,
-        )
-
-        return selected_flux
-
-    required_thickness = find_minimum_thickness_by_bisection(
-        evaluate_narrow_beam_flux,
-        target_flux,
-        allowed_max_thickness,
-        tolerance,
-        max_iterations,
-        "allowed maximum thickness",
     )
 
-    final_flux, final_uncollided_flux, _ = calculate_isotope_flux_at_thickness(
-        source,
-        material,
-        required_thickness,
-        detector_distance,
-        apply_buildup=False,
+    if target_flux >= unshielded_flux:
+        warnings.append(
+            "Target flux is greater than or equal to "
+            "the unshielded flux; no shielding is required."
+        )
+
+        return MinimumThicknessResult(
+            material=material,
+            required_thickness=0.0,
+            final_flux=unshielded_flux,
+            final_transmission=1.0,
+            target_description=target_description,
+            warnings=warnings,
+        )
+
+    def evaluate_uncollided_flux(
+        thickness: float,
+    ) -> float:
+        return calculate_isotope_flux_at_thickness(
+            source=source,
+            material=material,
+            thickness=thickness,
+            detector_distance=detector_distance,
+        )
+
+    required_thickness = (
+        find_minimum_thickness_by_bisection(
+            evaluate_flux=(
+                evaluate_uncollided_flux
+            ),
+            target_flux=target_flux,
+            high_thickness=allowed_max_thickness,
+            tolerance=tolerance,
+            max_iterations=max_iterations,
+            high_thickness_description=(
+                "allowed maximum thickness"
+            ),
+        )
     )
 
-    final_transmission = final_flux / unshielded_flux
+    final_flux = calculate_isotope_flux_at_thickness(
+        source=source,
+        material=material,
+        thickness=required_thickness,
+        detector_distance=detector_distance,
+    )
+
+    final_transmission = (
+        final_flux
+        / unshielded_flux
+    )
 
     return MinimumThicknessResult(
-        material,
-        required_thickness,
-        final_flux,
-        final_transmission,
-        target_description,
-        warnings,
-        "Narrow-beam minimum thickness design",
-        final_uncollided_flux,
-        None,
-        False,
+        material=material,
+        required_thickness=required_thickness,
+        final_flux=final_flux,
+        final_transmission=final_transmission,
+        target_description=target_description,
+        warnings=warnings,
+        calculation_mode=(
+            "Uncollided photon-fluence "
+            "minimum thickness design"
+        ),
     )

@@ -89,65 +89,59 @@ class AirKermaRateTarget:
 
 @dataclass
 class MinimumThicknessResult:
-    # Legacy-compatible photon-response minimum-thickness result.
+    # Result of an uncollided photon-fluence
+    # minimum-thickness calculation.
     #
     # final_flux:
-    #   Historical compatibility field containing the response value
-    #   used to test the target.
-    #
-    #   Uncollided mode:
-    #       uncollided photon fluence rate
-    #
-    #   Historical buildup mode:
-    #       G-P exposure-buildup-scaled response proxy
+    #   Final uncollided photon fluence rate at the
+    #   detector in photons/cm^2/s.
     #
     # final_transmission:
-    #   Ratio of the selected final response to the corresponding
-    #   unshielded response.
+    #   Final uncollided response divided by the
+    #   corresponding unshielded response.
+
     material: Material
     required_thickness: float
     final_flux: float
     final_transmission: float
     target_description: str
     warnings: list[str]
-    calculation_mode: str = "Narrow-beam minimum thickness design"
-    final_uncollided_flux: float | None = None
-    final_buildup_corrected_flux: float | None = None
-    buildup_used: bool = False
+
+    calculation_mode: str = (
+        "Uncollided photon-fluence "
+        "minimum thickness design"
+    )
 
     def __post_init__(self):
         if self.required_thickness < 0:
-            raise ValueError("Required thickness cannot be negative.")
-
-        if self.final_flux < 0:
-            raise ValueError("Final flux cannot be negative.")
-
-        if self.final_transmission < 0:
-            raise ValueError("Final transmission cannot be negative.")
-
-        if self.final_transmission > 1:
-            raise ValueError("Final transmission cannot be greater than 1.")
-
-        if self.calculation_mode.strip() == "":
-            raise ValueError("Calculation mode cannot be empty.")
-
-        if self.final_uncollided_flux is None:
-            self.final_uncollided_flux = self.final_flux
-
-        if self.final_uncollided_flux < 0:
-            raise ValueError("Final uncollided flux cannot be negative.")
-
-        if (
-            self.final_buildup_corrected_flux is not None
-            and self.final_buildup_corrected_flux < 0
-        ):
-            raise ValueError("Final buildup-corrected flux cannot be negative.")
-
-        if self.buildup_used and self.final_buildup_corrected_flux is None:
             raise ValueError(
-                "Buildup-corrected flux must be stored when buildup_used is True."
+                "Required thickness cannot be negative."
             )
 
+        if self.final_flux < 0:
+            raise ValueError(
+                "Final flux cannot be negative."
+            )
+
+        if self.final_transmission < 0:
+            raise ValueError(
+                "Final transmission cannot be negative."
+            )
+
+        if self.final_transmission > 1:
+            raise ValueError(
+                "Final transmission cannot be greater than 1."
+            )
+
+        if self.target_description.strip() == "":
+            raise ValueError(
+                "Target description cannot be empty."
+            )
+
+        if self.calculation_mode.strip() == "":
+            raise ValueError(
+                "Calculation mode cannot be empty."
+            )
 
 @dataclass
 class AirKermaMinimumThicknessResult:

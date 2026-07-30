@@ -1,4 +1,4 @@
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from models import ShieldingResult
 
 
@@ -71,34 +71,39 @@ class SourceLineResult:
 
 @dataclass
 class SourceCalculationResult:
-    # Stores the complete result for a source calculation.
-    # For isotope sources, this contains one SourceLineResult per photon line.
-    # total_uncollided_flux is always available.
-    # total_buildup_corrected_flux is only available when buildup was requested
-    # and successfully applied to every photon line.
-    # warnings stores non-fatal modeling limitations, such as skipped buildup.
+    # Complete uncollided photon-fluence result for one
+    # manual or isotope source.
+    #
+    # Isotope sources preserve one SourceLineResult per
+    # photon line. The total is the sum of the uncollided
+    # photon fluence-rate contributions.
+
     source_name: str
     activity_bq: float | None
     line_results: list[SourceLineResult]
     total_uncollided_flux: float
-    total_buildup_corrected_flux: float | None = None
-    warnings: list[str] = field(default_factory=list)
 
     def __post_init__(self):
         if self.source_name.strip() == "":
-            raise ValueError("Source name cannot be empty.")
-
-        if self.activity_bq is not None and self.activity_bq < 0:
-            raise ValueError("Source activity cannot be negative.")
-
-        if len(self.line_results) == 0:
-            raise ValueError("SourceCalculationResult must have at least one line result.")
-
-        if self.total_uncollided_flux < 0:
-            raise ValueError("Total uncollided flux cannot be negative.")
+            raise ValueError(
+                "Source name cannot be empty."
+            )
 
         if (
-            self.total_buildup_corrected_flux is not None
-            and self.total_buildup_corrected_flux < 0
+            self.activity_bq is not None
+            and self.activity_bq < 0
         ):
-            raise ValueError("Total buildup-corrected flux cannot be negative.")
+            raise ValueError(
+                "Source activity cannot be negative."
+            )
+
+        if len(self.line_results) == 0:
+            raise ValueError(
+                "SourceCalculationResult must have at "
+                "least one line result."
+            )
+
+        if self.total_uncollided_flux < 0:
+            raise ValueError(
+                "Total uncollided flux cannot be negative."
+            )

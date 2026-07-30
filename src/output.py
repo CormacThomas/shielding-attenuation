@@ -36,28 +36,13 @@ from unit_conversions import (
 def print_results(
     result: ShieldingResult,
 ) -> None:
-    # Print one low-level monoenergetic shielding result.
-    #
-    # The G-P-adjusted fields are retained for historical regression
-    # compatibility. They are labeled as response proxies rather than
-    # photon fluence rates.
+    # Print one low-level uncollided photon attenuation
+    # result.
 
-    has_legacy_buildup_proxy = (
-        result.buildup_factor is not None
-        and result.buildup_corrected_flux is not None
+    print(
+        "Calculation mode: Narrow-beam uncollided "
+        "photon fluence rate\n"
     )
-
-    if has_legacy_buildup_proxy:
-        print(
-            "Calculation mode: Legacy narrow-beam photon "
-            "response with G-P exposure-buildup proxy\n"
-        )
-
-    else:
-        print(
-            "Calculation mode: Narrow-beam uncollided "
-            "photon fluence rate\n"
-        )
 
     print(
         f"Photon energy: "
@@ -99,33 +84,6 @@ def print_results(
         f"{result.uncollided_flux:.6e} "
         "photons/cm^2/s"
     )
-
-    if has_legacy_buildup_proxy:
-        print(
-            "\nLegacy G-P exposure-buildup response:"
-        )
-
-        print(
-            "Buildup basis: Single-layer "
-            f"{result.layers[0].material.name} "
-            "exposure buildup"
-        )
-
-        print(
-            f"G-P exposure buildup factor: "
-            f"{result.buildup_factor}"
-        )
-
-        print(
-            "Exposure-buildup-adjusted photon-response "
-            "proxy: "
-            f"{result.buildup_corrected_flux:.6e}"
-        )
-
-        print(
-            "Note: This historical scaled response is not "
-            "interpreted as photon-number fluence rate."
-        )
 
     print("\nLayers:")
 
@@ -170,11 +128,8 @@ def print_results(
 def print_source_results(
     result: SourceCalculationResult,
 ) -> None:
-    # Print a manual or isotope photon-number result.
-    #
-    # Current public CLI calls use only the uncollided pathway.
-    # Historical buildup fields remain visible but are explicitly
-    # labeled as exposure-buildup response proxies.
+    # Print an uncollided manual or isotope
+    # photon-fluence result.
 
     print(
         "\nUncollided photon fluence-rate result"
@@ -202,27 +157,7 @@ def print_source_results(
         "photons/cm^2/s"
     )
 
-    if (
-        result.total_buildup_corrected_flux
-        is not None
-    ):
-        print(
-            "Total legacy G-P exposure-buildup-adjusted "
-            "photon-response proxy: "
-            f"{result.total_buildup_corrected_flux:.6e}"
-        )
-
-    if len(result.warnings) > 0:
-        print("\nWarnings:")
-
-        for warning in result.warnings:
-            print(
-                f"- {warning}"
-            )
-
     print("\nPhoton-line results:")
-
-    has_legacy_buildup_proxy = False
 
     for line_index, line_result in enumerate(
         result.line_results,
@@ -268,31 +203,6 @@ def print_source_results(
             "Uncollided photon fluence rate: "
             f"{shielding_result.uncollided_flux:.6e} "
             "photons/cm^2/s"
-        )
-
-        if shielding_result.buildup_factor is not None:
-            print(
-                f"G-P exposure buildup factor: "
-                f"{shielding_result.buildup_factor}"
-            )
-
-        if (
-            shielding_result.buildup_corrected_flux
-            is not None
-        ):
-            has_legacy_buildup_proxy = True
-
-            print(
-                "Legacy G-P exposure-buildup-adjusted "
-                "photon-response proxy: "
-                f"{shielding_result.buildup_corrected_flux:.6e}"
-            )
-
-    if has_legacy_buildup_proxy:
-        print(
-            "\nNote: Historical G-P-adjusted photon-response "
-            "proxy values are not interpreted as "
-            "photon-number fluence rates."
         )
 
 
@@ -484,14 +394,11 @@ def print_source_air_kerma_result(
 def print_minimum_thickness_result(
     result: MinimumThicknessResult,
 ) -> None:
-    # Print a legacy-compatible photon minimum-thickness design.
-    #
-    # Revised public CLI paths use uncollided photon fluence rate.
-    # Historical buildup-aware results are labeled as response
-    # proxies rather than photon-number fluence.
+    # Print an uncollided photon-fluence
+    # minimum-thickness result.
 
     print(
-        "\nPhoton-response minimum shielding "
+        "\nPhoton-fluence minimum shielding "
         "thickness result"
     )
 
@@ -516,48 +423,16 @@ def print_minimum_thickness_result(
     )
 
     print(
-        "Final selected-response ratio: "
+        "Final uncollided response ratio: "
         f"{result.final_transmission:.6e}"
     )
 
-    if result.buildup_used:
-        print(
-            "Final target-comparison legacy G-P "
-            "exposure-buildup-adjusted photon-response "
-            "proxy: "
-            f"{result.final_flux:.6e}"
-        )
-
-    else:
-        print(
-            "Final target-comparison uncollided "
-            "photon fluence rate: "
-            f"{result.final_flux:.6e} "
-            "photons/cm^2/s"
-        )
-
-    if result.final_uncollided_flux is not None:
-        print(
-            "Final uncollided photon fluence rate: "
-            f"{result.final_uncollided_flux:.6e} "
-            "photons/cm^2/s"
-        )
-
-    if (
-        result.final_buildup_corrected_flux
-        is not None
-    ):
-        print(
-            "Final legacy G-P exposure-buildup-adjusted "
-            "photon-response proxy: "
-            f"{result.final_buildup_corrected_flux:.6e}"
-        )
-
-        print(
-            "Note: The historical G-P-adjusted response "
-            "proxy is not interpreted as photon-number "
-            "fluence rate."
-        )
+    print(
+        "Final target-comparison uncollided "
+        "photon fluence rate: "
+        f"{result.final_flux:.6e} "
+        "photons/cm^2/s"
+    )
 
     if len(result.warnings) > 0:
         print("\nWarnings:")
@@ -565,7 +440,7 @@ def print_minimum_thickness_result(
         for warning in result.warnings:
             print(
                 f"- {warning}"
-            )     
+            )
 
 
 def print_air_kerma_minimum_thickness_result(
