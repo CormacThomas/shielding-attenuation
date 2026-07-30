@@ -637,6 +637,15 @@ def compare_materials_for_target(
     # Each material is tested independently. The result is a ranked comparison
     # table showing how much of each material is required.
 
+    if apply_buildup:
+        raise ValueError(
+            "G-P exposure buildup is not supported for "
+            "photon fluence, transmission, or "
+            "reduction-factor targets. "
+            "Use an AirKermaRateTarget for a "
+            "buildup-adjusted response calculation."
+        )
+    
     if len(materials) == 0:
         raise ValueError("At least one material is required for comparison.")
 

@@ -794,7 +794,7 @@ def run_validation_tests() -> None:
         detector_distance,
         FluxTarget(100.0),
         max_thickness=detector_distance,
-        apply_buildup=True,
+        apply_buildup=False,
     )
 
     assert_equal(
@@ -826,9 +826,9 @@ def run_validation_tests() -> None:
     )
 
     assert_equal(
-        "Lead material comparison uses buildup when valid",
+        "Lead photon comparison does not use exposure buildup",
         lead_candidate.buildup_used,
-        True,
+        False,
     )
 
     for candidate in material_comparison_result.candidates:
@@ -850,22 +850,35 @@ def run_validation_tests() -> None:
     )
 
     assert_equal(
-        "Unsupported buildup material can fall back to narrow-beam",
+        "Barite Concrete can use uncollided photon comparison",
         barite_candidate.status,
         "PASS",
     )
 
     assert_equal(
-        "Unsupported buildup material does not use buildup",
+        "Barite Concrete photon comparison does not use buildup",
         barite_candidate.buildup_used,
         False,
     )
 
-    assert_greater_than(
-        "Unsupported buildup material warning preserved",
-        len(barite_candidate.warnings),
-        0,
-    )
+    assert_raises(
+    (
+        "V1.08 photon material comparison rejects "
+        "G-P exposure buildup"
+    ),
+    ValueError,
+    lambda: compare_materials_for_target(
+        source=cs137_source,
+        materials=[
+            materials["lead"],
+        ],
+        detector_distance=detector_distance,
+        target=FluxTarget(100.0),
+        max_thickness=detector_distance,
+        apply_buildup=True,
+    ),
+    "not supported for photon fluence",
+)
 
     impossible_comparison_result = compare_materials_for_target(
         cs137_source,
@@ -951,7 +964,7 @@ def run_validation_tests() -> None:
             constraints=DesignConstraints(),
             optimization_mode="minimum_thickness",
             calculation_max_thickness=detector_distance,
-            apply_buildup=True,
+            apply_buildup=False,
         )
     )
 
@@ -997,7 +1010,7 @@ def run_validation_tests() -> None:
         ),
         optimization_mode="minimum_thickness",
         calculation_max_thickness=detector_distance,
-        apply_buildup=True,
+        apply_buildup=False,
     )
 
     water_optimized_candidate = (
@@ -1060,7 +1073,7 @@ def run_validation_tests() -> None:
         constraints=DesignConstraints(),
         optimization_mode="minimum_mass",
         calculation_max_thickness=detector_distance,
-        apply_buildup=True,
+        apply_buildup=False,
     )
 
     if minimum_mass_result.best_candidate is None:
@@ -1100,7 +1113,7 @@ def run_validation_tests() -> None:
         constraints=DesignConstraints(),
         optimization_mode="minimum_cost",
         calculation_max_thickness=detector_distance,
-        apply_buildup=True,
+        apply_buildup=False,
     )
 
     if minimum_cost_result.best_candidate is None:
@@ -1145,7 +1158,7 @@ def run_validation_tests() -> None:
             cost_weight=0.2,
         ),
         calculation_max_thickness=detector_distance,
-        apply_buildup=True,
+        apply_buildup=False,
     )
 
     if balanced_result.best_candidate is None:
@@ -1401,8 +1414,29 @@ def run_validation_tests() -> None:
         ),
         optimization_mode="minimum_mass",
         calculation_max_thickness=detector_distance,
-        apply_buildup=True,
+        apply_buildup=False,
     )
+
+    assert_raises(
+    (
+        "V1.09 photon material optimization rejects "
+        "G-P exposure buildup"
+    ),
+    ValueError,
+    lambda: optimize_material_selection(
+        source=cs137_source,
+        materials=[
+            materials["lead"],
+        ],
+        detector_distance=detector_distance,
+        target=FluxTarget(100.0),
+        constraints=DesignConstraints(),
+        optimization_mode="minimum_thickness",
+        calculation_max_thickness=detector_distance,
+        apply_buildup=True,
+    ),
+    "not supported for photon fluence",
+)
 
     visualization_plot_data = create_optimization_plot_data(
         visualization_constraint_result
@@ -1571,10 +1605,10 @@ def run_validation_tests() -> None:
         minimum_thickness_cm=0.0,
         maximum_thickness_cm=10.0,
         number_of_points=21,
-        apply_buildup=True,
+        apply_buildup=False,
         target=FluxTarget(100.0),
         required_thickness_cm=(
-            manual_buildup_flux_target_result.required_thickness
+            manual_flux_target_result.required_thickness
         ),
     )
 
@@ -1612,224 +1646,213 @@ def run_validation_tests() -> None:
     manual_required_curve_point = (
         get_response_curve_point_by_thickness(
             manual_response_curve,
-            manual_buildup_flux_target_result.required_thickness,
+            manual_flux_target_result.required_thickness,
         )
     )
 
-    manual_required_buildup_flux = assert_not_none(
-        "V1.10 manual required-thickness buildup flux",
-        manual_required_curve_point.buildup_corrected_flux,
-    )
-
     assert_less_than_or_equal(
-        "V1.10 manual curve reaches target at required thickness",
-        manual_required_buildup_flux,
+        (
+            "V1.10 manual uncollided curve reaches target "
+            "at required thickness"
+        ),
+        manual_required_curve_point.uncollided_flux,
         100.000001,
     )
 
-    all_manual_buildup_points_available = all(
-        point.buildup_corrected_flux is not None
+    all_manual_buildup_values_are_none = all(
+        point.buildup_corrected_flux is None
         for point in manual_response_curve.points
     )
 
     assert_equal(
-        "V1.10 supported lead curve stores buildup values",
-        all_manual_buildup_points_available,
+        (
+            "V1.10 uncollided photon curve stores no "
+            "buildup-adjusted values"
+        ),
+        all_manual_buildup_values_are_none,
         True,
     )
 
-    lead_feasibility = get_feasibility_row_by_material_key(
-    feasibility_rows,
-    "lead",
-    )
-
     assert_equal(
-        "V1.10 lead passes thickness constraint",
-        lead_feasibility.thickness_status,
-        "PASS",
+        "V1.10 manual photon curve does not request buildup",
+        manual_response_curve.buildup_requested,
+        False,
     )
 
-    assert_equal(
-        "V1.10 lead passes mass constraint",
-        lead_feasibility.mass_status,
-        "PASS",
-    )
 
-    assert_equal(
-        "V1.10 lead cost constraint is inactive",
-        lead_feasibility.cost_status,
-        "INACTIVE",
-    )
-
-    assert_equal(
-        "V1.10 lead is selected",
-        lead_feasibility.is_selected,
-        True,
-    )
-
-    copper_feasibility = get_feasibility_row_by_material_key(
-        feasibility_rows,
-        "copper",
-    )
-
-    assert_equal(
-        "V1.10 copper passes thickness constraint",
-        copper_feasibility.thickness_status,
-        "PASS",
-    )
-
-    assert_equal(
-        "V1.10 copper fails mass constraint",
-        copper_feasibility.mass_status,
-        "FAIL",
-    )
-
-    assert_equal(
-        "V1.10 copper is rejected overall",
-        copper_feasibility.optimization_status,
-        "REJECTED",
-    )
-
-    tin_feasibility = get_feasibility_row_by_material_key(
-        feasibility_rows,
-        "tin",
-    )
-
-    assert_equal(
-        "V1.10 tin passes thickness constraint",
-        tin_feasibility.thickness_status,
-        "PASS",
-    )
-
-    assert_equal(
-        "V1.10 tin fails mass constraint",
-        tin_feasibility.mass_status,
-        "FAIL",
-    )
-
-    water_feasibility = get_feasibility_row_by_material_key(
-        feasibility_rows,
-        "water",
-    )
-
-    assert_equal(
-        "V1.10 water fails thickness constraint",
-        water_feasibility.thickness_status,
-        "FAIL",
-    )
-
-    assert_equal(
-        "V1.10 water passes mass constraint",
-        water_feasibility.mass_status,
-        "PASS",
-    )
-
-    concrete_feasibility = get_feasibility_row_by_material_key(
-        feasibility_rows,
-        "concrete_ordinary",
-    )
-
-    assert_equal(
-        "V1.10 ordinary concrete fails thickness constraint",
-        concrete_feasibility.thickness_status,
-        "FAIL",
-    )
-
-    assert_equal(
-        "V1.10 ordinary concrete fails mass constraint",
-        concrete_feasibility.mass_status,
-        "FAIL",
-    )
-
-    # Validate unsupported buildup behavior.
+    # Validate every material's feasibility status against the
+    # numerical constraints used to create this optimization result.
     #
-    # Polyethylene does not have implemented G-P coefficient data.
-    # Its uncollided curve should still be calculated, while every buildup
-    # value remains unavailable.
+    # These tests intentionally derive the expected state from each
+    # candidate's current uncollided-photon design values rather than
+    # preserving historical buildup-proxy classifications.
 
-    unsupported_buildup_curve = create_response_curve(
-        source=manual_source,
-        material=materials["polyethylene"],
-        detector_distance_cm=detector_distance,
-        minimum_thickness_cm=0.0,
-        maximum_thickness_cm=5.0,
-        number_of_points=6,
-        apply_buildup=True,
-    )
+    feasibility_rows_by_key = {
+        row.material_key: row
+        for row in feasibility_rows
+    }
 
-    unsupported_buildup_values_are_none = all(
-        point.buildup_corrected_flux is None
-        for point in unsupported_buildup_curve.points
-    )
-
-    assert_equal(
-        "V1.10 unsupported material does not invent buildup curve values",
-        unsupported_buildup_values_are_none,
-        True,
-    )
-
-    assert_greater_than(
-        "V1.10 unsupported buildup curve generates warning",
-        len(unsupported_buildup_curve.warnings),
-        0,
-    )
-
-
-    # Validate buildup termination at the 40-MFP limit.
-    #
-    # At 0.6617 MeV, lead reaches 40 MFP at approximately 31.75 cm.
-    # The narrow-beam curve continues through 40 cm, while the buildup
-    # series should contain valid early points and unavailable later points.
-
-    limited_buildup_curve = create_response_curve(
-        source=manual_source,
-        material=materials["lead"],
-        detector_distance_cm=detector_distance,
-        minimum_thickness_cm=0.0,
-        maximum_thickness_cm=40.0,
-        number_of_points=7,
-        apply_buildup=True,
-    )
-
-    valid_buildup_point_count = sum(
-        point.buildup_corrected_flux is not None
-        for point in limited_buildup_curve.points
-    )
-
-    unavailable_buildup_point_count = sum(
-        point.buildup_corrected_flux is None
-        for point in limited_buildup_curve.points
-    )
-
-    assert_greater_than(
-        "V1.10 limited buildup curve contains valid early points",
-        valid_buildup_point_count,
-        0,
-    )
-
-    assert_greater_than(
-        "V1.10 limited buildup curve stops outside valid range",
-        unavailable_buildup_point_count,
-        0,
-    )
-
-    first_unavailable_buildup_index = next(
-        index
-        for index, point in enumerate(limited_buildup_curve.points)
-        if point.buildup_corrected_flux is None
-    )
-
-    buildup_remains_unavailable = all(
-        point.buildup_corrected_flux is None
-        for point in limited_buildup_curve.points[
-            first_unavailable_buildup_index:
+    for candidate in visualization_plot_data.candidates:
+        row = feasibility_rows_by_key[
+            candidate.material_key
         ]
+
+        assert_equal(
+            (
+                "V1.10 feasibility row preserves material "
+                f"key for {candidate.material_key}"
+            ),
+            row.material_key,
+            candidate.material_key,
+        )
+
+        if candidate.optimization_status == "FAILED":
+            assert_equal(
+                (
+                    "V1.10 failed candidate has unavailable "
+                    f"thickness status for {candidate.material_key}"
+                ),
+                row.thickness_status,
+                "UNAVAILABLE",
+            )
+
+            assert_equal(
+                (
+                    "V1.10 failed candidate has unavailable "
+                    f"mass status for {candidate.material_key}"
+                ),
+                row.mass_status,
+                "UNAVAILABLE",
+            )
+
+            assert_equal(
+                (
+                    "V1.10 failed candidate has unavailable "
+                    f"cost status for {candidate.material_key}"
+                ),
+                row.cost_status,
+                "UNAVAILABLE",
+            )
+
+            continue
+
+        required_thickness_cm = assert_not_none(
+            (
+                "V1.10 successful candidate thickness exists "
+                f"for {candidate.material_key}"
+            ),
+            candidate.required_thickness_cm,
+        )
+
+        mass_per_area_g_per_cm2 = assert_not_none(
+            (
+                "V1.10 successful candidate mass exists "
+                f"for {candidate.material_key}"
+            ),
+            candidate.mass_per_area_g_per_cm2,
+        )
+
+        expected_thickness_status = (
+            "PASS"
+            if required_thickness_cm <= 20.0
+            else "FAIL"
+        )
+
+        expected_mass_status = (
+            "PASS"
+            if mass_per_area_g_per_cm2 <= 120.0
+            else "FAIL"
+        )
+
+        assert_equal(
+            (
+                "V1.10 thickness feasibility matches "
+                f"numerical value for {candidate.material_key}"
+            ),
+            row.thickness_status,
+            expected_thickness_status,
+        )
+
+        assert_equal(
+            (
+                "V1.10 mass feasibility matches "
+                f"numerical value for {candidate.material_key}"
+            ),
+            row.mass_status,
+            expected_mass_status,
+        )
+
+        assert_equal(
+            (
+                "V1.10 inactive cost constraint remains "
+                f"inactive for {candidate.material_key}"
+            ),
+            row.cost_status,
+            "INACTIVE",
+        )
+
+        expected_optimization_status = (
+            "ELIGIBLE"
+            if (
+                expected_thickness_status == "PASS"
+                and expected_mass_status == "PASS"
+            )
+            else "REJECTED"
+        )
+
+        assert_equal(
+            (
+                "V1.10 overall feasibility matches "
+                f"active constraints for {candidate.material_key}"
+            ),
+            row.optimization_status,
+            expected_optimization_status,
+        )
+
+        assert_equal(
+            (
+                "V1.10 selected state matches plot data "
+                f"for {candidate.material_key}"
+            ),
+            row.is_selected,
+            candidate.is_selected,
+        )
+
+
+    assert_raises(
+        (
+            "V1.10 photon-fluence response curve rejects "
+            "G-P exposure buildup"
+        ),
+        ValueError,
+        lambda: create_response_curve(
+            source=manual_source,
+            material=materials["lead"],
+            detector_distance_cm=detector_distance,
+            minimum_thickness_cm=0.0,
+            maximum_thickness_cm=10.0,
+            number_of_points=21,
+            apply_buildup=True,
+        ),
+        "do not support G-P exposure buildup",
+    )
+
+    selected_feasibility_rows = [
+        row
+        for row in feasibility_rows
+        if row.is_selected
+    ]
+
+    assert_equal(
+        "V1.10 feasibility data contains one selected material",
+        len(selected_feasibility_rows),
+        1,
     )
 
     assert_equal(
-        "V1.10 buildup remains unavailable after curve termination",
-        buildup_remains_unavailable,
-        True,
+        "V1.10 uncollided minimum-mass design selects Lead",
+        selected_feasibility_rows[0].material_key,
+        "lead",
     )
 
 
@@ -1842,10 +1865,10 @@ def run_validation_tests() -> None:
         minimum_thickness_cm=0.0,
         maximum_thickness_cm=10.0,
         number_of_points=21,
-        apply_buildup=True,
+        apply_buildup=False,
         target=FluxTarget(100.0),
         required_thickness_cm=(
-            cs137_buildup_flux_target_result.required_thickness
+            cs137_flux_target_result.required_thickness
         ),
     )
 
@@ -1888,19 +1911,31 @@ def run_validation_tests() -> None:
     isotope_required_curve_point = (
         get_response_curve_point_by_thickness(
             isotope_response_curve,
-            cs137_buildup_flux_target_result.required_thickness,
+            cs137_flux_target_result.required_thickness,
         )
     )
 
-    isotope_required_buildup_flux = assert_not_none(
-        "V1.10 isotope required-thickness buildup flux",
-        isotope_required_curve_point.buildup_corrected_flux,
+    assert_less_than_or_equal(
+        (
+            "V1.10 isotope uncollided curve reaches target "
+            "at required thickness"
+        ),
+        isotope_required_curve_point.uncollided_flux,
+        100.000001,
     )
 
-    assert_less_than_or_equal(
-        "V1.10 isotope curve reaches target at required thickness",
-        isotope_required_buildup_flux,
-        100.000001,
+    isotope_buildup_values_are_none = all(
+        point.buildup_corrected_flux is None
+        for point in isotope_response_curve.points
+    )
+
+    assert_equal(
+        (
+            "V1.10 isotope photon curve stores no "
+            "buildup-adjusted values"
+        ),
+        isotope_buildup_values_are_none,
+        True,
     )
 
     assert_equal(
@@ -2019,7 +2054,8 @@ def run_v111_validation_tests() -> None:
     #   - scenario JSON serialization and loading
     #   - scenario-level combination validation
     #   - material resolution
-    #   - reproduction of the official V1.10 optimization result
+    #   - reproducible execution of the uncollided photon-fluence
+    #     reference scenario
 
     # ------------------------------------------------------------
     # Concentric spherical geometry
@@ -2211,7 +2247,7 @@ def run_v111_validation_tests() -> None:
     )
 
     # ------------------------------------------------------------
-    # Official JSON scenario
+    # Uncollided photon-fluence reference scenario
     # ------------------------------------------------------------
 
     repository_root = Path(__file__).resolve().parents[1]
@@ -2275,13 +2311,16 @@ def run_v111_validation_tests() -> None:
     )
 
     assert_equal(
-        "V1.11 loaded scenario preserves buildup setting",
+        (
+            "V1.11 reference flux scenario uses "
+            "uncollided photon fluence"
+        ),
         (
             reference_scenario
             .deterministic_settings
             .apply_buildup
         ),
-        True,
+        False,
     )
 
     # ------------------------------------------------------------
@@ -2615,17 +2654,31 @@ def run_v111_validation_tests() -> None:
     )
 
     assert_close(
-        "V1.11 reference scenario reproduces lead thickness",
+        (
+            "V1.11 uncollided reference scenario "
+            "reproduces Lead thickness"
+        ),
         lead_required_thickness,
-        7.088213,
+        6.210850924253464,
         1.0e-5,
     )
 
+    expected_lead_mass_per_area = (
+        best_candidate
+        .base_candidate
+        .material
+        .density
+        * lead_required_thickness
+    )
+
     assert_close(
-        "V1.11 reference scenario reproduces lead mass per area",
+        (
+            "V1.11 Lead mass per area equals "
+            "density times thickness"
+        ),
         lead_mass_per_area,
-        80.3803,
-        1.0e-3,
+        expected_lead_mass_per_area,
+        1.0e-10,
     )
 
     assert_equal(
@@ -7493,49 +7546,30 @@ def run_v112_validation_tests() -> None:
         True,
     )
 
-    legacy_fallback_optimization_result = (
-        optimize_material_selection(
-            source=cs137_solver_source,
-            materials=[
-                solver_materials[
-                    "concrete_barite"
-                ],
+    assert_raises(
+    (
+        "V1.12 photon optimization rejects the "
+        "historical buildup fallback pathway"
+    ),
+    ValueError,
+    lambda: optimize_material_selection(
+        source=cs137_solver_source,
+        materials=[
+            solver_materials[
+                "concrete_barite"
             ],
-            detector_distance=100.0,
-            target=FluxTarget(
-                target_flux=100.0
-            ),
-            constraints=DesignConstraints(),
-            optimization_mode="minimum_thickness",
-            calculation_max_thickness=100.0,
-            apply_buildup=True,
-        )
-    )
-
-    legacy_fallback_output_buffer = (
-        StringIO()
-    )
-
-    with redirect_stdout(
-        legacy_fallback_output_buffer
-    ):
-        print_optimized_design_result(
-            legacy_fallback_optimization_result
-        )
-
-    legacy_fallback_output_text = (
-        legacy_fallback_output_buffer
-        .getvalue()
-    )
-
-    assert_equal(
-        "V1.12 output preserves legacy photon fallback display",
-        (
-            "Fallback"
-            in legacy_fallback_output_text
+        ],
+        detector_distance=100.0,
+        target=FluxTarget(
+            target_flux=100.0
         ),
-        True,
-    )
+        constraints=DesignConstraints(),
+        optimization_mode="minimum_thickness",
+        calculation_max_thickness=100.0,
+        apply_buildup=True,
+    ),
+    "not supported for photon fluence",
+)
 
     # ------------------------------------------------------------
     # Remaining photon-response terminology

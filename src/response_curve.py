@@ -329,6 +329,15 @@ def create_response_curve(
     # The buildup series is not allowed to silently fall back to uncollided
     # flux. That distinction is essential for an honest comparison plot.
 
+    if apply_buildup:
+        raise ValueError(
+            "Photon-fluence response curves do not "
+            "support G-P exposure buildup. "
+            "G-P exposure buildup must be applied to "
+            "a compatible response quantity such as "
+            "collision air kerma."
+        )
+
     validate_response_curve_range(
         minimum_thickness_cm=minimum_thickness_cm,
         maximum_thickness_cm=maximum_thickness_cm,
