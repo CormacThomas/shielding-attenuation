@@ -288,6 +288,7 @@ class ShieldingScenario:
                     "Scenario target must be a supported target type or None."
                 )
 
+
     def _normalize_candidate_material_keys(self) -> None:
         # Normalize stable material keys before mode-specific validation.
 
@@ -337,6 +338,21 @@ class ShieldingScenario:
             raise ValueError(
                 "Material-optimization scenarios cannot contain "
                 "fixed shield layers."
+            )
+
+        if (
+            self.deterministic_settings.apply_buildup
+            and not isinstance(
+                self.target,
+                AirKermaRateTarget,
+            )
+        ):
+            raise ValueError(
+                "G-P exposure buildup may only be used "
+                "with an air-kerma-rate target. "
+                "Photon fluence, transmission, and "
+                "reduction-factor targets are uncollided "
+                "photon-number quantities."
             )
 
         if len(self.candidate_material_keys) == 0:

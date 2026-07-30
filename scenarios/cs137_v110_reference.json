@@ -39,7 +39,7 @@
     "weights": null
   },
   "deterministic_settings": {
-    "apply_buildup": true,
+    "apply_buildup": false,
     "calculation_max_thickness_cm": 100.0
   }
 }
