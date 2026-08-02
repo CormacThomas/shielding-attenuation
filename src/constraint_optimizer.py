@@ -623,7 +623,7 @@ def optimize_material_selection(
 
     return OptimizedDesignResult(
         target_description=comparison_result.target_description,
-        apply_buildup=comparison_result.apply_buildup,
+        apply_buildup=False,
         optimization_mode=optimization_mode,
         constraints=constraints,
         all_candidates=all_candidates,

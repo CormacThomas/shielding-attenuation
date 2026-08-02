@@ -542,42 +542,22 @@ def print_air_kerma_minimum_thickness_result(
 def get_buildup_display_for_candidate(
     candidate: OptimizationBaseCandidate,
 ) -> str:
-    # Air-kerma candidates use strict, response-specific buildup
-    # semantics.
+    # Photon candidates do not use exposure buildup.
     #
-    # PASS air-kerma candidate:
-    #   Yes -> G-P exposure buildup was applied.
-    #   No  -> an explicitly uncollided response was requested.
-    #
-    # FAILED air-kerma candidate:
-    #   Unavailable -> the requested response could not be calculated.
-    #
-    # Legacy photon candidates retain their historical fallback
-    # display for regression compatibility.
+    # Air-kerma candidates report applied, not requested,
+    # or unavailable buildup state.
 
-    if candidate.status == "FAILED":
-        if isinstance(
-            candidate,
-            AirKermaMaterialDesignCandidate,
-        ):
-            return "Unavailable"
-
-        return "--"
-
-    if isinstance(
+    if not isinstance(
         candidate,
         AirKermaMaterialDesignCandidate,
     ):
-        if candidate.buildup_used:
-            return "Yes"
-
         return "No"
+
+    if candidate.status == "FAILED":
+        return "Unavailable"
 
     if candidate.buildup_used:
         return "Yes"
-
-    if len(candidate.warnings) > 0:
-        return "Fallback"
 
     return "No"
 
@@ -595,19 +575,16 @@ def format_optional_float(value: float | None, precision: str = ".6g") -> str:
 def print_material_comparison_result(
     result: MaterialComparisonResult,
 ) -> None:
-    # Print a legacy-compatible photon-response material comparison.
-    #
-    # Uncollided candidates are reported as photon fluence rates.
-    # Historical buildup-adjusted candidates are identified as
-    # response proxies through the Response Basis column.
+    # Print an uncollided photon-fluence material
+    # comparison.
 
     print(
-        "\nPhoton-response material comparison result"
+        "\nPhoton-fluence material comparison result"
     )
 
     print(
         "Calculation mode: Single-material "
-        "photon-response design comparison"
+        "uncollided photon-fluence design comparison"
     )
 
     print(
@@ -615,87 +592,42 @@ def print_material_comparison_result(
         f"{result.target_description}"
     )
 
-    buildup_requested_text = (
-        "Yes"
-        if result.apply_buildup
-        else "No"
-    )
-
-    print(
-        "Legacy G-P exposure buildup requested: "
-        f"{buildup_requested_text}"
-    )
-
-    final_value_header = (
-        "Final Value"
-        if result.apply_buildup
-        else "Final Fluence Rate"
-    )
-
     print("\nCandidates:")
 
     print(
         f"{'Material':<28}"
         f"{'Thickness (cm)':<18}"
-        f"{final_value_header:<22}"
-        f"{'Response Basis':<22}"
+        f"{'Final Fluence Rate':<22}"
         f"{'Status':<10}"
     )
 
-    print("-" * 100)
-
-    any_legacy_proxy = False
+    print("-" * 78)
 
     for candidate in result.candidates:
         if candidate.status == "PASS":
-            thickness_text = (
-                format_optional_float(
-                    candidate.required_thickness
-                )
+            thickness_text = format_optional_float(
+                candidate.required_thickness
             )
 
-            final_value_text = (
-                format_optional_float(
-                    candidate.final_flux,
-                    ".6e",
-                )
+            final_value_text = format_optional_float(
+                candidate.final_flux,
+                ".6e",
             )
-
-            if candidate.buildup_used:
-                response_basis = (
-                    "Legacy G-P proxy"
-                )
-
-                any_legacy_proxy = True
-
-            else:
-                response_basis = (
-                    "Uncollided fluence"
-                )
 
         else:
             thickness_text = "--"
             final_value_text = "--"
-            response_basis = "--"
 
         print(
             f"{candidate.material.name:<28}"
             f"{thickness_text:<18}"
             f"{final_value_text:<22}"
-            f"{response_basis:<22}"
             f"{candidate.status:<10}"
         )
 
     print(
-        "\nUncollided fluence units: photons/cm^2/s"
+        "\nFinal Fluence Rate units: photons/cm^2/s"
     )
-
-    if any_legacy_proxy:
-        print(
-            "Legacy G-P proxy values are historical "
-            "exposure-buildup-scaled response values and "
-            "are not interpreted as photon fluence rates."
-        )
 
     has_messages = False
 
@@ -703,9 +635,8 @@ def print_material_comparison_result(
         if candidate.status == "FAILED":
             if not has_messages:
                 print(
-                    "\nFallbacks, failures, and warnings:"
+                    "\nFailures and warnings:"
                 )
-
                 has_messages = True
 
             print(
@@ -719,9 +650,8 @@ def print_material_comparison_result(
         ):
             if not has_messages:
                 print(
-                    "\nFallbacks, failures, and warnings:"
+                    "\nFailures and warnings:"
                 )
-
                 has_messages = True
 
             for warning in candidate.warnings:

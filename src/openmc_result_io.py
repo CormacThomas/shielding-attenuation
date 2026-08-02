@@ -20,6 +20,9 @@ from openmc_models import (
     OpenMCEnergyBinResult,
     OpenMCResponseResult,
     OpenMCRunManifest,
+    DeterministicOpenMCComparison,
+    OpenMCEnergyBinResult,
+    OpenMCResponseResult,
 )
 import csv
 from dataclasses import dataclass
@@ -28,12 +31,6 @@ import math
 from pathlib import Path
 from typing import Any
 
-
-from openmc_models import (
-    DeterministicOpenMCComparison,
-    OpenMCEnergyBinResult,
-    OpenMCResponseResult,
-)
 from unit_conversions import (
     convert_gy_per_s_to_microgy_per_h,
 )

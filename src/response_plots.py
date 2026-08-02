@@ -83,32 +83,6 @@ def plot_response_vs_thickness(
                 point.uncollided_flux
             )
 
-    buildup_values: list[float] = []
-
-    for point in curve_result.points:
-        buildup_value = (
-            point.buildup_corrected_flux
-        )
-
-        if buildup_value is None:
-            buildup_values.append(
-                math.nan
-            )
-
-        elif logarithmic and buildup_value <= 0:
-            buildup_values.append(
-                math.nan
-            )
-
-        else:
-            buildup_values.append(
-                buildup_value
-            )
-
-    has_buildup_values = any(
-        point.buildup_corrected_flux is not None
-        for point in curve_result.points
-    )
 
     if logarithmic:
         has_positive_uncollided_value = any(
@@ -116,19 +90,10 @@ def plot_response_vs_thickness(
             for point in curve_result.points
         )
 
-        has_positive_buildup_value = any(
-            point.buildup_corrected_flux is not None
-            and point.buildup_corrected_flux > 0
-            for point in curve_result.points
-        )
-
-        if (
-            not has_positive_uncollided_value
-            and not has_positive_buildup_value
-        ):
+        if not has_positive_uncollided_value:
             raise ValueError(
-                "A logarithmic response plot requires at least one "
-                "positive response value."
+                "A logarithmic response plot requires at "
+                "least one positive response value."
             )
 
     figure, axes = plt.subplots(
@@ -137,7 +102,7 @@ def plot_response_vs_thickness(
 
     (
         uncollided_color,
-        buildup_color,
+        _,
         design_color,
     ) = get_plot_colors()
 
@@ -162,7 +127,7 @@ def plot_response_vs_thickness(
         curve_result.quantity_units
     )
 
-    # Narrow-beam result.
+    # Uncollided photon fluence-rate result.
     axes.plot(
         thickness_values,
         uncollided_values,
@@ -170,24 +135,11 @@ def plot_response_vs_thickness(
         linestyle="--",
         linewidth=2.1,
         label=(
-            "Narrow-beam uncollided photon flux"
+            "Narrow-beam uncollided photon "
+            "fluence rate"
         ),
         zorder=3,
     )
-
-    # Current G-P exposure-buildup result.
-    if has_buildup_values:
-        axes.plot(
-            thickness_values,
-            buildup_values,
-            color=buildup_color,
-            linestyle="-",
-            linewidth=2.5,
-            label=(
-                "G-P exposure-buildup response proxy"
-            ),
-            zorder=4,
-        )
 
     # Design target.
     if curve_result.target_flux is not None:
@@ -279,23 +231,11 @@ def plot_response_vs_thickness(
             )
         )
 
-        # When the buildup result exists at the selected thickness, it is
-        # the target-comparison value used for the design point.
-        #
-        # Otherwise, the selected point uses the narrow-beam result.
-        if (
-            required_point.buildup_corrected_flux
-            is not None
-        ):
-            design_response = (
-                required_point
-                .buildup_corrected_flux
-            )
-
-        else:
-            design_response = (
-                required_point.uncollided_flux
-            )
+        # Photon response curves contain only the uncollided
+        # photon fluence-rate series.
+        design_response = (
+            required_point.uncollided_flux
+        )
 
         if not logarithmic or design_response > 0:
             axes.scatter(
@@ -352,22 +292,10 @@ def plot_response_vs_thickness(
         fontsize=10,
     )
 
-    # The buildup series uses exposure buildup coefficients, so the shared
-    # axis should not describe both series as ordinary photon flux.
-    if (
-        curve_result.buildup_requested
-        and has_buildup_values
-    ):
-        y_axis_label = (
-            "Calculated target-comparison response "
-            f"({display_units})"
-        )
-
-    else:
-        y_axis_label = (
-            f"{curve_result.quantity_name} "
-            f"({display_units})"
-        )
+    y_axis_label = (
+        f"{curve_result.quantity_name} "
+        f"({display_units})"
+    )
 
     axes.set_ylabel(
         y_axis_label,
@@ -402,13 +330,6 @@ def plot_response_vs_thickness(
         True
     )
 
-
-    buildup_description = (
-        "requested"
-        if curve_result.buildup_requested
-        else "not requested"
-    )
-
     response_context_lines = []
 
     if (
@@ -431,8 +352,7 @@ def plot_response_vs_thickness(
     response_context_lines.append(
         (
             f"Backend: {curve_result.backend_name}"
-            f" | G-P exposure buildup: "
-            f"{buildup_description}"
+            " | Response: uncollided photon fluence"
         )
     )
 
@@ -474,24 +394,6 @@ def plot_response_vs_thickness(
 
     figure_notes = []
 
-    if (
-        curve_result.buildup_requested
-        and has_buildup_values
-    ):
-        figure_notes.append(
-            "The G-P curve uses exposure buildup coefficients and is "
-            "displayed as a target-comparison response proxy. It should "
-            "not be interpreted as a general photon-flux estimate."
-        )
-
-    elif (
-        curve_result.buildup_requested
-        and not has_buildup_values
-    ):
-        figure_notes.append(
-            "G-P buildup was requested, but no valid buildup values were "
-            "available for the plotted material and thickness range."
-        )
 
     if len(curve_result.warnings) > 0:
         figure_notes.append(
@@ -506,19 +408,13 @@ def plot_response_vs_thickness(
         for point in curve_result.points
     )
 
-    contains_buildup_log_gap = any(
-        point.buildup_corrected_flux is not None
-        and point.buildup_corrected_flux <= 0
-        for point in curve_result.points
-    )
-
-    if logarithmic and (
-        contains_uncollided_log_gap
-        or contains_buildup_log_gap
+    if (
+        logarithmic
+        and contains_uncollided_log_gap
     ):
         figure_notes.append(
-            "Zero-valued numerical-underflow points are omitted from the "
-            "logarithmic response axis."
+            "Zero-valued numerical-underflow points are "
+            "omitted from the logarithmic response axis."
         )
 
     bottom_margin = 0.11

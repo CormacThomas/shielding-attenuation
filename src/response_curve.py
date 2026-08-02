@@ -270,9 +270,6 @@ def create_response_curve(
     # 2. Generate an evenly spaced thickness grid.
     # 3. Insert the exact optimized thickness when supplied.
     # 4. Calculate narrow-beam uncollided flux at every thickness.
-    # 5. Calculate buildup-adjusted values separately when requested.
-    # 6. Stop the buildup series when it becomes unavailable.
-    # 7. Return structured plot data.
     #
     # The buildup series is not allowed to silently fall back to uncollided
     # flux. That distinction is essential for an honest comparison plot.
@@ -306,8 +303,7 @@ def create_response_curve(
         target=target,
     )
 
-    points = []
-    warnings = []
+    points: list[ResponseCurvePoint] = []
 
     # Because thickness values are increasing, exceeding the 40-MFP limit is
     # permanent for all later points. Unsupported material or energy data is
@@ -325,21 +321,22 @@ def create_response_curve(
             ResponseCurvePoint(
                 thickness_cm=thickness_cm,
                 uncollided_flux=uncollided_flux,
-                buildup_corrected_flux=None,
             )
         )
 
     return ResponseCurveResult(
         backend_name="Deterministic",
-        quantity_name="Photon flux",
+        quantity_name=(
+            "Uncollided photon fluence rate"
+        ),
         quantity_units="photons/cm^2/s",
-        source_name=get_response_curve_source_name(source),
+        source_name=get_response_curve_source_name(
+            source
+        ),
         material_key=material.key,
         material_name=material.name,
         detector_distance_cm=detector_distance_cm,
         points=tuple(points),
-        buildup_requested=False,
         target_flux=target_flux,
         required_thickness_cm=required_thickness_cm,
-        warnings=tuple(warnings),
     )

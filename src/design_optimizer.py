@@ -62,7 +62,6 @@ class MaterialDesignCandidate:
     required_thickness: float | None = None
     final_flux: float | None = None
     final_transmission: float | None = None
-    buildup_used: bool = False
     calculation_mode: str | None = None
     warnings: list[str] = field(default_factory=list)
     failure_reason: str | None = None
@@ -117,7 +116,6 @@ class MaterialComparisonResult:
     # Passing candidates are sorted by required thickness.
     # Failed candidates are placed after passing candidates.
     target_description: str
-    apply_buildup: bool
     candidates: list[MaterialDesignCandidate]
 
     def __post_init__(self):
@@ -508,7 +506,6 @@ def create_candidate_from_minimum_thickness_result(
         final_flux=result.final_flux,
         final_transmission=result.final_transmission,
         calculation_mode=result.calculation_mode,
-        buildup_used=False,
         warnings=list(result.warnings),
     )
 
@@ -519,7 +516,6 @@ def calculate_material_candidate(
     detector_distance: float,
     target: Target,
     max_thickness: float | None = None,
-    apply_buildup: bool = False,
 ) -> MaterialDesignCandidate:
     # Calculate one material's required thickness for a shared design problem.
     #
@@ -650,12 +646,11 @@ def compare_materials_for_target(
 
     for material in materials:
         candidate = calculate_material_candidate(
-            source,
-            material,
-            detector_distance,
-            target,
-            max_thickness,
-            apply_buildup,
+            source=source,
+            material=material,
+            detector_distance=detector_distance,
+            target=target,
+            max_thickness=max_thickness,
         )
 
         candidates.append(candidate)
@@ -663,9 +658,8 @@ def compare_materials_for_target(
     sorted_candidates = sort_material_candidates(candidates)
 
     return MaterialComparisonResult(
-        get_target_description(
-            target,
+        target_description=get_target_description(
+            target
         ),
-        apply_buildup,
-        sorted_candidates,
+        candidates=sorted_candidates,
     )

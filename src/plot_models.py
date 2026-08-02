@@ -22,7 +22,6 @@ from optimization_models import (
 
 BuildupDisplay = Literal[
     "YES",
-    "FALLBACK",
     "NO",
     "UNAVAILABLE",
 ]
@@ -30,7 +29,6 @@ BuildupDisplay = Literal[
 
 VALID_BUILDUP_DISPLAYS = (
     "YES",
-    "FALLBACK",
     "NO",
     "UNAVAILABLE",
 )
@@ -453,20 +451,11 @@ class ParetoPoint:
 
 @dataclass(frozen=True)
 class ResponseCurvePoint:
-    # Detector flux values evaluated at one shielding thickness.
-    #
-    # buildup_corrected_flux may be None when:
-    #   - buildup was not requested
-    #   - the material has no G-P coefficients
-    #   - the energy is outside the G-P coefficient range
-    #   - the thickness exceeds the valid 40-MFP limit
-    #
-    # None must remain visible as unavailable data. It must not be replaced
-    # with an extrapolated or narrow-beam value.
+    # Uncollided photon fluence rate evaluated at one
+    # shielding thickness.
 
     thickness_cm: float
     uncollided_flux: float
-    buildup_corrected_flux: float | None = None
 
     def __post_init__(self):
         if self.thickness_cm < 0:
@@ -477,14 +466,6 @@ class ResponseCurvePoint:
         if self.uncollided_flux < 0:
             raise ValueError(
                 "Response-curve uncollided flux cannot be negative."
-            )
-
-        if (
-            self.buildup_corrected_flux is not None
-            and self.buildup_corrected_flux < 0
-        ):
-            raise ValueError(
-                "Response-curve buildup-corrected flux cannot be negative."
             )
 
 
@@ -510,8 +491,6 @@ class ResponseCurveResult:
 
     detector_distance_cm: float
     points: tuple[ResponseCurvePoint, ...]
-
-    buildup_requested: bool
 
     target_flux: float | None = None
     required_thickness_cm: float | None = None
@@ -570,14 +549,6 @@ class ResponseCurveResult:
                     )
 
             previous_thickness = point.thickness_cm
-
-        if not self.buildup_requested:
-            for point in self.points:
-                if point.buildup_corrected_flux is not None:
-                    raise ValueError(
-                        "Buildup-corrected curve values cannot be stored when "
-                        "buildup was not requested."
-                    )
 
         if self.target_flux is not None:
             if self.target_flux <= 0:

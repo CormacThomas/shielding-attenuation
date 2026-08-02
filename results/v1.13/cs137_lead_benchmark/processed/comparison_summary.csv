@@ -1,0 +1,15 @@
+category,metric,value,units,status
+spectrum,total_photon_fluence_rate,1480.3949296385968,photons/cm^2/s,
+deterministic,uncollided_collision_air_kerma_rate,5.1399175582430523,microGy/h,
+deterministic,gp_adjusted_collision_air_kerma_rate,13.557461191492456,microGy/h,applied
+openmc,direct_collision_air_kerma_rate,15.019807382096953,microGy/h,
+openmc,direct_standard_deviation,0.087341810918816182,microGy/h,
+openmc,relative_uncertainty,0.0058151085894033727,fraction,PASS
+openmc,spectrum_folded_collision_air_kerma_rate,15.021290067621356,microGy/h,
+comparison,relative_difference_from_uncollided,1.9221883837434712,fraction,
+comparison,relative_difference_from_gp,0.10786283434262348,fraction,
+comparison,observed_monte_carlo_buildup_ratio,2.922188383743471,dimensionless,
+comparison,direct_vs_folded_relative_difference,9.8715348784782854e-05,fraction,PASS
+acceptance,required_relative_uncertainty,0.050000000000000003,fraction,PASS
+acceptance,preferred_relative_uncertainty,0.02,fraction,PASS
+acceptance,direct_vs_folded_tolerance,0.02,fraction,PASS

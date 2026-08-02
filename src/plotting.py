@@ -19,6 +19,9 @@ from plotting_utils import (
 from response_plots import (
     plot_response_vs_thickness,
 )
+from openmc_benchmark_plots import (
+    plot_openmc_v113_benchmark,
+)
 
 
 __all__ = [
@@ -29,4 +32,5 @@ __all__ = [
     "plot_thickness_mass_tradeoff",
     "save_figure",
     "save_figure_formats",
+    "plot_openmc_v113_benchmark",
 ]

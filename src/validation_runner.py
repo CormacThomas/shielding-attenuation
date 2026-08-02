@@ -673,12 +673,6 @@ def run_validation_tests() -> None:
         100.000001,
     )
 
-    assert_equal(
-        "Lead photon comparison does not use exposure buildup",
-        lead_candidate.buildup_used,
-        False,
-    )
-
     for candidate in material_comparison_result.candidates:
         if candidate.status == "PASS":
             candidate_final_flux = assert_not_none(
@@ -703,11 +697,6 @@ def run_validation_tests() -> None:
         "PASS",
     )
 
-    assert_equal(
-        "Barite Concrete photon comparison does not use buildup",
-        barite_candidate.buildup_used,
-        False,
-    )
 
     assert_raises(
     (
@@ -1507,26 +1496,14 @@ def run_validation_tests() -> None:
         100.000001,
     )
 
-    all_manual_buildup_values_are_none = all(
-        point.buildup_corrected_flux is None
-        for point in manual_response_curve.points
-    )
-
     assert_equal(
         (
-            "V1.10 uncollided photon curve stores no "
-            "buildup-adjusted values"
+            "V1.10 manual curve identifies "
+            "uncollided photon fluence"
         ),
-        all_manual_buildup_values_are_none,
-        True,
+        manual_response_curve.quantity_name,
+        "Uncollided photon fluence rate",
     )
-
-    assert_equal(
-        "V1.10 manual photon curve does not request buildup",
-        manual_response_curve.buildup_requested,
-        False,
-    )
-
 
     # Validate every material's feasibility status against the
     # numerical constraints used to create this optimization result.
@@ -1772,19 +1749,6 @@ def run_validation_tests() -> None:
         100.000001,
     )
 
-    isotope_buildup_values_are_none = all(
-        point.buildup_corrected_flux is None
-        for point in isotope_response_curve.points
-    )
-
-    assert_equal(
-        (
-            "V1.10 isotope photon curve stores no "
-            "buildup-adjusted values"
-        ),
-        isotope_buildup_values_are_none,
-        True,
-    )
 
     assert_equal(
         "V1.10 value below maximum passes constraint",
@@ -7514,12 +7478,14 @@ def run_v112_validation_tests() -> None:
 
     photon_comparison_requirements = [
         (
-            "Photon-response material "
+            "Photon-fluence material "
             "comparison result"
         ),
+        (
+            "Single-material uncollided "
+            "photon-fluence design comparison"
+        ),
         "Final Fluence Rate",
-        "Response Basis",
-        "Uncollided fluence",
         "photons/cm^2/s",
     ]
 
@@ -7537,9 +7503,56 @@ def run_v112_validation_tests() -> None:
         )
 
     assert_equal(
+        (
+            "V1.12 photon comparison output removes "
+            "legacy response-basis column"
+        ),
+        (
+            "Response Basis"
+            in photon_comparison_output_text
+        ),
+        False,
+    )
+
+    assert_equal(
+        (
+            "V1.12 photon comparison output removes "
+            "legacy G-P terminology"
+        ),
+        (
+            "Legacy G-P"
+            in photon_comparison_output_text
+        ),
+        False,
+    )
+
+    assert_equal(
         "V1.12 photon comparison output removes Final Flux column",
         (
             "Final Flux"
+            in photon_comparison_output_text
+        ),
+        False,
+    )
+    assert_equal(
+        (
+            "V1.12 photon comparison output removes "
+            "legacy response-basis column"
+        ),
+        (
+            "Response Basis"
+            in photon_comparison_output_text
+        ),
+        False,
+    )
+
+    assert_equal(
+        (
+            "V1.12 photon comparison output removes "
+            "legacy G-P terminology"
+        ),
+        (
+            "Legacy G-P"
             in photon_comparison_output_text
         ),
         False,

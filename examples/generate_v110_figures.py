@@ -142,7 +142,7 @@ def main() -> None:
         calculation_max_thickness=(
             DETECTOR_DISTANCE_CM
         ),
-        apply_buildup=True,
+        apply_buildup=False,
     )
 
     if optimization_result.best_candidate is None:
@@ -203,7 +203,7 @@ def main() -> None:
         number_of_points=(
             RESPONSE_SAMPLE_COUNT
         ),
-        apply_buildup=True,
+        apply_buildup=False,
         target=target,
         required_thickness_cm=(
             required_thickness_cm

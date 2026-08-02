@@ -22,35 +22,33 @@ from plot_models import (
     ParetoPoint,
 )
 
+from design_optimizer import (
+    AirKermaMaterialDesignCandidate,
+)
+
 
 def get_candidate_buildup_display(
     candidate: OptimizedMaterialCandidate,
 ) -> BuildupDisplay:
-    # Convert the underlying V1.08 buildup state into a plot label.
+    # Photon candidates never use exposure buildup.
     #
-    # YES:
-    #   G-P buildup was successfully used.
-    #
-    # FALLBACK:
-    #   Buildup was requested, but the candidate used narrow-beam fallback
-    #   and preserved one or more warnings.
-    #
-    # NO:
-    #   Buildup was not used and no fallback warning exists.
-    #
-    # UNAVAILABLE:
-    #   The lower-level material calculation failed.
+    # Air-kerma candidates report whether buildup was
+    # applied or whether the requested response was
+    # unavailable.
 
     base_candidate = candidate.base_candidate
+
+    if not isinstance(
+        base_candidate,
+        AirKermaMaterialDesignCandidate,
+    ):
+        return "NO"
 
     if base_candidate.status == "FAILED":
         return "UNAVAILABLE"
 
     if base_candidate.buildup_used:
         return "YES"
-
-    if len(base_candidate.warnings) > 0:
-        return "FALLBACK"
 
     return "NO"
 
@@ -92,7 +90,11 @@ def create_material_plot_point(
             mass_per_area_g_per_cm2=None,
             relative_cost_index_per_area=None,
             optimization_score=None,
-            buildup_display="UNAVAILABLE",
+            buildup_display=(
+                get_candidate_buildup_display(
+                    candidate
+                )
+            ),
             is_selected=False,
             rejection_reasons=tuple(),
             warnings=tuple(base_candidate.warnings),

@@ -197,20 +197,6 @@ def get_gp_coefficients_at_energy(
     raise ValueError("Requested energy is outside the G-P coefficient data range.")
 
 
-def calculate_buildup_corrected_flux(uncollided_flux: float, buildup_factor: float) -> float:
-    # Return the historical G-P-scaled photon-response proxy.
-    #
-    # The function name is retained for regression compatibility.
-    # The returned value must not be interpreted as a physical
-    # photon-number fluence rate.
-    if uncollided_flux < 0:
-        raise ValueError("Uncollided flux cannot be negative.")
-
-    if buildup_factor < 1:
-        raise ValueError("Buildup factor should not be less than 1.")
-
-    return uncollided_flux * buildup_factor
-
 
 def get_buildup_material_key(material_name: str) -> str:
     return material_name.lower().strip()
