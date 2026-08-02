@@ -2,6 +2,237 @@
 
 All major development milestones for the Shielding Attenuation Simulator are documented here.
 
+## v1.13 - Matched Cs-137/Lead OpenMC Benchmark
+
+Added the first complete quantity-matched deterministic/OpenMC photon-shielding benchmark. Version 1.13 uses one shared physical scenario to construct deterministic and Monte Carlo calculations, processes a preserved five-million-history OpenMC production statepoint, compares shell-volume-averaged dry-air collision air kerma, and packages the benchmark with reproducible inputs, processed results, figures, acceptance checks, and provenance metadata.
+
+Changes:
+- Added fixed-shield response support to the shared scenario layer.
+- Added scenario JSON schema version `1.1`.
+- Added the official V1.13 physical scenario:
+  - `scenarios/cs137_v113_production.json`.
+- Added the official V1.13 OpenMC settings profile:
+  - `config/openmc/v113_production.json`.
+- Kept physical scenario inputs separate from OpenMC execution settings.
+- Added support for scenario-defined:
+  - centered isotope photon sources;
+  - vacuum source cavities;
+  - ordered concentric spherical shield layers;
+  - evaluation radii;
+  - fixed-shield deterministic response calculations.
+- Added reusable OpenMC data models for:
+  - benchmark settings;
+  - evaluation shells;
+  - tally definitions;
+  - processed spectrum bins;
+  - direct response results;
+  - deterministic/OpenMC comparison results.
+- Added `openmc_model_builder.py`.
+- Added scenario-driven OpenMC construction for:
+  - source cavity;
+  - spherical shield shells;
+  - evaluation shell;
+  - exterior vacuum region;
+  - outer vacuum boundary.
+- Added material construction using project material definitions and OpenMC photon data.
+- Added centered isotropic fixed-source construction.
+- Added physical photon-source-rate calculation from activity and emission intensity.
+- Added OpenMC photon transport settings for:
+  - thick-target bremsstrahlung treatment;
+  - atomic relaxation;
+  - photon cutoff energy;
+  - source particles per batch;
+  - batch count;
+  - random seed;
+  - thread count;
+  - statepoint batches.
+- Added `openmc_tally_builder.py`.
+- Added an energy-resolved photon track-length flux tally.
+- Added a direct dry-air collision-air-kerma response tally.
+- Added stable tally identifiers for benchmark processing.
+- Added 42 photon-energy bins spanning 1 keV to 700 keV.
+- Added a dedicated narrow bin containing the 661.657 keV Cs-137 source line.
+- Added `openmc_statepoint_processor.py`.
+- Added automatic extraction of named V1.13 tallies from OpenMC statepoints.
+- Added evaluation-shell volume calculation.
+- Added shell-volume normalization of track-length flux.
+- Added physical source-rate scaling.
+- Added energy-bin representative-energy calculation.
+- Added bin-level fluence-rate uncertainty processing.
+- Added bin-level dry-air response-coefficient folding.
+- Added spectrum-folded collision-air-kerma reconstruction.
+- Added direct collision-air-kerma mean and standard-deviation processing.
+- Added Gy/s and µGy/h output.
+- Added relative-uncertainty reporting.
+- Added `openmc_result_io.py`.
+- Added reproducible JSON output for processed OpenMC response records.
+- Added reproducible CSV output for energy-resolved photon spectra.
+- Added deterministic/OpenMC comparison JSON output.
+- Added `openmc_settings_io.py`.
+- Added serialization and validation for OpenMC settings profiles.
+- Added deterministic shell-volume averaging so deterministic and OpenMC responses represent the same spatial observable.
+- Added deterministic uncollided collision-air-kerma comparison.
+- Added deterministic G-P exposure-buildup-adjusted collision-air-kerma comparison.
+- Added the observed Monte Carlo response ratio relative to the deterministic uncollided result.
+- Added relative-difference reporting from both deterministic response methods.
+- Added direct-versus-spectrum-folded consistency checks.
+- Added required and preferred Monte Carlo uncertainty checks.
+- Added explicit configured tolerances and pass/fail results.
+- Added a development benchmark workflow.
+- Added a production benchmark workflow.
+- Added recovery processing for the preserved production statepoint.
+- Added `examples/openmc_v113_production_run.py`.
+- Added `examples/openmc_v113_process_production_recovery.py`.
+- Added `examples/check_v113_benchmark_plot_data.py`.
+- Added a reusable V1.13 benchmark plot-data layer.
+- Added validation of:
+  - processed response records;
+  - comparison records;
+  - spectrum rows;
+  - benchmark metadata;
+  - acceptance-check consistency;
+  - plotted result ordering.
+- Added `openmc_benchmark_plots.py`.
+- Added annotated OpenMC spherical geometry rendering.
+- Added combined use of:
+  - full-domain OpenMC geometry;
+  - central shield-detail inset;
+  - coded callouts and scale annotations.
+- Added an energy-resolved photon-spectrum panel.
+- Added a deterministic/OpenMC collision-air-kerma comparison panel.
+- Added a benchmark metadata and acceptance-summary panel.
+- Added an official four-panel V1.13 benchmark figure.
+- Added separate PNG and SVG exports for:
+  - annotated geometry;
+  - photon spectrum;
+  - response comparison;
+  - benchmark summary;
+  - combined benchmark figure.
+- Added `examples/generate_v113_benchmark_figure.py`.
+- Added raw OpenMC geometry-plot generation.
+- Added full-domain and central-detail geometry images.
+- Added reproducible benchmark-figure generation without requiring OpenMC for processed-result rendering.
+- Added the canonical release package:
+  - `results/v1.13/cs137_lead_benchmark/`.
+- Added authoritative input copies under:
+  - `inputs/`.
+- Added processed response, comparison, spectrum, and summary records under:
+  - `processed/`.
+- Added official benchmark figures under:
+  - `figures/`.
+- Added preservation of raw OpenMC geometry images under:
+  - `figures/raw_openmc/`.
+- Added `comparison_summary.csv`.
+- Added a reconstructed recovery manifest.
+- Added explicit identification of unavailable original metadata:
+  - wall-clock runtime;
+  - original execution timestamp;
+  - original Git commit.
+- Added SHA-256 verification of the canonical statepoint.
+- Added verification that the production statepoint and processing copy are byte-for-byte identical.
+- Added overwrite protection for mismatched release artifacts.
+- Added `examples/package_v113_release.py`.
+- Added the V1.13 benchmark technical report:
+  - `results/v1.13/cs137_lead_benchmark/README.md`.
+- Updated public photon-response semantics so photon-number response curves expose only uncollided photon fluence.
+- Removed G-P exposure-buildup values from current photon-fluence response-curve models.
+- Removed ambiguous current-response use of `buildup_corrected_flux`.
+- Retained legacy buildup-named fields only where required for historical regression compatibility.
+- Preserved V1.12 deterministic collision-air-kerma and strict buildup behavior.
+- Preserved execution of the historical V1.10 and V1.12 reference scenarios.
+- Preserved all earlier attenuation, source, response, optimization, scenario, and plotting regression behavior.
+
+Validated behavior:
+- The official V1.13 scenario reconstructs the same physical geometry for the deterministic and OpenMC backends.
+- The source cavity extends from 0 to 1.0 cm.
+- The Lead shield extends from 1.0 to 6.0 cm.
+- The evaluation shell extends from 99.5 to 100.5 cm.
+- The outer vacuum boundary is located at 110.0 cm.
+- The source activity is 3.70 × 10¹⁰ Bq.
+- The modeled photon emission intensity is 0.851 photons per decay.
+- The physical photon source rate is 3.1487 × 10¹⁰ photons/s.
+- The OpenMC production profile uses:
+  - 50,000 source particles per batch;
+  - 100 batches;
+  - 5,000,000 total source histories;
+  - random seed 113013;
+  - four configured threads.
+- The processed photon spectrum contains 42 energy bins.
+- The evaluation-shell volume is approximately 125664.753341 cm³.
+- The total physical photon fluence rate is approximately:
+  - 1480.394929639 photons/cm²/s.
+- The deterministic uncollided collision-air-kerma rate is approximately:
+  - 5.139917558 µGy/h.
+- The deterministic G-P-adjusted collision-air-kerma rate is approximately:
+  - 13.557461191 µGy/h.
+- The direct OpenMC collision-air-kerma rate is approximately:
+  - 15.019807382 µGy/h.
+- The spectrum-folded OpenMC collision-air-kerma rate is approximately:
+  - 15.021290068 µGy/h.
+- The direct OpenMC standard deviation is approximately:
+  - 0.087341811 µGy/h.
+- The direct OpenMC relative uncertainty is approximately:
+  - 0.581511%.
+- The required 5% relative-uncertainty criterion passes.
+- The preferred 2% relative-uncertainty criterion passes.
+- The direct and spectrum-folded OpenMC responses differ by approximately:
+  - 0.009872%.
+- The configured 2% direct-versus-folded tolerance passes.
+- The observed Monte Carlo response ratio relative to the deterministic uncollided result is approximately:
+  - 2.922188.
+- The direct OpenMC result is approximately 192.22% above the deterministic uncollided result.
+- The direct OpenMC result is approximately 10.79% above the deterministic G-P result.
+- The G-P estimate captures most, but not all, of the transported response in this benchmark.
+- The production statepoint and recovery-processing copy share the SHA-256 digest:
+  - `3D8342114E7F00A1B590CF1CF77EE9D95B2259E7C576EFB52C956E03B7695562`.
+- Processed benchmark records pass structural and numerical consistency checks.
+- Figure generation produces the complete PNG and SVG benchmark set.
+- Release packaging verifies matching existing artifacts and rejects conflicting overwrites.
+- The complete validation runner continues to end with:
+  - `All validation tests passed.`
+
+Validated benchmark:
+- Source: 1.00 Ci Cs-137
+- Activity: 3.70 × 10¹⁰ Bq
+- Photon energy: 0.661657 MeV
+- Emission intensity: 0.851 photons/decay
+- Source-cavity radius: 1.0 cm
+- Shield: 5.0 cm Lead
+- Shield outer radius: 6.0 cm
+- Evaluation-shell center radius: 100.0 cm
+- Evaluation-shell thickness: 1.0 cm
+- Outer vacuum-boundary radius: 110.0 cm
+- OpenMC source histories: 5,000,000
+- Energy bins: 42
+- Response quantity: shell-volume-averaged dry-air collision air-kerma rate
+- Deterministic uncollided response: approximately 5.139918 µGy/h
+- Deterministic G-P response: approximately 13.557461 µGy/h
+- OpenMC direct response: approximately 15.019807 µGy/h
+- OpenMC folded response: approximately 15.021290 µGy/h
+- OpenMC relative uncertainty: approximately 0.5815%
+- Direct-versus-folded agreement: PASS
+- Required uncertainty criterion: PASS
+- Preferred uncertainty criterion: PASS
+
+Notes:
+- V1.13 is a benchmark-foundation release rather than a broad material, energy, or deep-penetration validation study.
+- The benchmark technical README fulfills the V1.13 reproducible-report requirement.
+- A broader formal validation report is deferred to the multi-case V1.14 benchmark study.
+- Collision air kerma is not effective dose, organ dose, ambient dose equivalent, or a regulatory dose quantity.
+- The evaluation shell is modeled as a vacuum scoring region.
+- Dry-air collision air kerma is obtained through response-function scoring and folding rather than by filling the shell with physical air.
+- The deterministic and OpenMC results are compared using the same shell-volume-averaged response quantity.
+- The G-P result is an approximate exposure-buildup-adjusted deterministic response.
+- The G-P result is not interpreted as a general photon-number-fluence correction.
+- The observed Monte Carlo response ratio is specific to this benchmark and must not be generalized as a universal buildup coefficient.
+- V1.13 does not establish universal agreement between G-P buildup and Monte Carlo transport.
+- The production benchmark does not use variance-reduction methods.
+- The successful production transport result was preserved even though the original post-run workflow failed before writing its normal manifest.
+- The reconstructed manifest does not fabricate unavailable runtime, timestamp, or Git metadata.
+- The raw statepoint remains outside the compact release package and is referenced by repository path and SHA-256 digest.
+- Fresh OpenMC transport is not required to inspect, regenerate figures from, or verify the packaged processed benchmark.
+- V1.14 will expand the benchmark into a compact matrix of materials, energies, and shielding depths.
+
 ## v1.12 - Radiation-Response Quantity Foundation
 
 Added an explicit radiation-response quantity layer so deterministic shielding results can be compared scientifically with future OpenMC calculations. Version 1.12 separates photon-number fluence from photon energy fluence, uncollided collision air kerma, and G-P exposure-buildup-adjusted collision air kerma.
