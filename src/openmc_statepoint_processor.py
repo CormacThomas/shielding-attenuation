@@ -1,5 +1,8 @@
-# V1.13 OpenMC statepoint processing and physical normalization.
+# Reusable OpenMC benchmark statepoint processing and physical normalization.
 #
+# Introduced for the V1.13 matched benchmark and reused by later benchmark
+# studies.
+# 
 # This module converts raw OpenMC benchmark tallies into physical photon
 # fluence rates and dry-air collision-air-kerma rates.
 #
@@ -538,7 +541,7 @@ def create_processed_energy_bin_results(
     return energy_bin_results
 
 
-def process_openmc_v113_statepoint(
+def process_openmc_benchmark_statepoint(
     statepoint_path: str | Path,
     scenario: ShieldingScenario,
     settings_profile: OpenMCSettings,
@@ -549,8 +552,7 @@ def process_openmc_v113_statepoint(
     ) = None,
     expected_batch: int | None = None,
 ) -> OpenMCResponseResult:
-    # Process one completed V1.13 statepoint into physical response units.
-
+    # Process one completed benchmark statepoint into physical response units.
     if (
         scenario.calculation_mode
         != "fixed_shield_response"
@@ -858,3 +860,39 @@ def process_openmc_v113_statepoint(
 
     finally:
         statepoint.close()
+
+
+def process_openmc_v113_statepoint(
+    statepoint_path: str | Path,
+    scenario: ShieldingScenario,
+    settings_profile: OpenMCSettings,
+    evaluation_shell_thickness_cm: float = 1.0,
+    response_function: (
+        OpenMCAirKermaResponseFunction
+        | None
+    ) = None,
+    expected_batch: int | None = None,
+) -> OpenMCResponseResult:
+    # Backward-compatible V1.13 entry point.
+    #
+    # New benchmark-study code should call
+    # process_openmc_benchmark_statepoint() directly.
+
+    return process_openmc_benchmark_statepoint(
+        statepoint_path=(
+            statepoint_path
+        ),
+        scenario=scenario,
+        settings_profile=(
+            settings_profile
+        ),
+        evaluation_shell_thickness_cm=(
+            evaluation_shell_thickness_cm
+        ),
+        response_function=(
+            response_function
+        ),
+        expected_batch=(
+            expected_batch
+        ),
+    )

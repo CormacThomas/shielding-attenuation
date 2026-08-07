@@ -1,0 +1,27 @@
+{
+  "schema_version": "1.1",
+  "scenario_id": "cs137_lead_01mfp",
+  "description": "V1.14 deterministic-versus-OpenMC single-material benchmark with a centered cs137 source and 1 MFP of Lead at the explicit 0.661657 MeV reference energy.",
+  "calculation_mode": "fixed_shield_response",
+  "source": {
+    "type": "isotope",
+    "isotope_key": "cs137",
+    "activity_bq": 37000000000.0
+  },
+  "geometry": {
+    "type": "concentric_spherical",
+    "source_cavity_radius_cm": 1.0,
+    "evaluation_radius_cm": 100.0,
+    "layers": [
+      {
+        "material_key": "lead",
+        "thickness_cm": 0.7935864511780163
+      }
+    ]
+  },
+  "target": null,
+  "deterministic_settings": {
+    "apply_buildup": true,
+    "calculation_max_thickness_cm": null
+  }
+}

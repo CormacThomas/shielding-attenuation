@@ -20,9 +20,6 @@ from openmc_models import (
     OpenMCEnergyBinResult,
     OpenMCResponseResult,
     OpenMCRunManifest,
-    DeterministicOpenMCComparison,
-    OpenMCEnergyBinResult,
-    OpenMCResponseResult,
 )
 import csv
 from dataclasses import dataclass

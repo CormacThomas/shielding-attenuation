@@ -1,7 +1,9 @@
-# V1.13 OpenMC benchmark tally construction.
+# Reusable OpenMC benchmark tally construction.
 #
-# This module attaches the two official V1.13 tallies to an already-built
-# OpenMC photon model:
+# Introduced for the V1.13 matched benchmark and reused by later benchmark
+# studies.
+#
+# This module attaches two tallies to an already-built OpenMC photon model:
 #
 #   1. energy-resolved photon track-length flux;
 #   2. direct dry-air collision-air-kerma response.
@@ -60,6 +62,10 @@ PHOTON_PARTICLE_FILTER_ID = 5002
 SPECTRUM_ENERGY_FILTER_ID = 5003
 AIR_KERMA_RESPONSE_FILTER_ID = 5004
 
+# These names were established by V1.13 and are preserved as stable
+# statepoint identifiers. The generic V1.14 API continues to use them so
+# existing V1.13 statepoints remain processable.
+
 SPECTRUM_TALLY_NAME = (
     "v113_evaluation_shell_photon_flux_spectrum"
 )
@@ -99,7 +105,7 @@ class OpenMCTallyBuildResult:
     def __post_init__(self) -> None:
         if self.spectrum_tally.id != SPECTRUM_TALLY_ID:
             raise ValueError(
-                "Unexpected V1.13 spectrum tally ID."
+                "Unexpected benchmark spectrum tally ID."
             )
 
         if (
@@ -107,7 +113,7 @@ class OpenMCTallyBuildResult:
             != DIRECT_RESPONSE_TALLY_ID
         ):
             raise ValueError(
-                "Unexpected V1.13 direct-response tally ID."
+                "Unexpected benchmark direct-response tally ID."
             )
 
         if (
@@ -115,7 +121,7 @@ class OpenMCTallyBuildResult:
             != SPECTRUM_TALLY_NAME
         ):
             raise ValueError(
-                "Unexpected V1.13 spectrum tally name."
+                "Unexpected benchmark spectrum tally name."
             )
 
         if (
@@ -123,15 +129,14 @@ class OpenMCTallyBuildResult:
             != DIRECT_RESPONSE_TALLY_NAME
         ):
             raise ValueError(
-                "Unexpected V1.13 direct-response tally name."
+                "Unexpected benchmark direct-response tally name."
             )
 
         if self.spectrum_tally.scores != [
             "flux"
         ]:
             raise ValueError(
-                "V1.13 spectrum tally must use the "
-                "flux score."
+                "Benchmark spectrum tally must use the flux score."
             )
 
         if (
@@ -141,8 +146,7 @@ class OpenMCTallyBuildResult:
             ]
         ):
             raise ValueError(
-                "V1.13 direct-response tally must use "
-                "the flux score."
+                "Benchmark direct-response tally must use the flux score."
             )
 
         if (
@@ -150,8 +154,7 @@ class OpenMCTallyBuildResult:
             != "tracklength"
         ):
             raise ValueError(
-                "V1.13 spectrum tally must use the "
-                "track-length estimator."
+                "Benchmark spectrum tally must use the track-length estimator."
             )
 
         if (
@@ -159,14 +162,12 @@ class OpenMCTallyBuildResult:
             != "tracklength"
         ):
             raise ValueError(
-                "V1.13 direct-response tally must use "
-                "the track-length estimator."
+                "Benchmark direct-response tally must use the track-length estimator."
             )
 
         if len(self.tallies) != 2:
             raise ValueError(
-                "V1.13 benchmark model must contain "
-                "exactly two tallies."
+                "OpenMC benchmark model must contain exactly two tallies."
             )
 
         if (
@@ -174,8 +175,7 @@ class OpenMCTallyBuildResult:
             <= 0
         ):
             raise ValueError(
-                "V1.13 spectrum tally must contain "
-                "at least one energy bin."
+                "Benchmark spectrum tally must contain at least one energy bin."
             )
 
         if (
@@ -188,7 +188,7 @@ class OpenMCTallyBuildResult:
             )
 
 
-def create_v113_spectrum_tally(
+def create_openmc_spectrum_tally(
     openmc_module: Any,
     evaluation_cell_filter: Any,
     photon_particle_filter: Any,
@@ -233,7 +233,7 @@ def create_v113_spectrum_tally(
     )
 
 
-def create_v113_direct_response_tally(
+def create_openmc_direct_response_tally(
     openmc_module: Any,
     evaluation_cell_filter: Any,
     photon_particle_filter: Any,
@@ -296,7 +296,7 @@ def create_v113_direct_response_tally(
     )
 
 
-def attach_v113_benchmark_tallies(
+def attach_openmc_benchmark_tallies(
     model_build_result: (
         OpenMCModelBuildResult
     ),
@@ -306,7 +306,7 @@ def attach_v113_benchmark_tallies(
         | None
     ) = None,
 ) -> OpenMCTallyBuildResult:
-    # Attach the complete V1.13 tally set to an existing OpenMC model.
+    # Attach the complete benchmark tally set to an existing OpenMC model.
 
     openmc_module = load_openmc_module()
 
@@ -342,7 +342,7 @@ def attach_v113_benchmark_tallies(
     (
         spectrum_tally,
         spectrum_energy_filter,
-    ) = create_v113_spectrum_tally(
+    ) = create_openmc_spectrum_tally(
         openmc_module=openmc_module,
         evaluation_cell_filter=(
             evaluation_cell_filter
@@ -358,7 +358,7 @@ def attach_v113_benchmark_tallies(
     (
         direct_response_tally,
         air_kerma_response_filter,
-    ) = create_v113_direct_response_tally(
+    ) = create_openmc_direct_response_tally(
         openmc_module=openmc_module,
         evaluation_cell_filter=(
             evaluation_cell_filter
@@ -404,6 +404,80 @@ def attach_v113_benchmark_tallies(
         ),
         air_kerma_response_filter=(
             air_kerma_response_filter
+        ),
+        response_function=(
+            response_function
+        ),
+    )
+
+
+def create_v113_spectrum_tally(
+    openmc_module: Any,
+    evaluation_cell_filter: Any,
+    photon_particle_filter: Any,
+    settings_profile: OpenMCSettings,
+) -> tuple[Any, Any]:
+    # Backward-compatible V1.13 entry point.
+
+    return create_openmc_spectrum_tally(
+        openmc_module=openmc_module,
+        evaluation_cell_filter=(
+            evaluation_cell_filter
+        ),
+        photon_particle_filter=(
+            photon_particle_filter
+        ),
+        settings_profile=(
+            settings_profile
+        ),
+    )
+
+
+def create_v113_direct_response_tally(
+    openmc_module: Any,
+    evaluation_cell_filter: Any,
+    photon_particle_filter: Any,
+    response_function: (
+        OpenMCAirKermaResponseFunction
+    ),
+) -> tuple[Any, Any]:
+    # Backward-compatible V1.13 entry point.
+
+    return create_openmc_direct_response_tally(
+        openmc_module=openmc_module,
+        evaluation_cell_filter=(
+            evaluation_cell_filter
+        ),
+        photon_particle_filter=(
+            photon_particle_filter
+        ),
+        response_function=(
+            response_function
+        ),
+    )
+
+
+def attach_v113_benchmark_tallies(
+    model_build_result: (
+        OpenMCModelBuildResult
+    ),
+    settings_profile: OpenMCSettings,
+    response_function: (
+        OpenMCAirKermaResponseFunction
+        | None
+    ) = None,
+) -> OpenMCTallyBuildResult:
+    # Backward-compatible V1.13 entry point.
+    #
+    # New benchmark-study code should call
+    # attach_openmc_benchmark_tallies() directly.
+
+    return attach_openmc_benchmark_tallies(
+        model_build_result=(
+            model_build_result
+        ),
+        settings_profile=(
+            settings_profile
         ),
         response_function=(
             response_function

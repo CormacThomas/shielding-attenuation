@@ -1,4 +1,7 @@
-# V1.13 isolated OpenMC model construction.
+# Reusable OpenMC photon model construction.
+#
+# Introduced for the V1.13 matched benchmark and extended in V1.14 to support
+# multiple benchmark materials.
 #
 # This module is the first project module that creates actual OpenMC Python
 # objects. The OpenMC import is delayed until model construction begins so:
@@ -36,6 +39,9 @@ from fixed_shield_response import (
 from material_library import (
     get_material_library,
 )
+from openmc_material_library import (
+    get_openmc_material_definition,
+)
 from openmc_models import (
     OpenMCSettings,
 )
@@ -65,13 +71,6 @@ EXTERIOR_VOID_CELL_ID = 1203
 
 FIRST_MATERIAL_ID = 2001
 
-
-# OpenMC material compositions are deliberately explicit.
-#
-# More material mappings will be added during the later validation matrix.
-OPENMC_ELEMENT_SYMBOL_BY_MATERIAL_KEY = {
-    "lead": "Pb",
-}
 
 
 @dataclass
@@ -281,26 +280,16 @@ def create_openmc_materials(
                 f"{material_key}"
             )
 
-        if (
-            material_key
-            not in OPENMC_ELEMENT_SYMBOL_BY_MATERIAL_KEY
-        ):
-            raise ValueError(
-                "OpenMC material composition has not yet "
-                "been defined for project material: "
-                f"{material_key}"
-            )
-
         project_material = (
             project_material_library[
                 material_key
             ]
         )
 
-        element_symbol = (
-            OPENMC_ELEMENT_SYMBOL_BY_MATERIAL_KEY[
+        openmc_material_definition = (
+            get_openmc_material_definition(
                 material_key
-            ]
+            )
         )
 
         material_id = (
@@ -315,10 +304,18 @@ def create_openmc_materials(
             )
         )
 
-        openmc_material.add_element(
-            element_symbol,
-            1.0,
-        )
+        for component in (
+            openmc_material_definition
+            .normalized_components
+        ):
+            openmc_material.add_element(
+                component.element_symbol,
+                component.fraction,
+                percent_type=(
+                    openmc_material_definition
+                    .fraction_type
+                ),
+            )
 
         openmc_material.set_density(
             "g/cm3",
@@ -538,11 +535,12 @@ def create_openmc_transport_settings(
     return settings
 
 
-def build_openmc_v113_model(
+def build_openmc_benchmark_model(
     scenario: ShieldingScenario,
     settings_profile: OpenMCSettings,
     evaluation_shell_thickness_cm: float = 1.0,
 ) -> OpenMCModelBuildResult:
+    # Construct a complete untallied OpenMC benchmark model.
     # Construct the complete untallied V1.13 OpenMC model.
     #
     # The evaluation shell is vacuum. It serves as a nonperturbing photon
@@ -569,7 +567,7 @@ def build_openmc_v113_model(
         <= 0
     ):
         raise ValueError(
-            "The V1.13 OpenMC model requires a positive "
+            "OpenMC benchmark models require a positive "
             "source-cavity radius."
         )
 
@@ -577,7 +575,7 @@ def build_openmc_v113_model(
         geometry_spec.layers
     ) == 0:
         raise ValueError(
-            "The V1.13 OpenMC model requires at least "
+            "OpenMC benchmark models require at least "
             "one fixed shielding layer."
         )
 
@@ -900,5 +898,26 @@ def build_openmc_v113_model(
         ),
         openmc_version=str(
             openmc_module.__version__
+        ),
+    )
+
+
+def build_openmc_v113_model(
+    scenario: ShieldingScenario,
+    settings_profile: OpenMCSettings,
+    evaluation_shell_thickness_cm: float = 1.0,
+) -> OpenMCModelBuildResult:
+    # Backward-compatible V1.13 entry point.
+    #
+    # New benchmark-study code should call
+    # build_openmc_benchmark_model() directly.
+
+    return build_openmc_benchmark_model(
+        scenario=scenario,
+        settings_profile=(
+            settings_profile
+        ),
+        evaluation_shell_thickness_cm=(
+            evaluation_shell_thickness_cm
         ),
     )
