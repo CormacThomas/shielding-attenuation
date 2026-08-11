@@ -1,0 +1,467 @@
+ ====>     TALLY 4001: V113_EVALUATION_SHELL_PHOTON_FLUX_SPECTRUM     <=====
+
+ Cell 1202
+   Particle: photon
+     Incoming Energy [1000, 1414.213562373095)
+       Total Material
+         Flux                                 0 +/- 0
+     Incoming Energy [1414.213562373095, 2000)
+       Total Material
+         Flux                                 0 +/- 0
+     Incoming Energy [2000, 2449.489742783178)
+       Total Material
+         Flux                                 0 +/- 0
+     Incoming Energy [2449.489742783178, 3000)
+       Total Material
+         Flux                                 2.06202e-07 +/- 2.06202e-07
+     Incoming Energy [3000, 3872.983346207417)
+       Total Material
+         Flux                                 0 +/- 0
+     Incoming Energy [3872.983346207417, 5000)
+       Total Material
+         Flux                                 0 +/- 0
+     Incoming Energy [5000, 5916.079783099616)
+       Total Material
+         Flux                                 2.03435e-07 +/- 2.03435e-07
+     Incoming Energy [5916.079783099616, 7000)
+       Total Material
+         Flux                                 4.13529e-07 +/- 2.90942e-07
+     Incoming Energy [7000, 8366.600265340756)
+       Total Material
+         Flux                                 4.54837e-07 +/- 3.20124e-07
+     Incoming Energy [8366.600265340756, 10000)
+       Total Material
+         Flux                                 0 +/- 0
+     Incoming Energy [10000, 12247.44871391589)
+       Total Material
+         Flux                                 1.47871e-06 +/- 5.42598e-07
+     Incoming Energy [12247.44871391589, 15000)
+       Total Material
+         Flux                                 2.34545e-06 +/- 6.72092e-07
+     Incoming Energy [15000, 17320.508075688773)
+       Total Material
+         Flux                                 1.72142e-06 +/- 7.43951e-07
+     Incoming Energy [17320.508075688773, 20000)
+       Total Material
+         Flux                                 1.71302e-06 +/- 6.52364e-07
+     Incoming Energy [20000, 24494.89742783178)
+       Total Material
+         Flux                                 2.10517e-05 +/- 2.32856e-06
+     Incoming Energy [24494.89742783178, 30000)
+       Total Material
+         Flux                                 0.000410912 +/- 9.98906e-06
+     Incoming Energy [30000, 34641.016151377546)
+       Total Material
+         Flux                                 0.0015522 +/- 1.74645e-05
+     Incoming Energy [34641.016151377546, 40000)
+       Total Material
+         Flux                                 0.00377878 +/- 2.60495e-05
+     Incoming Energy [40000, 44721.359549995796)
+       Total Material
+         Flux                                 0.00479443 +/- 2.8913e-05
+     Incoming Energy [44721.359549995796, 50000)
+       Total Material
+         Flux                                 0.00612043 +/- 3.78252e-05
+     Incoming Energy [50000, 52440.44240850758)
+       Total Material
+         Flux                                 0.00302836 +/- 2.41567e-05
+     Incoming Energy [52440.44240850758, 55000)
+       Total Material
+         Flux                                 0.003131 +/- 2.00846e-05
+     Incoming Energy [55000, 56480.084985771755)
+       Total Material
+         Flux                                 0.00180904 +/- 2.264e-05
+     Incoming Energy [56480.084985771755, 58000)
+       Total Material
+         Flux                                 0.00180858 +/- 2.09189e-05
+     Incoming Energy [58000, 58497.863208838666)
+       Total Material
+         Flux                                 0.000585156 +/- 1.0942e-05
+     Incoming Energy [58497.863208838666, 59000)
+       Total Material
+         Flux                                 0.0005983 +/- 1.11407e-05
+     Incoming Energy [59000, 59249.472571492144)
+       Total Material
+         Flux                                 0.000293706 +/- 7.19319e-06
+     Incoming Energy [59249.472571492144, 59500)
+       Total Material
+         Flux                                 0.000296618 +/- 8.55669e-06
+     Incoming Energy [59500, 59549.97900923224)
+       Total Material
+         Flux                                 5.95725e-05 +/- 3.66641e-06
+     Incoming Energy [59549.97900923224, 59600)
+       Total Material
+         Flux                                 5.68603e-05 +/- 3.41579e-06
+     Incoming Energy [59600, 59799.66555090421)
+       Total Material
+         Flux                                 0.000236544 +/- 7.35829e-06
+     Incoming Energy [59799.66555090421, 60000)
+       Total Material
+         Flux                                 0.000236558 +/- 6.60316e-06
+     Incoming Energy [60000, 62449.97998398398)
+       Total Material
+         Flux                                 0.00280375 +/- 2.25884e-05
+     Incoming Energy [62449.97998398398, 65000)
+       Total Material
+         Flux                                 0.00283337 +/- 2.23485e-05
+     Incoming Energy [65000, 69821.20021884471)
+       Total Material
+         Flux                                 0.00504991 +/- 3.11333e-05
+     Incoming Energy [69821.20021884471, 75000)
+       Total Material
+         Flux                                 0.0049883 +/- 3.14019e-05
+     Incoming Energy [75000, 82158.38362577492)
+       Total Material
+         Flux                                 0.00633852 +/- 3.41018e-05
+     Incoming Energy [82158.38362577492, 90000)
+       Total Material
+         Flux                                 0.00618987 +/- 3.52176e-05
+     Incoming Energy [90000, 94868.32980505138)
+       Total Material
+         Flux                                 0.00349389 +/- 2.57746e-05
+     Incoming Energy [94868.32980505138, 100000)
+       Total Material
+         Flux                                 0.00342788 +/- 2.77867e-05
+     Incoming Energy [100000, 111803.39887498948)
+       Total Material
+         Flux                                 0.00704123 +/- 4.07918e-05
+     Incoming Energy [111803.39887498948, 125000)
+       Total Material
+         Flux                                 0.00635626 +/- 3.22833e-05
+     Incoming Energy [125000, 136930.63937629154)
+       Total Material
+         Flux                                 0.00473886 +/- 2.9424e-05
+     Incoming Energy [136930.63937629154, 150000)
+       Total Material
+         Flux                                 0.00444338 +/- 2.7818e-05
+     Incoming Energy [150000, 162018.5174601965)
+       Total Material
+         Flux                                 0.00348932 +/- 2.75309e-05
+     Incoming Energy [162018.5174601965, 175000)
+       Total Material
+         Flux                                 0.00349052 +/- 2.74744e-05
+     Incoming Energy [175000, 187082.86933869706)
+       Total Material
+         Flux                                 0.00296702 +/- 2.3136e-05
+     Incoming Energy [187082.86933869706, 200000)
+       Total Material
+         Flux                                 0.00289754 +/- 2.29954e-05
+     Incoming Energy [200000, 212132.03435596425)
+       Total Material
+         Flux                                 0.00258391 +/- 2.35678e-05
+     Incoming Energy [212132.03435596425, 225000)
+       Total Material
+         Flux                                 0.00258421 +/- 2.44531e-05
+     Incoming Energy [225000, 237170.82451262846)
+       Total Material
+         Flux                                 0.00229823 +/- 2.04316e-05
+     Incoming Energy [237170.82451262846, 250000)
+       Total Material
+         Flux                                 0.00233267 +/- 1.93165e-05
+     Incoming Energy [250000, 262202.21204253787)
+       Total Material
+         Flux                                 0.00211372 +/- 1.83179e-05
+     Incoming Energy [262202.21204253787, 275000)
+       Total Material
+         Flux                                 0.0021961 +/- 2.20963e-05
+     Incoming Energy [275000, 287228.1323269014)
+       Total Material
+         Flux                                 0.00202474 +/- 2.07658e-05
+     Incoming Energy [287228.1323269014, 300000)
+       Total Material
+         Flux                                 0.00206838 +/- 1.90254e-05
+     Incoming Energy [300000, 312249.8999199199)
+       Total Material
+         Flux                                 0.00193157 +/- 1.84972e-05
+     Incoming Energy [312249.8999199199, 325000)
+       Total Material
+         Flux                                 0.00195771 +/- 2.16257e-05
+     Incoming Energy [325000, 337268.43908080104)
+       Total Material
+         Flux                                 0.00185889 +/- 1.90552e-05
+     Incoming Energy [337268.43908080104, 350000)
+       Total Material
+         Flux                                 0.00186966 +/- 2.11582e-05
+     Incoming Energy [350000, 362284.41865473596)
+       Total Material
+         Flux                                 0.00178856 +/- 1.82151e-05
+     Incoming Energy [362284.41865473596, 375000)
+       Total Material
+         Flux                                 0.00178336 +/- 1.87294e-05
+     Incoming Energy [375000, 387298.33462074166)
+       Total Material
+         Flux                                 0.00166961 +/- 1.76791e-05
+     Incoming Energy [387298.33462074166, 400000)
+       Total Material
+         Flux                                 0.00170192 +/- 1.66827e-05
+     Incoming Energy [400000, 412310.56256176607)
+       Total Material
+         Flux                                 0.00162834 +/- 1.8705e-05
+     Incoming Energy [412310.56256176607, 425000)
+       Total Material
+         Flux                                 0.00161672 +/- 1.76739e-05
+     Incoming Energy [425000, 437321.39211339754)
+       Total Material
+         Flux                                 0.00153908 +/- 1.79378e-05
+     Incoming Energy [437321.39211339754, 450000)
+       Total Material
+         Flux                                 0.00150982 +/- 1.67629e-05
+     Incoming Energy [450000, 462331.0502226732)
+       Total Material
+         Flux                                 0.00146569 +/- 1.52169e-05
+     Incoming Energy [462331.0502226732, 475000)
+       Total Material
+         Flux                                 0.00147737 +/- 1.80956e-05
+     Incoming Energy [475000, 487339.71724044817)
+       Total Material
+         Flux                                 0.00139827 +/- 2.03826e-05
+     Incoming Energy [487339.71724044817, 500000)
+       Total Material
+         Flux                                 0.00137189 +/- 1.60603e-05
+     Incoming Energy [500000, 512347.5382979799)
+       Total Material
+         Flux                                 0.00129212 +/- 1.60602e-05
+     Incoming Energy [512347.5382979799, 525000)
+       Total Material
+         Flux                                 0.00130396 +/- 1.69327e-05
+     Incoming Energy [525000, 537354.6315051169)
+       Total Material
+         Flux                                 0.00125065 +/- 1.84455e-05
+     Incoming Energy [537354.6315051169, 550000)
+       Total Material
+         Flux                                 0.00124692 +/- 1.56361e-05
+     Incoming Energy [550000, 562361.0939600996)
+       Total Material
+         Flux                                 0.00117981 +/- 1.64398e-05
+     Incoming Energy [562361.0939600996, 575000)
+       Total Material
+         Flux                                 0.00116915 +/- 1.7242e-05
+     Incoming Energy [575000, 587367.0062235366)
+       Total Material
+         Flux                                 0.00113228 +/- 1.52331e-05
+     Incoming Energy [587367.0062235366, 600000)
+       Total Material
+         Flux                                 0.00111919 +/- 1.43243e-05
+     Incoming Energy [600000, 609918.0272790763)
+       Total Material
+         Flux                                 0.0008563 +/- 1.19316e-05
+     Incoming Energy [609918.0272790763, 620000)
+       Total Material
+         Flux                                 0.000831092 +/- 1.35029e-05
+     Incoming Energy [620000, 629920.6299209449)
+       Total Material
+         Flux                                 0.000815384 +/- 1.25304e-05
+     Incoming Energy [629920.6299209449, 640000)
+       Total Material
+         Flux                                 0.00083368 +/- 1.321e-05
+     Incoming Energy [640000, 644980.6198638839)
+       Total Material
+         Flux                                 0.000407365 +/- 9.28309e-06
+     Incoming Energy [644980.6198638839, 650000)
+       Total Material
+         Flux                                 0.000385422 +/- 9.46897e-06
+     Incoming Energy [650000, 654980.9157525126)
+       Total Material
+         Flux                                 0.000404544 +/- 9.94124e-06
+     Incoming Energy [654980.9157525126, 660000)
+       Total Material
+         Flux                                 0.000380242 +/- 8.06956e-06
+     Incoming Energy [660000, 660499.8107494052)
+       Total Material
+         Flux                                 3.78106e-05 +/- 3.10063e-06
+     Incoming Energy [660499.8107494052, 661000)
+       Total Material
+         Flux                                 3.34051e-05 +/- 2.88621e-06
+     Incoming Energy [661000, 661249.9527410191)
+       Total Material
+         Flux                                 1.66013e-05 +/- 1.90821e-06
+     Incoming Energy [661249.9527410191, 661500)
+       Total Material
+         Flux                                 1.52008e-05 +/- 1.66056e-06
+     Incoming Energy [661500, 661549.9981104981)
+       Total Material
+         Flux                                 2.20005e-06 +/- 6.90207e-07
+     Incoming Energy [661549.9981104981, 661600)
+       Total Material
+         Flux                                 2.40008e-06 +/- 6.53219e-07
+     Incoming Energy [661600, 661649.9981107836)
+       Total Material
+         Flux                                 2.20003e-06 +/- 8.47821e-07
+     Incoming Energy [661649.9981107836, 661700)
+       Total Material
+         Flux                                 0.00681601 +/- 3.68123e-05
+     Incoming Energy [661700, 661849.9830021906)
+       Total Material
+         Flux                                 0 +/- 0
+     Incoming Energy [661849.9830021906, 662000)
+       Total Material
+         Flux                                 0 +/- 0
+     Incoming Energy [662000, 663498.3044439526)
+       Total Material
+         Flux                                 0 +/- 0
+     Incoming Energy [663498.3044439526, 665000)
+       Total Material
+         Flux                                 0 +/- 0
+     Incoming Energy [665000, 667495.318335642)
+       Total Material
+         Flux                                 0 +/- 0
+     Incoming Energy [667495.318335642, 670000)
+       Total Material
+         Flux                                 0 +/- 0
+     Incoming Energy [670000, 674981.4812274482)
+       Total Material
+         Flux                                 0 +/- 0
+     Incoming Energy [674981.4812274482, 680000)
+       Total Material
+         Flux                                 0 +/- 0
+     Incoming Energy [680000, 689927.5324264136)
+       Total Material
+         Flux                                 0 +/- 0
+     Incoming Energy [689927.5324264136, 700000)
+       Total Material
+         Flux                                 0 +/- 0
+     Incoming Energy [700000, 724568.8373094719)
+       Total Material
+         Flux                                 0 +/- 0
+     Incoming Energy [724568.8373094719, 750000)
+       Total Material
+         Flux                                 0 +/- 0
+     Incoming Energy [750000, 774596.6692414833)
+       Total Material
+         Flux                                 0 +/- 0
+     Incoming Energy [774596.6692414833, 800000)
+       Total Material
+         Flux                                 0 +/- 0
+     Incoming Energy [800000, 848528.137423857)
+       Total Material
+         Flux                                 0 +/- 0
+     Incoming Energy [848528.137423857, 900000)
+       Total Material
+         Flux                                 0 +/- 0
+     Incoming Energy [900000, 948683.2980505138)
+       Total Material
+         Flux                                 0 +/- 0
+     Incoming Energy [948683.2980505138, 1000000)
+       Total Material
+         Flux                                 0 +/- 0
+     Incoming Energy [1000000, 1048808.8481701515)
+       Total Material
+         Flux                                 0 +/- 0
+     Incoming Energy [1048808.8481701515, 1100000)
+       Total Material
+         Flux                                 0 +/- 0
+     Incoming Energy [1100000, 1124722.1879201992)
+       Total Material
+         Flux                                 0 +/- 0
+     Incoming Energy [1124722.1879201992, 1150000)
+       Total Material
+         Flux                                 0 +/- 0
+     Incoming Energy [1150000, 1159956.8957508723)
+       Total Material
+         Flux                                 0 +/- 0
+     Incoming Energy [1159956.8957508723, 1170000)
+       Total Material
+         Flux                                 0 +/- 0
+     Incoming Energy [1170000, 1171499.039692308)
+       Total Material
+         Flux                                 0 +/- 0
+     Incoming Energy [1171499.039692308, 1173000)
+       Total Material
+         Flux                                 0 +/- 0
+     Incoming Energy [1173000, 1173099.9957377887)
+       Total Material
+         Flux                                 0 +/- 0
+     Incoming Energy [1173099.9957377887, 1173200)
+       Total Material
+         Flux                                 0 +/- 0
+     Incoming Energy [1173200, 1173249.9989345835)
+       Total Material
+         Flux                                 0 +/- 0
+     Incoming Energy [1173249.9989345835, 1173300)
+       Total Material
+         Flux                                 0 +/- 0
+     Incoming Energy [1173300, 1173649.947812379)
+       Total Material
+         Flux                                 0 +/- 0
+     Incoming Energy [1173649.947812379, 1174000)
+       Total Material
+         Flux                                 0 +/- 0
+     Incoming Energy [1174000, 1186928.809996623)
+       Total Material
+         Flux                                 0 +/- 0
+     Incoming Energy [1186928.809996623, 1200000)
+       Total Material
+         Flux                                 0 +/- 0
+     Incoming Energy [1200000, 1224744.871391589)
+       Total Material
+         Flux                                 0 +/- 0
+     Incoming Energy [1224744.871391589, 1250000)
+       Total Material
+         Flux                                 0 +/- 0
+     Incoming Energy [1250000, 1274754.8783981963)
+       Total Material
+         Flux                                 0 +/- 0
+     Incoming Energy [1274754.8783981963, 1300000)
+       Total Material
+         Flux                                 0 +/- 0
+     Incoming Energy [1300000, 1309961.8315050253)
+       Total Material
+         Flux                                 0 +/- 0
+     Incoming Energy [1309961.8315050253, 1320000)
+       Total Material
+         Flux                                 0 +/- 0
+     Incoming Energy [1320000, 1324990.5660041508)
+       Total Material
+         Flux                                 0 +/- 0
+     Incoming Energy [1324990.5660041508, 1330000)
+       Total Material
+         Flux                                 0 +/- 0
+     Incoming Energy [1330000, 1330999.6243425466)
+       Total Material
+         Flux                                 0 +/- 0
+     Incoming Energy [1330999.6243425466, 1332000)
+       Total Material
+         Flux                                 0 +/- 0
+     Incoming Energy [1332000, 1332199.9849872391)
+       Total Material
+         Flux                                 0 +/- 0
+     Incoming Energy [1332199.9849872391, 1332400)
+       Total Material
+         Flux                                 0 +/- 0
+     Incoming Energy [1332400, 1332499.9962476548)
+       Total Material
+         Flux                                 0 +/- 0
+     Incoming Energy [1332499.9962476548, 1332600)
+       Total Material
+         Flux                                 0 +/- 0
+     Incoming Energy [1332600, 1332799.9849939975)
+       Total Material
+         Flux                                 0 +/- 0
+     Incoming Energy [1332799.9849939975, 1333000)
+       Total Material
+         Flux                                 0 +/- 0
+     Incoming Energy [1333000, 1336495.4171264486)
+       Total Material
+         Flux                                 0 +/- 0
+     Incoming Energy [1336495.4171264486, 1340000)
+       Total Material
+         Flux                                 0 +/- 0
+     Incoming Energy [1340000, 1369671.4934611146)
+       Total Material
+         Flux                                 0 +/- 0
+     Incoming Energy [1369671.4934611146, 1400000)
+       Total Material
+         Flux                                 0 +/- 0
+     Incoming Energy [1400000, 1449137.6746189438)
+       Total Material
+         Flux                                 0 +/- 0
+     Incoming Energy [1449137.6746189438, 1500000)
+       Total Material
+         Flux                                 0 +/- 0
+ ==>     TALLY 4002: V113_EVALUATION_SHELL_DIRECT_AIR_KERMA_RESPONSE     <==
+
+ Cell 1202
+   Particle: photon
+     Energy Function f([1.0e+03, ..., 2.0e+07]) = [5.8e-10, ..., 4.2e-11]
+       Total Material
+         Flux                                 1.72665e-13 +/- 2.42398e-16

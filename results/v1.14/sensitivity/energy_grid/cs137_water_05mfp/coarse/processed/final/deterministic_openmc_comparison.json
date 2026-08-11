@@ -1,0 +1,45 @@
+{
+  "schema_version": "1.0",
+  "record_type": "deterministic_openmc_comparison",
+  "scenario_id": "cs137_water_05mfp",
+  "settings_profile_name": "v114_energy_coarse",
+  "response_quantity": "shell-volume-averaged dry-air collision air-kerma rate",
+  "evaluation_shell": {
+    "center_radius_cm": 100.0,
+    "thickness_cm": 1.0,
+    "inner_radius_cm": 99.5,
+    "outer_radius_cm": 100.5
+  },
+  "deterministic": {
+    "uncollided_response_rate_gy_per_s": 5.241532862594832e-09,
+    "uncollided_response_rate_microgy_per_h": 18.869518305341398,
+    "gp_adjusted_response_rate_gy_per_s": 7.443071244812062e-08,
+    "gp_adjusted_response_rate_microgy_per_h": 267.9505648132342,
+    "buildup_status": "applied"
+  },
+  "openmc": {
+    "direct_response_rate_gy_per_s": 4.3263614653833075e-08,
+    "direct_response_rate_microgy_per_h": 155.74901275379906,
+    "direct_response_standard_deviation_gy_per_s": 6.073615887753087e-11,
+    "direct_response_standard_deviation_microgy_per_h": 0.21865017195911113,
+    "relative_uncertainty": 0.001403862330124322,
+    "spectrum_folded_response_rate_gy_per_s": 4.345617231725852e-08,
+    "spectrum_folded_response_rate_microgy_per_h": 156.44222034213067
+  },
+  "comparison": {
+    "relative_difference_from_uncollided": 7.254000459021319,
+    "relative_difference_from_gp": -0.41873974827275107,
+    "observed_monte_carlo_buildup_ratio": 8.25400045902132,
+    "direct_vs_folded_relative_difference": 0.004450799244727034,
+    "absolute_direct_vs_folded_relative_difference": 0.004450799244727034
+  },
+  "acceptance_checks": {
+    "direct_vs_folded_tolerance": 0.02,
+    "direct_vs_folded_pass": true,
+    "required_relative_uncertainty": 0.05,
+    "required_uncertainty_pass": true,
+    "preferred_relative_uncertainty": 0.02,
+    "preferred_uncertainty_pass": true
+  },
+  "warnings": []
+}

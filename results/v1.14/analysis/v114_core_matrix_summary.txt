@@ -1,0 +1,37 @@
+========================================================================================
+V1.14 CORE DETERMINISTIC-VERSUS-OPENMC MATRIX SUMMARY
+========================================================================================
+Cases aggregated: 8
+Settings profile: v114_production
+Histories per case: 5,000,000
+Required uncertainty checks: 8/8 PASS
+Preferred uncertainty checks: 7/8 PASS
+Direct-versus-folded checks: 8/8 PASS
+----------------------------------------------------------------------------------------
+Case                                      MFP     OpenMC µGy/h       MC B      G-P B    MC vs G-P   MC unc.
+----------------------------------------------------------------------------------------
+cs137_lead_01mfp                          1.0           1338.1     1.2988     1.4576      -10.89%     0.05%
+cs137_lead_05mfp                          5.0          46.8253     2.4815     2.4214       +2.48%     0.35%
+cs137_lead_10mfp                         10.0         0.555975     4.3729     3.1636      +38.23%     3.11%
+cs137_tungsten_01mfp                      1.0          1375.57     1.3352     1.8056      -26.05%     0.04%
+cs137_tungsten_05mfp                      5.0          51.2688     2.7170     3.3169      -18.09%     0.29%
+cs137_concrete_ordinary_01mfp             1.0          1790.57     1.7380     2.3744      -26.80%     0.02%
+cs137_concrete_ordinary_05mfp             5.0          132.718     7.0335    13.0570      -46.13%     0.17%
+cs137_water_05mfp                         5.0          155.749     8.2540    14.2002      -41.87%     0.14%
+----------------------------------------------------------------------------------------
+Largest absolute OpenMC-vs-G-P difference: cs137_concrete_ordinary_05mfp | -46.1324%
+Largest observed Monte Carlo buildup ratio: cs137_water_05mfp | 8.254000
+
+5-MFP OpenMC buildup ordering:
+  1. Lead: B_MC = 2.481531, OpenMC vs G-P = +2.4815%
+  2. Tungsten: B_MC = 2.717016, OpenMC vs G-P = -18.0868%
+  3. Concrete (Ordinary): B_MC = 7.033469, OpenMC vs G-P = -46.1324%
+  4. Water: B_MC = 8.254000, OpenMC vs G-P = -41.8740%
+
+Lead optical-thickness series:
+  1 MFP | B_MC = 1.298819 | B_GP = 1.457603 | OpenMC vs G-P = -10.8935% | MC uncertainty = 0.0460%
+  5 MFP | B_MC = 2.481531 | B_GP = 2.421443 | OpenMC vs G-P = +2.4815% | MC uncertainty = 0.3499%
+  10 MFP | B_MC = 4.372876 | B_GP = 3.163577 | OpenMC vs G-P = +38.2257% | MC uncertainty = 3.1105%
+
+Deterministic values in this matrix are the matched evaluation-shell averages from each production comparison record, not the nominal-radius point values stored in the case-generation metadata.
+========================================================================================

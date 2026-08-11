@@ -1,0 +1,45 @@
+{
+  "schema_version": "1.0",
+  "record_type": "deterministic_openmc_comparison",
+  "scenario_id": "cs137_tungsten_01mfp",
+  "settings_profile_name": "v114_production",
+  "response_quantity": "shell-volume-averaged dry-air collision air-kerma rate",
+  "evaluation_shell": {
+    "center_radius_cm": 100.0,
+    "thickness_cm": 1.0,
+    "inner_radius_cm": 99.5,
+    "outer_radius_cm": 100.5
+  },
+  "deterministic": {
+    "uncollided_response_rate_gy_per_s": 2.861779976356087e-07,
+    "uncollided_response_rate_microgy_per_h": 1030.2407914881912,
+    "gp_adjusted_response_rate_gy_per_s": 5.167089798252007e-07,
+    "gp_adjusted_response_rate_microgy_per_h": 1860.1523273707226,
+    "buildup_status": "applied"
+  },
+  "openmc": {
+    "direct_response_rate_gy_per_s": 3.821040951462101e-07,
+    "direct_response_rate_microgy_per_h": 1375.5747425263564,
+    "direct_response_standard_deviation_gy_per_s": 1.5151988791113273e-10,
+    "direct_response_standard_deviation_microgy_per_h": 0.5454715964800778,
+    "relative_uncertainty": 0.00039654086369619895,
+    "spectrum_folded_response_rate_gy_per_s": 3.8208118549301463e-07,
+    "spectrum_folded_response_rate_microgy_per_h": 1375.4922677748527
+  },
+  "comparison": {
+    "relative_difference_from_uncollided": 0.33519731881255393,
+    "relative_difference_from_gp": -0.26050424888014634,
+    "observed_monte_carlo_buildup_ratio": 1.3351973188125539,
+    "direct_vs_folded_relative_difference": -5.995657593440152e-05,
+    "absolute_direct_vs_folded_relative_difference": 5.995657593440152e-05
+  },
+  "acceptance_checks": {
+    "direct_vs_folded_tolerance": 0.02,
+    "direct_vs_folded_pass": true,
+    "required_relative_uncertainty": 0.05,
+    "required_uncertainty_pass": true,
+    "preferred_relative_uncertainty": 0.02,
+    "preferred_uncertainty_pass": true
+  },
+  "warnings": []
+}

@@ -1,0 +1,239 @@
+ ====>     TALLY 4001: V113_EVALUATION_SHELL_PHOTON_FLUX_SPECTRUM     <=====
+
+ Cell 1202
+   Particle: photon
+     Incoming Energy [1000, 2000)
+       Total Material
+         Flux                                 1.00077e-06 +/- 4.38422e-07
+     Incoming Energy [2000, 3000)
+       Total Material
+         Flux                                 2.0014e-07 +/- 2.0014e-07
+     Incoming Energy [3000, 5000)
+       Total Material
+         Flux                                 1.20084e-06 +/- 4.77702e-07
+     Incoming Energy [5000, 7000)
+       Total Material
+         Flux                                 1.60058e-06 +/- 6.15178e-07
+     Incoming Energy [7000, 10000)
+       Total Material
+         Flux                                 3.00104e-06 +/- 7.1799e-07
+     Incoming Energy [10000, 15000)
+       Total Material
+         Flux                                 1.16051e-05 +/- 1.33932e-06
+     Incoming Energy [15000, 20000)
+       Total Material
+         Flux                                 1.62069e-05 +/- 2.0049e-06
+     Incoming Energy [20000, 30000)
+       Total Material
+         Flux                                 7.24342e-05 +/- 3.71674e-06
+     Incoming Energy [30000, 40000)
+       Total Material
+         Flux                                 0.000192718 +/- 5.98479e-06
+     Incoming Energy [40000, 50000)
+       Total Material
+         Flux                                 0.00123518 +/- 1.58709e-05
+     Incoming Energy [50000, 55000)
+       Total Material
+         Flux                                 0.00155084 +/- 2.08779e-05
+     Incoming Energy [55000, 58000)
+       Total Material
+         Flux                                 0.00131505 +/- 1.77539e-05
+     Incoming Energy [58000, 59000)
+       Total Material
+         Flux                                 0.000516819 +/- 1.07933e-05
+     Incoming Energy [59000, 59500)
+       Total Material
+         Flux                                 0.000282829 +/- 7.08699e-06
+     Incoming Energy [59500, 59600)
+       Total Material
+         Flux                                 5.9648e-05 +/- 3.57596e-06
+     Incoming Energy [59600, 60000)
+       Total Material
+         Flux                                 0.000227375 +/- 7.00084e-06
+     Incoming Energy [60000, 65000)
+       Total Material
+         Flux                                 0.00332383 +/- 2.85583e-05
+     Incoming Energy [65000, 75000)
+       Total Material
+         Flux                                 0.00895597 +/- 3.91028e-05
+     Incoming Energy [75000, 90000)
+       Total Material
+         Flux                                 0.0176207 +/- 5.68901e-05
+     Incoming Energy [90000, 100000)
+       Total Material
+         Flux                                 0.0134336 +/- 4.94181e-05
+     Incoming Energy [100000, 125000)
+       Total Material
+         Flux                                 0.036886 +/- 8.16694e-05
+     Incoming Energy [125000, 150000)
+       Total Material
+         Flux                                 0.0339018 +/- 7.823e-05
+     Incoming Energy [150000, 175000)
+       Total Material
+         Flux                                 0.0295826 +/- 7.9667e-05
+     Incoming Energy [175000, 200000)
+       Total Material
+         Flux                                 0.02978 +/- 7.8523e-05
+     Incoming Energy [200000, 225000)
+       Total Material
+         Flux                                 0.0265259 +/- 6.61388e-05
+     Incoming Energy [225000, 250000)
+       Total Material
+         Flux                                 0.0237852 +/- 7.16448e-05
+     Incoming Energy [250000, 275000)
+       Total Material
+         Flux                                 0.0221814 +/- 6.61754e-05
+     Incoming Energy [275000, 300000)
+       Total Material
+         Flux                                 0.0211376 +/- 6.62702e-05
+     Incoming Energy [300000, 325000)
+       Total Material
+         Flux                                 0.0203146 +/- 6.27447e-05
+     Incoming Energy [325000, 350000)
+       Total Material
+         Flux                                 0.0197377 +/- 6.76042e-05
+     Incoming Energy [350000, 375000)
+       Total Material
+         Flux                                 0.019426 +/- 6.51098e-05
+     Incoming Energy [375000, 400000)
+       Total Material
+         Flux                                 0.019101 +/- 6.24181e-05
+     Incoming Energy [400000, 425000)
+       Total Material
+         Flux                                 0.0190006 +/- 6.42438e-05
+     Incoming Energy [425000, 450000)
+       Total Material
+         Flux                                 0.0189109 +/- 6.08748e-05
+     Incoming Energy [450000, 475000)
+       Total Material
+         Flux                                 0.0189921 +/- 6.25074e-05
+     Incoming Energy [475000, 500000)
+       Total Material
+         Flux                                 0.0191637 +/- 6.70841e-05
+     Incoming Energy [500000, 525000)
+       Total Material
+         Flux                                 0.0192772 +/- 5.63291e-05
+     Incoming Energy [525000, 550000)
+       Total Material
+         Flux                                 0.0194065 +/- 6.16112e-05
+     Incoming Energy [550000, 575000)
+       Total Material
+         Flux                                 0.0196128 +/- 6.20092e-05
+     Incoming Energy [575000, 600000)
+       Total Material
+         Flux                                 0.0199285 +/- 7.29091e-05
+     Incoming Energy [600000, 620000)
+       Total Material
+         Flux                                 0.016195 +/- 5.32007e-05
+     Incoming Energy [620000, 640000)
+       Total Material
+         Flux                                 0.0163444 +/- 6.20091e-05
+     Incoming Energy [640000, 650000)
+       Total Material
+         Flux                                 0.00822306 +/- 4.11151e-05
+     Incoming Energy [650000, 660000)
+       Total Material
+         Flux                                 0.00823731 +/- 3.96343e-05
+     Incoming Energy [660000, 661000)
+       Total Material
+         Flux                                 0.000803002 +/- 1.41547e-05
+     Incoming Energy [661000, 661500)
+       Total Material
+         Flux                                 0.0003914 +/- 8.21557e-06
+     Incoming Energy [661500, 661600)
+       Total Material
+         Flux                                 6.02e-05 +/- 3.8507e-06
+     Incoming Energy [661600, 661700)
+       Total Material
+         Flux                                 0.368588 +/- 0.000221637
+     Incoming Energy [661700, 662000)
+       Total Material
+         Flux                                 0 +/- 0
+     Incoming Energy [662000, 665000)
+       Total Material
+         Flux                                 0 +/- 0
+     Incoming Energy [665000, 670000)
+       Total Material
+         Flux                                 0 +/- 0
+     Incoming Energy [670000, 680000)
+       Total Material
+         Flux                                 0 +/- 0
+     Incoming Energy [680000, 700000)
+       Total Material
+         Flux                                 0 +/- 0
+     Incoming Energy [700000, 750000)
+       Total Material
+         Flux                                 0 +/- 0
+     Incoming Energy [750000, 800000)
+       Total Material
+         Flux                                 0 +/- 0
+     Incoming Energy [800000, 900000)
+       Total Material
+         Flux                                 0 +/- 0
+     Incoming Energy [900000, 1000000)
+       Total Material
+         Flux                                 0 +/- 0
+     Incoming Energy [1000000, 1100000)
+       Total Material
+         Flux                                 0 +/- 0
+     Incoming Energy [1100000, 1150000)
+       Total Material
+         Flux                                 0 +/- 0
+     Incoming Energy [1150000, 1170000)
+       Total Material
+         Flux                                 0 +/- 0
+     Incoming Energy [1170000, 1173000)
+       Total Material
+         Flux                                 0 +/- 0
+     Incoming Energy [1173000, 1173200)
+       Total Material
+         Flux                                 0 +/- 0
+     Incoming Energy [1173200, 1173300)
+       Total Material
+         Flux                                 0 +/- 0
+     Incoming Energy [1173300, 1174000)
+       Total Material
+         Flux                                 0 +/- 0
+     Incoming Energy [1174000, 1200000)
+       Total Material
+         Flux                                 0 +/- 0
+     Incoming Energy [1200000, 1250000)
+       Total Material
+         Flux                                 0 +/- 0
+     Incoming Energy [1250000, 1300000)
+       Total Material
+         Flux                                 0 +/- 0
+     Incoming Energy [1300000, 1320000)
+       Total Material
+         Flux                                 0 +/- 0
+     Incoming Energy [1320000, 1330000)
+       Total Material
+         Flux                                 0 +/- 0
+     Incoming Energy [1330000, 1332000)
+       Total Material
+         Flux                                 0 +/- 0
+     Incoming Energy [1332000, 1332400)
+       Total Material
+         Flux                                 0 +/- 0
+     Incoming Energy [1332400, 1332600)
+       Total Material
+         Flux                                 0 +/- 0
+     Incoming Energy [1332600, 1333000)
+       Total Material
+         Flux                                 0 +/- 0
+     Incoming Energy [1333000, 1340000)
+       Total Material
+         Flux                                 0 +/- 0
+     Incoming Energy [1340000, 1400000)
+       Total Material
+         Flux                                 0 +/- 0
+     Incoming Energy [1400000, 1500000)
+       Total Material
+         Flux                                 0 +/- 0
+ ==>     TALLY 4002: V113_EVALUATION_SHELL_DIRECT_AIR_KERMA_RESPONSE     <==
+
+ Cell 1202
+   Particle: photon
+     Energy Function f([1.0e+03, ..., 2.0e+07]) = [5.8e-10, ..., 4.2e-11]
+       Total Material
+         Flux                                 1.98505e-12 +/- 4.70764e-16

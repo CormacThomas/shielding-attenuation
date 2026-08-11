@@ -1,0 +1,129 @@
+{
+  "record_type": "v114_core_model_export_summary",
+  "version": "1.14",
+  "transport_executed": false,
+  "settings_profile_name": "v114_smoke",
+  "case_count": 8,
+  "cases": [
+    {
+      "case_id": "cs137_lead_01mfp",
+      "scenario_path": "scenarios/v1.14/cs137_lead_01mfp.json",
+      "model_xml_path": "results/v1.14/development/model_exports/cs137_lead_01mfp__v114_smoke/model.xml",
+      "summary_path": "results/v1.14/development/model_exports/cs137_lead_01mfp__v114_smoke/model_export_summary.json",
+      "material_keys": [
+        "lead"
+      ],
+      "cell_count": 5,
+      "surface_count": 5,
+      "tally_ids": [
+        4001,
+        4002
+      ]
+    },
+    {
+      "case_id": "cs137_lead_05mfp",
+      "scenario_path": "scenarios/v1.14/cs137_lead_05mfp.json",
+      "model_xml_path": "results/v1.14/development/model_exports/cs137_lead_05mfp__v114_smoke/model.xml",
+      "summary_path": "results/v1.14/development/model_exports/cs137_lead_05mfp__v114_smoke/model_export_summary.json",
+      "material_keys": [
+        "lead"
+      ],
+      "cell_count": 5,
+      "surface_count": 5,
+      "tally_ids": [
+        4001,
+        4002
+      ]
+    },
+    {
+      "case_id": "cs137_lead_10mfp",
+      "scenario_path": "scenarios/v1.14/cs137_lead_10mfp.json",
+      "model_xml_path": "results/v1.14/development/model_exports/cs137_lead_10mfp__v114_smoke/model.xml",
+      "summary_path": "results/v1.14/development/model_exports/cs137_lead_10mfp__v114_smoke/model_export_summary.json",
+      "material_keys": [
+        "lead"
+      ],
+      "cell_count": 5,
+      "surface_count": 5,
+      "tally_ids": [
+        4001,
+        4002
+      ]
+    },
+    {
+      "case_id": "cs137_tungsten_01mfp",
+      "scenario_path": "scenarios/v1.14/cs137_tungsten_01mfp.json",
+      "model_xml_path": "results/v1.14/development/model_exports/cs137_tungsten_01mfp__v114_smoke/model.xml",
+      "summary_path": "results/v1.14/development/model_exports/cs137_tungsten_01mfp__v114_smoke/model_export_summary.json",
+      "material_keys": [
+        "tungsten"
+      ],
+      "cell_count": 5,
+      "surface_count": 5,
+      "tally_ids": [
+        4001,
+        4002
+      ]
+    },
+    {
+      "case_id": "cs137_tungsten_05mfp",
+      "scenario_path": "scenarios/v1.14/cs137_tungsten_05mfp.json",
+      "model_xml_path": "results/v1.14/development/model_exports/cs137_tungsten_05mfp__v114_smoke/model.xml",
+      "summary_path": "results/v1.14/development/model_exports/cs137_tungsten_05mfp__v114_smoke/model_export_summary.json",
+      "material_keys": [
+        "tungsten"
+      ],
+      "cell_count": 5,
+      "surface_count": 5,
+      "tally_ids": [
+        4001,
+        4002
+      ]
+    },
+    {
+      "case_id": "cs137_concrete_ordinary_01mfp",
+      "scenario_path": "scenarios/v1.14/cs137_concrete_ordinary_01mfp.json",
+      "model_xml_path": "results/v1.14/development/model_exports/cs137_concrete_ordinary_01mfp__v114_smoke/model.xml",
+      "summary_path": "results/v1.14/development/model_exports/cs137_concrete_ordinary_01mfp__v114_smoke/model_export_summary.json",
+      "material_keys": [
+        "concrete_ordinary"
+      ],
+      "cell_count": 5,
+      "surface_count": 5,
+      "tally_ids": [
+        4001,
+        4002
+      ]
+    },
+    {
+      "case_id": "cs137_concrete_ordinary_05mfp",
+      "scenario_path": "scenarios/v1.14/cs137_concrete_ordinary_05mfp.json",
+      "model_xml_path": "results/v1.14/development/model_exports/cs137_concrete_ordinary_05mfp__v114_smoke/model.xml",
+      "summary_path": "results/v1.14/development/model_exports/cs137_concrete_ordinary_05mfp__v114_smoke/model_export_summary.json",
+      "material_keys": [
+        "concrete_ordinary"
+      ],
+      "cell_count": 5,
+      "surface_count": 5,
+      "tally_ids": [
+        4001,
+        4002
+      ]
+    },
+    {
+      "case_id": "cs137_water_05mfp",
+      "scenario_path": "scenarios/v1.14/cs137_water_05mfp.json",
+      "model_xml_path": "results/v1.14/development/model_exports/cs137_water_05mfp__v114_smoke/model.xml",
+      "summary_path": "results/v1.14/development/model_exports/cs137_water_05mfp__v114_smoke/model_export_summary.json",
+      "material_keys": [
+        "water"
+      ],
+      "cell_count": 5,
+      "surface_count": 5,
+      "tally_ids": [
+        4001,
+        4002
+      ]
+    }
+  ]
+}

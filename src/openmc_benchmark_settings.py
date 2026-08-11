@@ -1,0 +1,126 @@
+# Reproducible V1.14 OpenMC benchmark settings profiles.
+#
+# The smoke and production profiles share one energy grid so differences in
+# processed spectra are attributable to Monte Carlo sampling rather than
+# tally discretization.
+
+from __future__ import annotations
+
+from openmc_models import OpenMCSettings
+
+
+V114_COMMON_ENERGY_BIN_BOUNDARIES_EV = (
+    1000.0,
+    2000.0,
+    3000.0,
+    5000.0,
+    7000.0,
+    10000.0,
+    15000.0,
+    20000.0,
+    30000.0,
+    40000.0,
+    50000.0,
+    55000.0,
+    58000.0,
+    59000.0,
+    59500.0,
+    59600.0,
+    60000.0,
+    65000.0,
+    75000.0,
+    90000.0,
+    100000.0,
+    125000.0,
+    150000.0,
+    175000.0,
+    200000.0,
+    225000.0,
+    250000.0,
+    275000.0,
+    300000.0,
+    325000.0,
+    350000.0,
+    375000.0,
+    400000.0,
+    425000.0,
+    450000.0,
+    475000.0,
+    500000.0,
+    525000.0,
+    550000.0,
+    575000.0,
+    600000.0,
+    620000.0,
+    640000.0,
+    650000.0,
+    660000.0,
+    661000.0,
+    661500.0,
+    661600.0,
+    661700.0,
+    662000.0,
+    665000.0,
+    670000.0,
+    680000.0,
+    700000.0,
+    750000.0,
+    800000.0,
+    900000.0,
+    1000000.0,
+    1100000.0,
+    1150000.0,
+    1170000.0,
+    1173000.0,
+    1173200.0,
+    1173300.0,
+    1174000.0,
+    1200000.0,
+    1250000.0,
+    1300000.0,
+    1320000.0,
+    1330000.0,
+    1332000.0,
+    1332400.0,
+    1332600.0,
+    1333000.0,
+    1340000.0,
+    1400000.0,
+    1500000.0,
+)
+
+
+def create_v114_smoke_settings() -> OpenMCSettings:
+    return OpenMCSettings(
+        profile_name="v114_smoke",
+        particles_per_batch=10000,
+        batches=10,
+        random_seed=114001,
+        threads=4,
+        energy_bin_boundaries_ev=list(
+            V114_COMMON_ENERGY_BIN_BOUNDARIES_EV
+        ),
+        electron_treatment="ttb",
+        atomic_relaxation=True,
+        photon_cutoff_energy_ev=1000.0,
+        outer_boundary_radius_cm=110.0,
+        statepoint_batches=[10],
+    )
+
+
+def create_v114_production_settings() -> OpenMCSettings:
+    return OpenMCSettings(
+        profile_name="v114_production",
+        particles_per_batch=50000,
+        batches=100,
+        random_seed=114100,
+        threads=4,
+        energy_bin_boundaries_ev=list(
+            V114_COMMON_ENERGY_BIN_BOUNDARIES_EV
+        ),
+        electron_treatment="ttb",
+        atomic_relaxation=True,
+        photon_cutoff_energy_ev=1000.0,
+        outer_boundary_radius_cm=110.0,
+        statepoint_batches=[25, 50, 75, 100],
+    )
