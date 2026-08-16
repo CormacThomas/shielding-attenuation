@@ -606,6 +606,236 @@ def plot_buildup_comparison(
     return figure
 
 
+def plot_buildup_comparison_quad(
+    case_map: dict[
+        tuple[str, float],
+        dict[str, Any],
+    ],
+) -> Figure:
+    # Compact, high-contrast version intended for a quad chart or
+    # other presentation use where the figure is displayed small.
+
+    ordered_cases = [
+        ("lead", 1.0),
+        ("tungsten", 1.0),
+        ("concrete_ordinary", 1.0),
+        ("lead", 5.0),
+        ("tungsten", 5.0),
+        ("concrete_ordinary", 5.0),
+        ("water", 5.0),
+        ("lead", 10.0),
+    ]
+
+    labels = [
+        "Lead\n1 MFP",
+        "W\n1 MFP",
+        "Concrete\n1 MFP",
+        "Lead\n5 MFP",
+        "W\n5 MFP",
+        "Concrete\n5 MFP",
+        "Water\n5 MFP",
+        "Lead\n10 MFP",
+    ]
+
+    gp_values: list[float] = []
+    mc_values: list[float] = []
+    mc_buildup_uncertainties: list[float] = []
+
+    for key in ordered_cases:
+        case = case_map[key]
+
+        gp_buildup = require_number(
+            case.get("gp_buildup_factor"),
+            f"{key}: G-P buildup factor",
+        )
+
+        mc_buildup = require_number(
+            case.get("openmc_buildup_ratio"),
+            f"{key}: Monte Carlo buildup ratio",
+        )
+
+        openmc_std = require_number(
+            case.get(
+                "openmc_standard_deviation_microgy_per_h"
+            ),
+            f"{key}: OpenMC standard deviation",
+        )
+
+        deterministic_uncollided = require_number(
+            case.get(
+                "deterministic_uncollided_microgy_per_h"
+            ),
+            f"{key}: deterministic uncollided response",
+        )
+
+        gp_values.append(
+            gp_buildup
+        )
+
+        mc_values.append(
+            mc_buildup
+        )
+
+        mc_buildup_uncertainties.append(
+            openmc_std
+            / deterministic_uncollided
+        )
+
+    x_values = np.arange(
+        len(ordered_cases),
+        dtype=float,
+    )
+
+    bar_width = 0.36
+
+    figure, axes = plt.subplots(
+        figsize=(10.5, 5.6),
+        facecolor="white",
+    )
+
+    axes.set_facecolor(
+        "white"
+    )
+
+    axes.bar(
+        x_values - bar_width / 2.0,
+        gp_values,
+        width=bar_width,
+        label="G-P",
+        alpha=1.0,
+    )
+
+    axes.bar(
+        x_values + bar_width / 2.0,
+        mc_values,
+        width=bar_width,
+        yerr=mc_buildup_uncertainties,
+        capsize=3.5,
+        label="OpenMC",
+        alpha=1.0,
+    )
+
+    axes.set_title(
+        "Cs-137 Buildup: G-P vs OpenMC",
+        fontsize=17,
+        fontweight="bold",
+        color="#111827",
+        pad=10,
+    )
+
+    axes.set_ylabel(
+        "Buildup factor",
+        fontsize=13,
+        fontweight="semibold",
+        color="#111827",
+    )
+
+    axes.set_xlabel(
+        "Shield material and optical thickness",
+        fontsize=12,
+        fontweight="semibold",
+        color="#111827",
+        labelpad=8,
+    )
+
+    axes.set_xticks(
+        x_values,
+        labels=labels,
+    )
+
+    axes.tick_params(
+        axis="x",
+        labelsize=11,
+        colors="#111827",
+    )
+
+    axes.tick_params(
+        axis="y",
+        labelsize=11,
+        colors="#111827",
+    )
+
+    axes.grid(
+        axis="y",
+        color="#A0A0A0",
+        linewidth=0.8,
+        alpha=0.45,
+    )
+
+    legend = axes.legend(
+        loc="upper left",
+        fontsize=11.5,
+        frameon=True,
+    )
+
+    legend.get_frame().set_facecolor(
+        "white"
+    )
+
+    legend.get_frame().set_alpha(
+        1.0
+    )
+
+    legend.get_frame().set_edgecolor(
+        "#B8B8B8"
+    )
+
+    for legend_text in legend.get_texts():
+        legend_text.set_color(
+            "#111827"
+        )
+
+    # Separate optical-thickness groups.
+    for separator in (
+        2.5,
+        6.5,
+    ):
+        axes.axvline(
+            separator,
+            linewidth=1.2,
+            linestyle="--",
+            color="#777777",
+            alpha=0.7,
+        )
+
+    upper_limit = max(
+        max(gp_values),
+        max(mc_values),
+    )
+
+    for x_position, text in (
+        (1.0, "1 MFP"),
+        (4.5, "5 MFP"),
+        (7.0, "10 MFP"),
+    ):
+        axes.text(
+            x_position,
+            upper_limit * 1.035,
+            text,
+            ha="center",
+            va="bottom",
+            fontsize=11,
+            fontweight="semibold",
+            color="#111827",
+        )
+
+    axes.set_ylim(
+        0.0,
+        upper_limit * 1.15,
+    )
+
+    for spine in axes.spines.values():
+        spine.set_color(
+            "#9A9A9A"
+        )
+
+    figure.tight_layout(
+        pad=1.0
+    )
+
+    return figure
+
+
 def plot_openmc_vs_gp_difference(
     case_map: dict[
         tuple[str, float],
@@ -901,6 +1131,40 @@ def save_and_close(
     return saved_paths
 
 
+def save_and_close_quad(
+    figure: Figure,
+    output_stem: str,
+) -> list[Path]:
+    saved_paths: list[Path] = []
+
+    for output_format in OUTPUT_FORMATS:
+        output_path = (
+            OUTPUT_DIRECTORY
+            / output_stem
+        ).with_suffix(
+            f".{output_format}"
+        )
+
+        figure.savefig(
+            output_path,
+            format=output_format,
+            dpi=DPI,
+            bbox_inches="tight",
+            facecolor="white",
+            edgecolor="none",
+        )
+
+        saved_paths.append(
+            output_path
+        )
+
+    plt.close(
+        figure
+    )
+
+    return saved_paths
+
+
 def main() -> None:
     plt.style.use(
         "default"
@@ -919,6 +1183,7 @@ def main() -> None:
         exist_ok=True,
     )
 
+    # Standard report figures use the normal project save path.
     figures = [
         (
             "v114_core_buildup_comparison",
@@ -951,9 +1216,28 @@ def main() -> None:
             )
         )
 
+    # Quad-chart figure uses an explicitly white saved background.
+    quad_figure = (
+        plot_buildup_comparison_quad(
+            case_map
+        )
+    )
+
+    saved_paths.extend(
+        save_and_close_quad(
+            figure=quad_figure,
+            output_stem=(
+                "v114_core_buildup_comparison_quad"
+            ),
+        )
+    )
+
     expected_file_count = (
-        len(
-            figures
+        (
+            len(
+                figures
+            )
+            + 1
         )
         * len(
             OUTPUT_FORMATS
@@ -1010,6 +1294,10 @@ def main() -> None:
 
     print("=" * 88)
     print()
+
+
+if __name__ == "__main__":
+    main()
 
 
 if __name__ == "__main__":
