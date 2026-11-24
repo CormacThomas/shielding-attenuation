@@ -2,6 +2,14 @@
 
 All major development milestones for the Shielding Attenuation Simulator are documented here.
 
+## v1.15.0 — Packaging and verification refactor
+
+- Installed the simulator as the `shielding` Python package and command.
+- Moved the original validation checks into pytest and added deterministic replay of the eight-case V1.14 matrix.
+- Shared the source, collision-kerma, and ranking logic used by multiple workflows.
+- Fixed V1.10 photon-fluence scenario reporting and protected benchmark input files from output-directory replacement.
+- Preserved processed benchmark records and put prior Java code, release scripts, and reports under `archive/`.
+
 ## v1.13 - Matched Cs-137/Lead OpenMC Benchmark
 
 Added the first complete quantity-matched deterministic/OpenMC photon-shielding benchmark. Version 1.13 uses one shared physical scenario to construct deterministic and Monte Carlo calculations, processes a preserved five-million-history OpenMC production statepoint, compares shell-volume-averaged dry-air collision air kerma, and packages the benchmark with reproducible inputs, processed results, figures, acceptance checks, and provenance metadata.

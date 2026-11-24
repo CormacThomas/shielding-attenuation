@@ -1,0 +1,157 @@
+from dataclasses import dataclass
+
+
+@dataclass
+class Material:
+    # Shielding material with energy-dependent attenuation data.
+    #
+    # key:
+    #   Stable internal identifier used for dictionaries, input lookup, and
+    #   G-P buildup coefficient lookup.
+    #
+    # name:
+    #   Human-readable display name used in output.
+    #
+    # density:
+    #   Material density in g/cm^3.
+    #
+    # energy:
+    #   Photon energy table in MeV.
+    #
+    # mu_over_p:
+    #   Mass attenuation coefficient table in cm^2/g.
+    key: str
+    name: str
+    density: float
+    energy: list[float]
+    mu_over_p: list[float]
+
+    def __post_init__(self):
+        # Validate material data at object creation so incorrect material tables
+        # are caught before they can produce misleading shielding results.
+        if self.key.strip() == "":
+            raise ValueError("Material key cannot be empty.")
+
+        if len(self.energy) != len(self.mu_over_p):
+            raise ValueError(
+                f"{self.name} has {len(self.energy)} energy values "
+                f"but {len(self.mu_over_p)} mu/rho values."
+            )
+
+        if self.density <= 0:
+            raise ValueError(f"{self.name} density must be positive.")
+
+        if len(self.energy) < 2:
+            raise ValueError(f"{self.name} must have at least two energy values.")
+
+        for energy_value in self.energy:
+            if energy_value <= 0:
+                raise ValueError(f"{self.name} has a non positive energy value.")
+
+        for mu_over_p_value in self.mu_over_p:
+            if mu_over_p_value <= 0:
+                raise ValueError(f"{self.name} has a non positive mu/rho value.")
+
+        # Energies must be sorted so interpolation functions can find the
+        # correct bracketing energy interval.
+        for i in range(len(self.energy) - 1):
+            if self.energy[i] > self.energy[i + 1]:
+                raise ValueError(f"{self.name} energy values must be sorted.")
+
+
+@dataclass
+class Layer:
+    # A single shielding layer that stores thickness and references a material object.
+    thickness: float
+    material: Material
+
+    def __post_init__(self):
+        if self.thickness < 0:
+            raise ValueError("Layer thickness cannot be negative.")
+
+
+@dataclass
+class LayerResult:
+    # Stores calculated quantities for one shielding layer.
+    # This separates calculated values from the input Layer object.
+    # layer = original layer input
+    # mu_over_p = interpolated mass attenuation coefficient in cm^2/g
+    # mu = linear attenuation coefficient in 1/cm
+    # mfp = optical thickness of this layer in mean free paths
+    # transmission = narrow-beam transmission through this layer
+
+    layer: Layer
+    mu_over_p: float
+    mu: float
+    mfp: float
+    transmission: float
+
+    def __post_init__(self):
+        if self.mu_over_p < 0:
+            raise ValueError("LayerResult mu/rho cannot be negative.")
+
+        if self.mu < 0:
+            raise ValueError("LayerResult mu cannot be negative.")
+
+        if self.mfp < 0:
+            raise ValueError("LayerResult MFP cannot be negative.")
+
+        if self.transmission < 0:
+            raise ValueError("LayerResult transmission cannot be negative.")
+
+        if self.transmission > 1:
+            raise ValueError("LayerResult transmission cannot be greater than 1.")
+
+
+@dataclass
+class ShieldingResult:
+    # Complete result of one narrow-beam photon attenuation
+    # calculation.
+    #
+    # This result stores attenuation and uncollided photon
+    # fluence only. Response-specific quantities such as
+    # collision air kerma and G-P buildup are calculated by
+    # the dedicated air-response pathway.
+
+    layers: list[Layer]
+    layer_results: list[LayerResult]
+    photon_energy: float
+    source_strength: float
+    detector_distance: float
+    total_thickness: float
+    total_mfp: float
+    total_transmission: float
+    uncollided_flux: float
+
+    def __post_init__(self):
+        if self.photon_energy <= 0:
+            raise ValueError("Photon energy must be greater than zero.")
+
+        if self.source_strength < 0:
+            raise ValueError("Source strength cannot be negative.")
+
+        if self.detector_distance <= 0:
+            raise ValueError("Detector distance must be greater than zero.")
+
+        if len(self.layers) != len(self.layer_results):
+            raise ValueError("Number of layers and layer results must match.")
+
+        if self.total_thickness < 0:
+            raise ValueError("Total thickness cannot be negative.")
+
+        if self.total_thickness > self.detector_distance:
+            raise ValueError(
+                "Total thickness cannot be greater than detector distance."
+            )
+
+        if self.total_mfp < 0:
+            raise ValueError("Total MFP cannot be negative.")
+
+        if self.total_transmission < 0:
+            raise ValueError("Total transmission cannot be negative.")
+
+        if self.total_transmission > 1:
+            raise ValueError("Total transmission cannot be greater than 1.")
+
+        if self.uncollided_flux < 0:
+            raise ValueError("Uncollided flux cannot be negative.")

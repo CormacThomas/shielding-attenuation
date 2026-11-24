@@ -8,3 +8,15 @@ venv/
 
 # OpenMC runtime outputs
 openmc_smoke_test_output/
+# Python build and test artifacts
+.pytest_cache/
+.ruff_cache/
+*.egg-info/
+build/
+dist/
+
+# Generated plots, run directories, and OpenMC statepoints
+/output/
+/results/
+statepoint.*.h5
+summary.h5
