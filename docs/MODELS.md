@@ -1,6 +1,6 @@
 # Architecture and physical models
 
-## Follow one calculation
+## Follow one calculation 
 
 `shielding scenario` loads a JSON document through `scenarios.json_io`. The scenario records the source, concentric geometry, response quantity or target, and calculation settings. `scenarios.sources` resolves source specifications to runtime photon sources. `scenarios.runner` routes a prescribed layer stack to `scenarios.fixed_shield` and a material-selection problem to `design.optimization`. The API entry point is `run_scenario(load_scenario(path))`.
 
