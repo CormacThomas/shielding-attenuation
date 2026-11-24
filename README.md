@@ -47,4 +47,4 @@ Generated tables and figures go to `output/`. The [OpenMC guide](docs/OPENMC.md)
 | `scenarios/`, `config/openmc/`, `examples/` | Reusable cases, separate transport profiles, and runnable examples |
 | `tests/`, `benchmarks/reference/`, `archive/` | Automated checks, historical evidence, and original release material |
 
-[Architecture, equations, and references](docs/MODELS.md) · [Refactor and verification record](docs/REFACTOR.md) · [Interview guide](docs/INTERVIEW.md) · [License](LICENSE)
+[Architecture, equations, and references](docs/MODELS.md) · [Refactor and verification record](docs/REFACTOR.md) · [License](LICENSE)
