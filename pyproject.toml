@@ -1,0 +1,34 @@
+[build-system]
+requires = ["setuptools>=77"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "shielding-attenuation"
+version = "1.15.0"
+description = "Deterministic photon shielding, design trades, and OpenMC computational benchmarks"
+readme = "README.md"
+requires-python = ">=3.10"
+license = "Apache-2.0"
+authors = [{name = "Cormac Thomas"}]
+dependencies = []
+
+[project.optional-dependencies]
+plots = ["matplotlib>=3.7", "numpy>=1.24"]
+test = ["pytest>=8", "matplotlib>=3.7", "numpy>=1.24"]
+
+[project.scripts]
+shielding = "shielding.cli.commands:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-ra"
+markers = [
+    "openmc: OpenMC API or live transport integration",
+]
+
+[tool.ruff]
+target-version = "py310"
+extend-exclude = ["archive"]

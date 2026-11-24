@@ -8,51 +8,30 @@
 #     python examples/generate_v110_figures.py
 
 from pathlib import Path
-import sys
 
-# Resolve project paths independently of the current working directory.
-PROJECT_ROOT = Path(__file__).resolve().parents[1]
-SRC_DIRECTORY = PROJECT_ROOT / "src"
-OUTPUT_DIRECTORY = (
-    PROJECT_ROOT
-    / "docs"
-    / "figures"
-    / "v1.10"
-)
-
-if str(SRC_DIRECTORY) not in sys.path:
-    sys.path.insert(
-        0,
-        str(SRC_DIRECTORY),
-    )
-
-
-# Select a noninteractive backend before importing pyplot or project
-# plotting modules. This allows the script to run in terminals, CI jobs,
-# and other environments without a display.
 import matplotlib
-
-matplotlib.use("Agg")
-
 import matplotlib.pyplot as plt
 from matplotlib.figure import Figure
 
-from constraint_optimizer import optimize_material_selection
-from material_library import get_material_library
-from optimization_models import DesignConstraints
-from plot_data import create_optimization_plot_data
-from plotting import (
+from shielding.data.isotopes import create_isotope_source
+from shielding.data.materials import get_material_library
+from shielding.design.models import DesignConstraints
+from shielding.design.optimization import optimize_material_selection
+from shielding.design.response_curves import create_response_curve
+from shielding.design.targets import FluxTarget
+from shielding.reporting.optimization_data import create_optimization_plot_data
+from shielding.reporting.plots import (
     plot_constraint_feasibility_matrix,
     plot_material_design_comparison,
     plot_response_vs_thickness,
     plot_thickness_mass_tradeoff,
     save_figure_formats,
 )
-from response_curve import create_response_curve
-from source_library import create_isotope_source
-from target_models import FluxTarget
-from plotting_utils import apply_project_plot_style
+from shielding.reporting.style import apply_project_plot_style
 
+PROJECT_ROOT = Path(__file__).resolve().parents[1]
+
+OUTPUT_DIRECTORY = PROJECT_ROOT / "output" / "figures" / "v1.10"
 
 # Fixed V1.10 portfolio scenario.
 SOURCE_ACTIVITY_BQ = 3.7e10
@@ -92,20 +71,17 @@ def save_and_close_figure(
         dpi=300,
     )
 
-    plt.close(
-        figure
-    )
+    plt.close(figure)
 
     return saved_paths
 
 
 def main() -> None:
+    matplotlib.use("Agg")
     # Use Matplotlib's standard style so local user settings do not silently
     # change the project figures.
 
-    plt.style.use(
-        "default"
-    )
+    plt.style.use("default")
 
     apply_project_plot_style()
 
@@ -121,9 +97,7 @@ def main() -> None:
         SOURCE_ACTIVITY_BQ,
     )
 
-    target = FluxTarget(
-        TARGET_FLUX
-    )
+    target = FluxTarget(TARGET_FLUX)
 
     optimization_result = optimize_material_selection(
         source=source,
@@ -131,17 +105,11 @@ def main() -> None:
         detector_distance=DETECTOR_DISTANCE_CM,
         target=target,
         constraints=DesignConstraints(
-            max_thickness_cm=(
-                MAXIMUM_DESIGN_THICKNESS_CM
-            ),
-            max_mass_per_area_g_per_cm2=(
-                MAXIMUM_MASS_PER_AREA_G_PER_CM2
-            ),
+            max_thickness_cm=(MAXIMUM_DESIGN_THICKNESS_CM),
+            max_mass_per_area_g_per_cm2=(MAXIMUM_MASS_PER_AREA_G_PER_CM2),
         ),
         optimization_mode="minimum_mass",
-        calculation_max_thickness=(
-            DETECTOR_DISTANCE_CM
-        ),
+        calculation_max_thickness=(DETECTOR_DISTANCE_CM),
         apply_buildup=False,
     )
 
@@ -151,26 +119,15 @@ def main() -> None:
             "eligible selected material."
         )
 
-    best_candidate = (
-        optimization_result.best_candidate
-    )
+    best_candidate = optimization_result.best_candidate
 
-    selected_material = (
-        best_candidate
-        .base_candidate
-        .material
-    )
+    selected_material = best_candidate.base_candidate.material
 
-    required_thickness_cm = (
-        best_candidate
-        .base_candidate
-        .required_thickness
-    )
+    required_thickness_cm = best_candidate.base_candidate.required_thickness
 
     if required_thickness_cm is None:
         raise RuntimeError(
-            "The selected V1.10 material is missing its "
-            "required shielding thickness."
+            "The selected V1.10 material is missing its required shielding thickness."
         )
 
     # The documented V1.10 scenario is expected to select lead. This check
@@ -182,32 +139,18 @@ def main() -> None:
             f"{selected_material.name}."
         )
 
-    optimization_plot_data = (
-        create_optimization_plot_data(
-            optimization_result
-        )
-    )
+    optimization_plot_data = create_optimization_plot_data(optimization_result)
 
     response_curve_result = create_response_curve(
         source=source,
         material=selected_material,
-        detector_distance_cm=(
-            DETECTOR_DISTANCE_CM
-        ),
-        minimum_thickness_cm=(
-            RESPONSE_MINIMUM_THICKNESS_CM
-        ),
-        maximum_thickness_cm=(
-            RESPONSE_MAXIMUM_THICKNESS_CM
-        ),
-        number_of_points=(
-            RESPONSE_SAMPLE_COUNT
-        ),
+        detector_distance_cm=(DETECTOR_DISTANCE_CM),
+        minimum_thickness_cm=(RESPONSE_MINIMUM_THICKNESS_CM),
+        maximum_thickness_cm=(RESPONSE_MAXIMUM_THICKNESS_CM),
+        number_of_points=(RESPONSE_SAMPLE_COUNT),
         apply_buildup=False,
         target=target,
-        required_thickness_cm=(
-            required_thickness_cm
-        ),
+        required_thickness_cm=(required_thickness_cm),
     )
 
     figures = (
@@ -250,35 +193,20 @@ def main() -> None:
             output_name,
         )
 
-        all_saved_paths.extend(
-            saved_paths
-        )
+        all_saved_paths.extend(saved_paths)
 
-    print(
-        "\nV1.10 figure generation complete."
-    )
+    print("\nV1.10 figure generation complete.")
 
-    print(
-        f"Selected material: {selected_material.name}"
-    )
+    print(f"Selected material: {selected_material.name}")
 
-    print(
-        "Required thickness: "
-        f"{required_thickness_cm:.6g} cm"
-    )
+    print(f"Required thickness: {required_thickness_cm:.6g} cm")
 
-    print(
-        f"Generated files: {len(all_saved_paths)}"
-    )
+    print(f"Generated files: {len(all_saved_paths)}")
 
     for saved_path in all_saved_paths:
-        relative_path = saved_path.relative_to(
-            PROJECT_ROOT
-        )
+        relative_path = saved_path.relative_to(PROJECT_ROOT)
 
-        print(
-            f"- {relative_path}"
-        )
+        print(f"- {relative_path}")
 
 
 if __name__ == "__main__":

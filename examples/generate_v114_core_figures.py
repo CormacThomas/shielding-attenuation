@@ -15,48 +15,28 @@ from __future__ import annotations
 import json
 import math
 from pathlib import Path
-import sys
 from typing import Any
 
+import matplotlib
+import matplotlib.pyplot as plt
+import numpy as np
+from matplotlib.figure import Figure
+
+from shielding.reporting.plots import save_figure_formats
+from shielding.reporting.style import apply_project_plot_style
 
 REPOSITORY_ROOT = Path(__file__).resolve().parents[1]
-SOURCE_DIRECTORY = REPOSITORY_ROOT / "src"
-
-if str(SOURCE_DIRECTORY) not in sys.path:
-    sys.path.insert(
-        0,
-        str(SOURCE_DIRECTORY),
-    )
-
-
-import matplotlib
-
-matplotlib.use("Agg")
-
-
-import matplotlib.pyplot as plt
-from matplotlib.figure import Figure
-import numpy as np
-
-
-from plotting import save_figure_formats  # noqa: E402
-from plotting_utils import apply_project_plot_style  # noqa: E402
-
 
 MATRIX_PATH = (
     REPOSITORY_ROOT
-    / "results"
+    / "benchmarks"
+    / "reference"
     / "v1.14"
     / "analysis"
     / "v114_core_matrix.json"
 )
 
-OUTPUT_DIRECTORY = (
-    REPOSITORY_ROOT
-    / "docs"
-    / "figures"
-    / "v1.14"
-)
+OUTPUT_DIRECTORY = REPOSITORY_ROOT / "output" / "benchmark-figures"
 
 OUTPUT_FORMATS = (
     "png",
@@ -65,9 +45,7 @@ OUTPUT_FORMATS = (
 
 DPI = 300
 
-EXPECTED_RECORD_TYPE = (
-    "v114_core_deterministic_openmc_matrix"
-)
+EXPECTED_RECORD_TYPE = "v114_core_deterministic_openmc_matrix"
 
 EXPECTED_CASE_COUNT = 8
 
@@ -96,36 +74,23 @@ def require(
     message: str,
 ) -> None:
     if not condition:
-        raise RuntimeError(
-            message
-        )
+        raise RuntimeError(message)
 
 
 def require_number(
     value: Any,
     description: str,
 ) -> float:
-    if (
-        isinstance(value, bool)
-        or not isinstance(
-            value,
-            (int, float),
-        )
+    if isinstance(value, bool) or not isinstance(
+        value,
+        (int, float),
     ):
-        raise ValueError(
-            f"{description} must be numerical."
-        )
+        raise ValueError(f"{description} must be numerical.")
 
-    number = float(
-        value
-    )
+    number = float(value)
 
-    if not math.isfinite(
-        number
-    ):
-        raise ValueError(
-            f"{description} must be finite."
-        )
+    if not math.isfinite(number):
+        raise ValueError(f"{description} must be finite.")
 
     return number
 
@@ -133,71 +98,42 @@ def require_number(
 def load_matrix() -> dict[str, Any]:
     if not MATRIX_PATH.is_file():
         raise FileNotFoundError(
-            "V1.14 aggregated core matrix does not exist: "
-            f"{MATRIX_PATH}"
+            f"V1.14 aggregated core matrix does not exist: {MATRIX_PATH}"
         )
 
     try:
-        matrix = json.loads(
-            MATRIX_PATH.read_text(
-                encoding="utf-8"
-            )
-        )
+        matrix = json.loads(MATRIX_PATH.read_text(encoding="utf-8"))
 
     except json.JSONDecodeError as error:
         raise ValueError(
-            "V1.14 aggregated core matrix contains invalid JSON: "
-            f"{error}"
+            f"V1.14 aggregated core matrix contains invalid JSON: {error}"
         ) from error
 
     require(
         isinstance(matrix, dict),
-        (
-            "V1.14 aggregated core matrix "
-            "must be a JSON object."
-        ),
+        ("V1.14 aggregated core matrix must be a JSON object."),
     )
 
     require(
-        matrix.get(
-            "record_type"
-        )
-        == EXPECTED_RECORD_TYPE,
-        (
-            "Unexpected V1.14 matrix record type."
-        ),
+        matrix.get("record_type") == EXPECTED_RECORD_TYPE,
+        ("Unexpected V1.14 matrix record type."),
     )
 
     require(
-        matrix.get(
-            "case_count"
-        )
-        == EXPECTED_CASE_COUNT,
-        (
-            "V1.14 core figure generation "
-            "requires exactly eight cases."
-        ),
+        matrix.get("case_count") == EXPECTED_CASE_COUNT,
+        ("V1.14 core figure generation requires exactly eight cases."),
     )
 
-    cases = matrix.get(
-        "cases"
-    )
+    cases = matrix.get("cases")
 
     require(
         isinstance(cases, list),
-        (
-            "V1.14 aggregated matrix must "
-            "contain a case list."
-        ),
+        ("V1.14 aggregated matrix must contain a case list."),
     )
 
     require(
-        len(cases)
-        == EXPECTED_CASE_COUNT,
-        (
-            "V1.14 aggregated matrix case "
-            "list has the wrong length."
-        ),
+        len(cases) == EXPECTED_CASE_COUNT,
+        ("V1.14 aggregated matrix case list has the wrong length."),
     )
 
     return matrix
@@ -214,38 +150,24 @@ def get_case_map(
         dict[str, Any],
     ] = {}
 
-    cases = matrix[
-        "cases"
-    ]
+    cases = matrix["cases"]
 
     for case in cases:
         require(
             isinstance(case, dict),
-            (
-                "Every V1.14 core case "
-                "must be a JSON object."
-            ),
+            ("Every V1.14 core case must be a JSON object."),
         )
 
-        material_key = case.get(
-            "material_key"
-        )
+        material_key = case.get("material_key")
 
         require(
             isinstance(material_key, str),
-            (
-                "Every V1.14 core case must "
-                "contain a material key."
-            ),
+            ("Every V1.14 core case must contain a material key."),
         )
 
         target_mfp = require_number(
-            case.get(
-                "target_mean_free_paths"
-            ),
-            (
-                "V1.14 core case target MFP"
-            ),
+            case.get("target_mean_free_paths"),
+            ("V1.14 core case target MFP"),
         )
 
         key = (
@@ -255,15 +177,10 @@ def get_case_map(
 
         require(
             key not in case_map,
-            (
-                "Duplicate V1.14 matrix "
-                f"entry for {key}."
-            ),
+            (f"Duplicate V1.14 matrix entry for {key}."),
         )
 
-        case_map[
-            key
-        ] = case
+        case_map[key] = case
 
     expected_keys = {
         ("lead", 1.0),
@@ -277,14 +194,8 @@ def get_case_map(
     }
 
     require(
-        set(
-            case_map
-        )
-        == expected_keys,
-        (
-            "V1.14 core matrix does not "
-            "contain the expected eight cases."
-        ),
+        set(case_map) == expected_keys,
+        ("V1.14 core matrix does not contain the expected eight cases."),
     )
 
     return case_map
@@ -338,120 +249,69 @@ def plot_buildup_comparison(
 
     gp_values: list[float] = []
     mc_values: list[float] = []
-    mc_buildup_uncertainties: list[
-        float
-    ] = []
+    mc_buildup_uncertainties: list[float] = []
 
     for key in ordered_cases:
-        case = case_map[
-            key
-        ]
+        case = case_map[key]
 
         gp_buildup = require_number(
-            case.get(
-                "gp_buildup_factor"
-            ),
-            (
-                f"{key}: G-P buildup factor"
-            ),
+            case.get("gp_buildup_factor"),
+            (f"{key}: G-P buildup factor"),
         )
 
         mc_buildup = require_number(
-            case.get(
-                "openmc_buildup_ratio"
-            ),
-            (
-                f"{key}: Monte Carlo buildup ratio"
-            ),
+            case.get("openmc_buildup_ratio"),
+            (f"{key}: Monte Carlo buildup ratio"),
         )
 
         openmc_direct = require_number(
-            case.get(
-                "openmc_direct_microgy_per_h"
-            ),
-            (
-                f"{key}: OpenMC direct response"
-            ),
+            case.get("openmc_direct_microgy_per_h"),
+            (f"{key}: OpenMC direct response"),
         )
 
         openmc_std = require_number(
-            case.get(
-                "openmc_standard_deviation_microgy_per_h"
-            ),
-            (
-                f"{key}: OpenMC standard deviation"
-            ),
+            case.get("openmc_standard_deviation_microgy_per_h"),
+            (f"{key}: OpenMC standard deviation"),
         )
 
-        deterministic_uncollided = (
-            require_number(
-                case.get(
-                    "deterministic_uncollided_microgy_per_h"
-                ),
-                (
-                    f"{key}: deterministic "
-                    "uncollided response"
-                ),
-            )
+        deterministic_uncollided = require_number(
+            case.get("deterministic_uncollided_microgy_per_h"),
+            (f"{key}: deterministic uncollided response"),
         )
 
         require(
             gp_buildup > 0.0,
-            (
-                f"{key}: G-P buildup factor "
-                "must be positive."
-            ),
+            (f"{key}: G-P buildup factor must be positive."),
         )
 
         require(
             mc_buildup > 0.0,
-            (
-                f"{key}: Monte Carlo buildup "
-                "ratio must be positive."
-            ),
+            (f"{key}: Monte Carlo buildup ratio must be positive."),
         )
 
         require(
             openmc_direct > 0.0,
-            (
-                f"{key}: OpenMC direct response "
-                "must be positive."
-            ),
+            (f"{key}: OpenMC direct response must be positive."),
         )
 
         require(
             openmc_std >= 0.0,
-            (
-                f"{key}: OpenMC standard deviation "
-                "cannot be negative."
-            ),
+            (f"{key}: OpenMC standard deviation cannot be negative."),
         )
 
         require(
             deterministic_uncollided > 0.0,
-            (
-                f"{key}: deterministic uncollided "
-                "response must be positive."
-            ),
+            (f"{key}: deterministic uncollided response must be positive."),
         )
 
-        gp_values.append(
-            gp_buildup
-        )
+        gp_values.append(gp_buildup)
 
-        mc_values.append(
-            mc_buildup
-        )
+        mc_values.append(mc_buildup)
 
-        mc_buildup_uncertainties.append(
-            openmc_std
-            / deterministic_uncollided
-        )
+        mc_buildup_uncertainties.append(openmc_std / deterministic_uncollided)
 
     x_values = np.arange(
-        len(
-            ordered_cases
-        ),
+        len(ordered_cases),
         dtype=float,
     )
 
@@ -463,13 +323,10 @@ def plot_buildup_comparison(
             6.7,
         )
     )
-    axes.set_facecolor(
-        "white"
-    )
+    axes.set_facecolor("white")
 
     axes.bar(
-        x_values
-        - bar_width / 2.0,
+        x_values - bar_width / 2.0,
         gp_values,
         width=bar_width,
         label="G-P deterministic buildup",
@@ -477,8 +334,7 @@ def plot_buildup_comparison(
     )
 
     axes.bar(
-        x_values
-        + bar_width / 2.0,
+        x_values + bar_width / 2.0,
         mc_values,
         width=bar_width,
         yerr=mc_buildup_uncertainties,
@@ -487,50 +343,32 @@ def plot_buildup_comparison(
         alpha=1.0,
     )
 
-    axes.set_title(
-        "Cs-137 Photon Buildup: Deterministic G-P vs OpenMC"
-    )
+    axes.set_title("Cs-137 Photon Buildup: Deterministic G-P vs OpenMC")
 
-    axes.set_ylabel(
-        "Buildup factor / observed buildup ratio"
-    )
+    axes.set_ylabel("Buildup factor / observed buildup ratio")
 
-    axes.set_xlabel(
-        "Shield material and optical thickness"
-    )
+    axes.set_xlabel("Shield material and optical thickness")
 
     axes.set_xticks(
         x_values,
         labels=labels,
     )
 
-    axes.set_ylim(
-        bottom=0.0
-    )
+    axes.set_ylim(bottom=0.0)
 
     axes.grid(
         axis="y",
         alpha=0.25,
     )
 
-    legend = axes.legend(
-        loc="upper left"
-    )
+    legend = axes.legend(loc="upper left")
 
-    legend.get_frame().set_facecolor(
-        "white"
-    )
-    legend.get_frame().set_alpha(
-        1.0
-    )
-    legend.get_frame().set_edgecolor(
-        "0.8"
-    )
+    legend.get_frame().set_facecolor("white")
+    legend.get_frame().set_alpha(1.0)
+    legend.get_frame().set_edgecolor("0.8")
 
     for legend_text in legend.get_texts():
-        legend_text.set_color(
-            "black"
-        )
+        legend_text.set_color("black")
 
     axes.axvline(
         2.5,
@@ -547,12 +385,8 @@ def plot_buildup_comparison(
     )
 
     upper_limit = max(
-        max(
-            gp_values
-        ),
-        max(
-            mc_values
-        ),
+        max(gp_values),
+        max(mc_values),
     )
 
     axes.text(
@@ -590,9 +424,7 @@ def plot_buildup_comparison(
         upper_limit * 1.15,
     )
 
-    add_figure_context(
-        figure
-    )
+    add_figure_context(figure)
 
     figure.tight_layout(
         rect=(
@@ -655,31 +487,20 @@ def plot_buildup_comparison_quad(
         )
 
         openmc_std = require_number(
-            case.get(
-                "openmc_standard_deviation_microgy_per_h"
-            ),
+            case.get("openmc_standard_deviation_microgy_per_h"),
             f"{key}: OpenMC standard deviation",
         )
 
         deterministic_uncollided = require_number(
-            case.get(
-                "deterministic_uncollided_microgy_per_h"
-            ),
+            case.get("deterministic_uncollided_microgy_per_h"),
             f"{key}: deterministic uncollided response",
         )
 
-        gp_values.append(
-            gp_buildup
-        )
+        gp_values.append(gp_buildup)
 
-        mc_values.append(
-            mc_buildup
-        )
+        mc_values.append(mc_buildup)
 
-        mc_buildup_uncertainties.append(
-            openmc_std
-            / deterministic_uncollided
-        )
+        mc_buildup_uncertainties.append(openmc_std / deterministic_uncollided)
 
     x_values = np.arange(
         len(ordered_cases),
@@ -693,9 +514,7 @@ def plot_buildup_comparison_quad(
         facecolor="white",
     )
 
-    axes.set_facecolor(
-        "white"
-    )
+    axes.set_facecolor("white")
 
     axes.bar(
         x_values - bar_width / 2.0,
@@ -768,22 +587,14 @@ def plot_buildup_comparison_quad(
         frameon=True,
     )
 
-    legend.get_frame().set_facecolor(
-        "white"
-    )
+    legend.get_frame().set_facecolor("white")
 
-    legend.get_frame().set_alpha(
-        1.0
-    )
+    legend.get_frame().set_alpha(1.0)
 
-    legend.get_frame().set_edgecolor(
-        "#B8B8B8"
-    )
+    legend.get_frame().set_edgecolor("#B8B8B8")
 
     for legend_text in legend.get_texts():
-        legend_text.set_color(
-            "#111827"
-        )
+        legend_text.set_color("#111827")
 
     # Separate optical-thickness groups.
     for separator in (
@@ -825,13 +636,9 @@ def plot_buildup_comparison_quad(
     )
 
     for spine in axes.spines.values():
-        spine.set_color(
-            "#9A9A9A"
-        )
+        spine.set_color("#9A9A9A")
 
-    figure.tight_layout(
-        pad=1.0
-    )
+    figure.tight_layout(pad=1.0)
 
     return figure
 
@@ -871,91 +678,51 @@ def plot_openmc_vs_gp_difference(
         "Lead — 10 MFP",
     ]
 
-    differences_percent: list[
-        float
-    ] = []
+    differences_percent: list[float] = []
 
-    uncertainties_percent: list[
-        float
-    ] = []
+    uncertainties_percent: list[float] = []
 
     for key in ordered_cases:
-        case = case_map[
-            key
-        ]
+        case = case_map[key]
 
-        relative_difference = (
-            require_number(
-                case.get(
-                    "openmc_vs_gp_relative_difference"
-                ),
-                (
-                    f"{key}: OpenMC-vs-G-P "
-                    "relative difference"
-                ),
-            )
+        relative_difference = require_number(
+            case.get("openmc_vs_gp_relative_difference"),
+            (f"{key}: OpenMC-vs-G-P relative difference"),
         )
 
         openmc_direct = require_number(
-            case.get(
-                "openmc_direct_microgy_per_h"
-            ),
-            (
-                f"{key}: OpenMC direct response"
-            ),
+            case.get("openmc_direct_microgy_per_h"),
+            (f"{key}: OpenMC direct response"),
         )
 
         openmc_std = require_number(
-            case.get(
-                "openmc_standard_deviation_microgy_per_h"
-            ),
-            (
-                f"{key}: OpenMC standard deviation"
-            ),
+            case.get("openmc_standard_deviation_microgy_per_h"),
+            (f"{key}: OpenMC standard deviation"),
         )
 
         deterministic_gp = require_number(
-            case.get(
-                "deterministic_gp_microgy_per_h"
-            ),
-            (
-                f"{key}: deterministic G-P response"
-            ),
+            case.get("deterministic_gp_microgy_per_h"),
+            (f"{key}: deterministic G-P response"),
         )
 
         require(
             openmc_direct > 0.0,
-            (
-                f"{key}: OpenMC direct response "
-                "must be positive."
-            ),
+            (f"{key}: OpenMC direct response must be positive."),
         )
 
         require(
             deterministic_gp > 0.0,
-            (
-                f"{key}: deterministic G-P response "
-                "must be positive."
-            ),
+            (f"{key}: deterministic G-P response must be positive."),
         )
 
-        differences_percent.append(
-            100.0
-            * relative_difference
-        )
+        differences_percent.append(100.0 * relative_difference)
 
         # Only OpenMC sampling uncertainty is shown. No deterministic-model
         # uncertainty is implied or assigned.
-        uncertainties_percent.append(
-            100.0
-            * openmc_std
-            / deterministic_gp
-        )
+        uncertainties_percent.append(100.0 * openmc_std / deterministic_gp)
 
     y_values = np.arange(
-        len(
-            ordered_cases
-        ),
+        len(ordered_cases),
         dtype=float,
     )
 
@@ -965,9 +732,7 @@ def plot_openmc_vs_gp_difference(
             6.8,
         )
     )
-    axes.set_facecolor(
-        "white"
-    )
+    axes.set_facecolor("white")
 
     axes.barh(
         y_values,
@@ -982,17 +747,11 @@ def plot_openmc_vs_gp_difference(
         linewidth=1.2,
     )
 
-    axes.set_title(
-        "OpenMC Difference from Deterministic G-P Response"
-    )
+    axes.set_title("OpenMC Difference from Deterministic G-P Response")
 
-    axes.set_xlabel(
-        "Signed relative difference, (OpenMC − G-P) / G-P [%]"
-    )
+    axes.set_xlabel("Signed relative difference, (OpenMC − G-P) / G-P [%]")
 
-    axes.set_ylabel(
-        "Benchmark case"
-    )
+    axes.set_ylabel("Benchmark case")
 
     axes.set_yticks(
         y_values,
@@ -1019,44 +778,28 @@ def plot_openmc_vs_gp_difference(
         strict=True,
     ):
         if difference >= 0.0:
-            text_x = (
-                difference
-                + uncertainty
-                + 1.2
-            )
+            text_x = difference + uncertainty + 1.2
 
-            horizontal_alignment = (
-                "left"
-            )
+            horizontal_alignment = "left"
 
         else:
-            text_x = (
-                difference
-                - uncertainty
-                - 1.2
-            )
+            text_x = difference - uncertainty - 1.2
 
-            horizontal_alignment = (
-                "right"
-            )
+            horizontal_alignment = "right"
 
         axes.text(
             text_x,
             y_value,
             f"{difference:+.1f}%",
             va="center",
-            ha=(
-                horizontal_alignment
-            ),
+            ha=(horizontal_alignment),
             fontsize=8.5,
             color="black",
         )
 
     lower_extent = min(
-        difference
-        - uncertainty
-        for difference, uncertainty
-        in zip(
+        difference - uncertainty
+        for difference, uncertainty in zip(
             differences_percent,
             uncertainties_percent,
             strict=True,
@@ -1064,10 +807,8 @@ def plot_openmc_vs_gp_difference(
     )
 
     upper_extent = max(
-        difference
-        + uncertainty
-        for difference, uncertainty
-        in zip(
+        difference + uncertainty
+        for difference, uncertainty in zip(
             differences_percent,
             uncertainties_percent,
             strict=True,
@@ -1076,23 +817,15 @@ def plot_openmc_vs_gp_difference(
 
     horizontal_padding = max(
         7.0,
-        0.13
-        * (
-            upper_extent
-            - lower_extent
-        ),
+        0.13 * (upper_extent - lower_extent),
     )
 
     axes.set_xlim(
-        lower_extent
-        - horizontal_padding,
-        upper_extent
-        + horizontal_padding,
+        lower_extent - horizontal_padding,
+        upper_extent + horizontal_padding,
     )
 
-    add_figure_context(
-        figure
-    )
+    add_figure_context(figure)
 
     figure.tight_layout(
         rect=(
@@ -1109,24 +842,15 @@ def plot_openmc_vs_gp_difference(
 def save_and_close(
     figure: Figure,
     output_stem: str,
-) -> list[
-    Path
-]:
+) -> list[Path]:
     saved_paths = save_figure_formats(
         figure=figure,
-        output_stem=(
-            OUTPUT_DIRECTORY
-            / output_stem
-        ),
-        formats=(
-            OUTPUT_FORMATS
-        ),
+        output_stem=(OUTPUT_DIRECTORY / output_stem),
+        formats=(OUTPUT_FORMATS),
         dpi=DPI,
     )
 
-    plt.close(
-        figure
-    )
+    plt.close(figure)
 
     return saved_paths
 
@@ -1138,12 +862,7 @@ def save_and_close_quad(
     saved_paths: list[Path] = []
 
     for output_format in OUTPUT_FORMATS:
-        output_path = (
-            OUTPUT_DIRECTORY
-            / output_stem
-        ).with_suffix(
-            f".{output_format}"
-        )
+        output_path = (OUTPUT_DIRECTORY / output_stem).with_suffix(f".{output_format}")
 
         figure.savefig(
             output_path,
@@ -1154,29 +873,22 @@ def save_and_close_quad(
             edgecolor="none",
         )
 
-        saved_paths.append(
-            output_path
-        )
+        saved_paths.append(output_path)
 
-    plt.close(
-        figure
-    )
+    plt.close(figure)
 
     return saved_paths
 
 
 def main() -> None:
-    plt.style.use(
-        "default"
-    )
+    matplotlib.use("Agg")
+    plt.style.use("default")
 
     apply_project_plot_style()
 
     matrix = load_matrix()
 
-    case_map = get_case_map(
-        matrix
-    )
+    case_map = get_case_map(matrix)
 
     OUTPUT_DIRECTORY.mkdir(
         parents=True,
@@ -1187,21 +899,15 @@ def main() -> None:
     figures = [
         (
             "v114_core_buildup_comparison",
-            plot_buildup_comparison(
-                case_map
-            ),
+            plot_buildup_comparison(case_map),
         ),
         (
             "v114_core_openmc_vs_gp_difference",
-            plot_openmc_vs_gp_difference(
-                case_map
-            ),
+            plot_openmc_vs_gp_difference(case_map),
         ),
     ]
 
-    saved_paths: list[
-        Path
-    ] = []
+    saved_paths: list[Path] = []
 
     for (
         output_stem,
@@ -1210,60 +916,31 @@ def main() -> None:
         saved_paths.extend(
             save_and_close(
                 figure=figure,
-                output_stem=(
-                    output_stem
-                ),
+                output_stem=(output_stem),
             )
         )
 
     # Quad-chart figure uses an explicitly white saved background.
-    quad_figure = (
-        plot_buildup_comparison_quad(
-            case_map
-        )
-    )
+    quad_figure = plot_buildup_comparison_quad(case_map)
 
     saved_paths.extend(
         save_and_close_quad(
             figure=quad_figure,
-            output_stem=(
-                "v114_core_buildup_comparison_quad"
-            ),
+            output_stem=("v114_core_buildup_comparison_quad"),
         )
     )
 
-    expected_file_count = (
-        (
-            len(
-                figures
-            )
-            + 1
-        )
-        * len(
-            OUTPUT_FORMATS
-        )
-    )
+    expected_file_count = (len(figures) + 1) * len(OUTPUT_FORMATS)
 
     require(
-        len(
-            saved_paths
-        )
-        == expected_file_count,
-        (
-            "V1.14 core figure generation "
-            "created an unexpected number of files."
-        ),
+        len(saved_paths) == expected_file_count,
+        ("V1.14 core figure generation created an unexpected number of files."),
     )
 
-    for saved_path in (
-        saved_paths
-    ):
+    for saved_path in saved_paths:
         require(
             saved_path.is_file(),
-            (
-                "Expected V1.14 figure "
-                f"was not created: {saved_path}"
-            ),
+            (f"Expected V1.14 figure was not created: {saved_path}"),
         )
 
     print()
@@ -1271,33 +948,17 @@ def main() -> None:
     print("V1.14 CORE ANALYSIS FIGURES CREATED")
     print("=" * 88)
 
-    print(
-        "Source matrix:"
-    )
+    print("Source matrix:")
 
-    print(
-        "  "
-        f"{MATRIX_PATH}"
-    )
+    print(f"  {MATRIX_PATH}")
 
-    print(
-        "Generated figures:"
-    )
+    print("Generated figures:")
 
-    for saved_path in (
-        saved_paths
-    ):
-        print(
-            "  "
-            f"{saved_path}"
-        )
+    for saved_path in saved_paths:
+        print(f"  {saved_path}")
 
     print("=" * 88)
     print()
-
-
-if __name__ == "__main__":
-    main()
 
 
 if __name__ == "__main__":
